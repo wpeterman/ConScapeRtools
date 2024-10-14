@@ -214,7 +214,7 @@ cs_par.func <- function(i,
                         .theta,
                         .exp_d){
 
-  # julia_setup(.jl_home, rebuild = T)
+  julia_setup(.jl_home, rebuild = T)
   julia_library("ConScape")
   julia_library("SparseArrays")
   julia_library("Statistics")
