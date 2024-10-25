@@ -3,8 +3,7 @@
 #' @description This uses objects created by the [ConScapeRtools:make_tiles()] function to create identical tiles from other `SpatRaster` objects.
 #'
 #' @param r Raster file as `SpatRaster` to be broken up into smaller tiles
-#' @param cs_tiles `SpatVector` of tiles from [make_tiles()]
-#' @param tile_num Index of tiles from [make_tiles()]
+#' @param make_tiles Object created from  [make_tiles()] function
 #' @param out_dir Directory where .asc files of tiles will be written. This should be different directory from the `make_tiles` `asc_dir`
 #' @param clear_dir Should existing files in the `out_dir` be overwritten? This function must have an empty `out_dir` to proceed
 #' @return A named list with the path to the directory where .asc tiles were written
@@ -15,13 +14,20 @@
 #' @author Bill Peterman
 
 tile_rast <- function(r,
-                      cs_tiles,
-                      tile_num,
+                      make_tiles,
                       out_dir,
                       clear_dir = FALSE){
+  ## Extend raster
+  extnd <- ext(r) + trim
+  r_e <- extend(r, extnd)
+  r_e[is.na(r_e)] <- 0
+
+  cs_tiles <- make_tiles$cs_tiles
+  tile_num <- make_tiles$tile_num
+
   ## Break up raster
   r_list <- lapply(1:length(cs_tiles), function(x)
-    terra::mask(crop(r, ext(cs_tiles[x])), cs_tiles[x]))
+    terra::mask(crop(r_e, ext(cs_tiles[x])), cs_tiles[x]))
 
   select_rast <- tile_num
 

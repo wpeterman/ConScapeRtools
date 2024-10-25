@@ -8,7 +8,7 @@
 #' @param r Raster file as `SpatRaster` to be broken up into smaller tiles
 #' @param clear_dir Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
-#' @return A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, and the path to the directory where .asc tiles were written
+#' @return A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directory where .asc tiles were written, and the `tile_trim` value specified.
 #' @details
 #' The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` needs to be increased.
 #'
@@ -25,6 +25,10 @@ make_tiles <- function(tile_d,
                        clear_dir = FALSE,
                        landmark = 10L) {
   r_ext <- ext(r)
+  extnd <- r_ext + tile_trim
+  r_e <- extend(r, extnd)
+  r_e[is.na(r_e)] <- 0
+  r_ext <- ext(r_e)
 
   e <- ext(r_ext[1], r_ext[1] + tile_d,
            r_ext[4] - tile_d, r_ext[4])
@@ -89,10 +93,10 @@ make_tiles <- function(tile_d,
 
   ## Break up raster
   r_list <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r, ext(all_r[x])), all_r[x]))
+    terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
 
   r_list.crop <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r, ext(s[x])), s[x]))
+    terra::mask(crop(r_e, ext(s[x])), s[x]))
 
   na_rast <- lapply(1:length(r_list.crop), function(x)
     minmax(r_list.crop[[x]])[1]) |> unlist()
@@ -132,7 +136,8 @@ make_tiles <- function(tile_d,
 
   out <- list(cs_tiles = all_r[select_rast],
               tile_num = select_rast,
-              asc_dir = write_dir)
+              asc_dir = write_dir,
+              tile_trim = tile_trim)
   return(out)
 } ## End function
 
