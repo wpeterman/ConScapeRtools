@@ -4,14 +4,12 @@
 \alias{tile_rast}
 \title{Break raster into small tiles}
 \usage{
-tile_rast(r, cs_tiles, tile_num, out_dir, clear_dir = FALSE)
+tile_rast(r, make_tiles, out_dir, clear_dir = FALSE)
 }
 \arguments{
 \item{r}{Raster file as `SpatRaster` to be broken up into smaller tiles}
 
-\item{cs_tiles}{`SpatVector` of tiles from [make_tiles()]}
-
-\item{tile_num}{Index of tiles from [make_tiles()]}
+\item{make_tiles}{Object created from  [make_tiles()] function}
 
 \item{out_dir}{Directory where .asc files of tiles will be written. This should be different directory from the `make_tiles` `asc_dir`}
 

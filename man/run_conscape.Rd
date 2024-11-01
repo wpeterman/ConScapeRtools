@@ -6,6 +6,7 @@
 \usage{
 run_conscape(
   data_dir,
+  conscape_prep = NULL,
   out_dir,
   hab_target,
   hab_src,
@@ -20,6 +21,8 @@ run_conscape(
 )
 }
 \arguments{
+\item{conscape_prep}{Object of class `ConScapeRtools_prep` created using the `conscape_prep` function. If NULL (Default), then `hab_target`, `hab_src`, and `mov_prob` must individually be specified.}
+
 \item{out_dir}{Directory where final ConScape outputs will be written}
 
 \item{hab_target}{Directory with habitat target tiles}
@@ -49,6 +52,9 @@ A named list with the directories where betweenness and functional connectivity 
 }
 \description{
 This function runs ConScape (optionally in parallel) over all created landscape tiles
+}
+\details{
+In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
 }
 \examples{
 examples/run_conscape_example.R

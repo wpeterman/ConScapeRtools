@@ -1,7 +1,10 @@
-function conscape(data_dir, out_dir, r_target, r_source, r_res, land_mark, theta, exp_d, iter)
+function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res, land_mark, theta, exp_d, iter)
 
 # set folders
-datadir = joinpath(data_dir);
+# datadir = joinpath(target_dir);
+targetdir = joinpath(target_dir);
+movdir = joinpath(mov_dir);
+srcdir = joinpath(src_dir);
 outdir_btwn = joinpath(out_dir, "btwn");
 outdir_fcon = joinpath(out_dir, "fcon");
 
@@ -19,11 +22,11 @@ if !isdir(outdir_fcon)
 end
 
 # read habitat quality raster
-hab_qual_target, meta_t = ConScape.readasc(joinpath(datadir, r_target));
-hab_qual_source, meta_s = ConScape.readasc(joinpath(datadir, r_source));
+hab_qual_target, meta_t = ConScape.readasc(joinpath(targetdir, r_target));
+hab_qual_source, meta_s = ConScape.readasc(joinpath(srcdir, r_source));
 
 ## read movemement probability raster
-mov_prob, meta_p = ConScape.readasc(joinpath(datadir, r_res));
+mov_prob, meta_p = ConScape.readasc(joinpath(movdir, r_res));
 
 keys(meta_p)
 
@@ -40,7 +43,7 @@ mov_prob[non_matches] .= -9999
 hab_qual_source[non_matches] .= -9999;
 
 adjacency_matrix = ConScape.graph_matrix_from_raster(mov_prob)
-g = ConScape.Grid(size(mov_prob)..., 
+g = ConScape.Grid(size(mov_prob)...,
                     affinities = adjacency_matrix,
                     source_qualities = hab_qual_source,
                     target_qualities = ConScape.sparse(hab_qual_target),
@@ -57,11 +60,11 @@ g_coarse = ConScape.Grid(size(mov_prob)...,
 
 @time h_coarse = ConScape.GridRSP(g_coarse, θ=θ);
 
-func_con = ConScape.connected_habitat(h_coarse, 
+func_con = ConScape.connected_habitat(h_coarse,
         distance_transformation=x -> exp(-x/exp_d));
-	
 
-kbetw = ConScape.betweenness_kweighted(h_coarse, 
+
+kbetw = ConScape.betweenness_kweighted(h_coarse,
                 distance_transformation=x -> exp(-x/exp_d));
 
 ## Save results

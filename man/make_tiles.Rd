@@ -27,7 +27,7 @@ make_tiles(
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
 }
 \value{
-A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, and the path to the directory where .asc tiles were written
+A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directory where .asc tiles were written, and the `tile_trim` value specified.
 }
 \description{
 This function will break a large raster into tiles of specified dimensions.

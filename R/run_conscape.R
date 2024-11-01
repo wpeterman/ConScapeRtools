@@ -3,6 +3,7 @@
 #' @description This function runs ConScape (optionally in parallel) over all created landscape tiles
 #'
 #' @param out_dir Directory where final ConScape outputs will be written
+#' @param conscape_prep Object of class `ConScapeRtools_prep` created using the `conscape_prep` function. If NULL (Default), then `hab_target`, `hab_src`, and `mov_prob` must individually be specified.
 #' @param hab_target Directory with habitat target tiles
 #' @param hab_src Directory with habitat source tiles
 #' @param mov_prob Directory with movement probability tiles
@@ -15,16 +16,19 @@
 #' @param workers If `parallel = TRUE`, provide the number of parallel workers to create. Default 0.5*Number of available cores
 #' @param end_multisession Logical. Default == FALSE
 #' @return A named list with the directories where betweenness and functional connectivity outputs were written
-
+#' @details
+#' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
+#'
 #' @export
 #' @examples examples/run_conscape_example.R
 #' @author Bill Peterman
 
 run_conscape <- function(data_dir,
+                         conscape_prep = NULL,
                          out_dir,
-                         hab_target,
-                         hab_src,
-                         mov_prob,
+                         hab_target = NULL,
+                         hab_src = NULL,
+                         mov_prob = NULL,
                          landmark = 10L,
                          theta = 0.01,
                          exp_d = 150,
@@ -43,6 +47,15 @@ run_conscape <- function(data_dir,
     unlink(out_dir,
            recursive = T,
            force = T)
+  }
+
+  if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
+    target_dir <- conscape_prep$target
+    src_dir <- conscape_prep$src
+    mov_dir <- conscape_prep$mov
+    hab_target <- list.files(target_dir, pattern = "\\.asc$")
+    hab_src <- list.files(src_dir, pattern = "\\.asc$")
+    mov_prob <- list.files(mov_dir, pattern = "\\.asc$")
   }
 
   if(class(hab_target)[[1]] == 'SpatRaster' |
@@ -81,9 +94,14 @@ run_conscape <- function(data_dir,
       stop("Specify either a SpatRaster object or path to directory containing *.asc files")
     }
 
-    hab_target <- list.files(hab_target, pattern = "\\.asc$")
-    hab_src <- list.files(hab_src, pattern = "\\.asc$")
-    mov_prob <- list.files(mov_prob, pattern = "\\.asc$")
+    if(is.null(conscape_prep)){
+      target_dir <- hab_target
+      src_dir <- hab_src
+      mov_dir <- mov_prob
+      hab_target <- list.files(hab_target, pattern = "\\.asc$")
+      hab_src <- list.files(hab_src, pattern = "\\.asc$")
+      mov_prob <- list.files(mov_prob, pattern = "\\.asc$")
+    }
 
     if(isTRUE(parallel)) {
 
@@ -99,7 +117,9 @@ run_conscape <- function(data_dir,
                                   .hab_target = hab_target,
                                   .hab_src = hab_src,
                                   .mov_prob = mov_prob,
-                                  .data_dir = data_dir,
+                                  .src_dir = src_dir,
+                                  .mov_dir = mov_dir,
+                                  .target_dir = target_dir,
                                   .out_dir = out_dir,
                                   .landmark = landmark,
                                   .theta = theta,
@@ -132,7 +152,9 @@ run_conscape <- function(data_dir,
                                     .hab_target = hab_target,
                                     .hab_src = hab_src,
                                     .mov_prob = mov_prob,
-                                    .data_dir = data_dir,
+                                    .src_dir = src_dir,
+                                    .mov_dir = mov_dir,
+                                    .target_dir = target_dir,
                                     .out_dir = out_dir,
                                     .landmark = landmark,
                                     .theta = theta,
@@ -165,7 +187,9 @@ run_conscape <- function(data_dir,
         r_source <- hab_src[i]
         r_res <- mov_prob[i]
 
-        julia_assign("data_dir", data_dir)
+        julia_assign("src_dir", src_dir)
+        julia_assign("mov_dir", mov_dir)
+        julia_assign("target_dir", target_dir)
         julia_assign("out_dir", out_dir)
         julia_assign("r_target", r_target)
         julia_assign("r_source", r_source)
@@ -176,7 +200,9 @@ run_conscape <- function(data_dir,
         julia_assign("iter", iter)
 
         julia_command("conscape(
-                data_dir,
+                src_dir,
+                mov_dir,
+                target_dir,
                 out_dir,
                 r_target,
                 r_source,
@@ -184,7 +210,7 @@ run_conscape <- function(data_dir,
                 landmark,
                 theta,
                 exp_d,
-                iter)")
+                iter);")
 
         setTxtProgressBar(pb,i)
       } ## End for loop
@@ -208,7 +234,9 @@ cs_par.func <- function(i,
                         .hab_target,
                         .hab_src,
                         .mov_prob,
-                        .data_dir,
+                        .src_dir,
+                        .mov_dir,
+                        .target_dir,
                         .out_dir,
                         .landmark,
                         .theta,
@@ -226,7 +254,9 @@ cs_par.func <- function(i,
   r_source <- .hab_src[i]
   r_res <- .mov_prob[i]
 
-  julia_assign("data_dir", .data_dir)
+  julia_assign("src_dir", .src_dir)
+  julia_assign("mov_dir", .mov_dir)
+  julia_assign("target_dir", .target_dir)
   julia_assign("out_dir", .out_dir)
   julia_assign("r_target", r_target)
   julia_assign("r_source", r_source)
@@ -237,7 +267,9 @@ cs_par.func <- function(i,
   julia_assign("iter", iter)
 
   julia_command("conscape(
-                data_dir,
+                src_dir,
+                mov_dir,
+                target_dir,
                 out_dir,
                 r_target,
                 r_source,
