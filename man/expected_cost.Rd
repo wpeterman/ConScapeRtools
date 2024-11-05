@@ -2,12 +2,12 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{expected_cost}
 \alias{expected_cost}
-\title{Wrapper for the `expected_cost` function of `ConScape`}
+\title{Wrapper for the \code{expected_cost} function of \code{ConScape}}
 \usage{
 expected_cost(h)
 }
 \arguments{
-\item{h}{`[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.}
+\item{h}{\verb{[GridRSP]} \cr The output from the \code{\link[ConScapeR:GridRSP]{ConScapeR::GridRSP()}} function.}
 }
 \description{
 Computes the RSP expected cost between all sources and non-zero targets.

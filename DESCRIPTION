@@ -28,3 +28,4 @@ Suggests:
 URL: https://github.com/wpeterman/ConScapeRtools
 BugReports: https://github.com/wpeterman/ConScapeRtools/issues
 VignetteBuilder: knitr    
+Roxygen: list(markdown = TRUE)

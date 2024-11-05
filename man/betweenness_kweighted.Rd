@@ -2,18 +2,18 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{betweenness_kweighted}
 \alias{betweenness_kweighted}
-\title{Wrapper for the `betweenness_kweighted` function of `ConScape`}
+\title{Wrapper for the \code{betweenness_kweighted} function of \code{ConScape}}
 \usage{
 betweenness_kweighted(h, alpha)
 }
 \arguments{
-\item{h}{`[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.}
+\item{h}{\verb{[GridRSP]} \cr The output from the \code{\link[ConScapeR:GridRSP]{ConScapeR::GridRSP()}} function.}
 
-\item{alpha}{`[numeric]` \cr The distance scaling for the exponential distance
+\item{alpha}{\verb{[numeric]} \cr The distance scaling for the exponential distance
 to proximity transformation.}
 }
 \value{
-`matrix`
+\code{matrix}
 }
 \description{
 Computes the quality- and proximity-weighted betweenness for a ConScape.GridRSP object.

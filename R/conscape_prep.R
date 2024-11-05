@@ -1,6 +1,6 @@
 #' Wrapper function to prepare data for `run_conscape`
 #'
-#' @description This function will run teh `make_tiles` and `tile_rast` functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
+#' @description This function will run the `make_tiles` and `tile_rast` functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
 #'
 #' @param tile_d Dimensions (in meters) of tiles
 #' @param tile_trim The amount of border to be trimmed from tiles after running ConScape (meters)

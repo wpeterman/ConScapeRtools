@@ -7,13 +7,13 @@
 mat2rast(mat, rast)
 }
 \arguments{
-\item{mat}{`[matrix]` \cr Matrix to be converted.}
+\item{mat}{\verb{[matrix]} \cr Matrix to be converted.}
 
-\item{rast}{`[SpatRaster]` \cr Template raster, usually one of those used in the
-[ConScapeR::Grid()] function.}
+\item{rast}{\verb{[SpatRaster]} \cr Template raster, usually one of those used in the
+\code{\link[ConScapeR:Grid]{ConScapeR::Grid()}} function.}
 }
 \value{
-`[SpatRaster]`
+\verb{[SpatRaster]}
 }
 \description{
 Convert a matrix to raster

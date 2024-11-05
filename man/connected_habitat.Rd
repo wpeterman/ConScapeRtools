@@ -2,18 +2,18 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{connected_habitat}
 \alias{connected_habitat}
-\title{Wrapper for the `connected_habitat` function of `ConScape`}
+\title{Wrapper for the \code{connected_habitat} function of \code{ConScape}}
 \usage{
 connected_habitat(h, alpha)
 }
 \arguments{
-\item{h}{`[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.}
+\item{h}{\verb{[GridRSP]} \cr The output from the \code{\link[ConScapeR:GridRSP]{ConScapeR::GridRSP()}} function.}
 
-\item{alpha}{`[numeric]` \cr The distance scaling for the exponential distance to
+\item{alpha}{\verb{[numeric]} \cr The distance scaling for the exponential distance to
 proximity transformation.}
 }
 \value{
-A `matrix` with loca (pixel) measures of habitat functionality.
+A \code{matrix} with loca (pixel) measures of habitat functionality.
 }
 \description{
 Computes the habitat functionality for a ConScape.GridRSP object.

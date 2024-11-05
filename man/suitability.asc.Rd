@@ -16,5 +16,5 @@ plot(r)
 
 }
 \seealso{
-[ConScapeRtools::affinity.asc] \cr
+\link{affinity.asc} \cr
 }

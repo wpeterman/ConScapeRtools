@@ -2,36 +2,36 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{Grid}
 \alias{Grid}
-\title{Wrapper for the Grid function of `ConScape`}
+\title{Wrapper for the Grid function of \code{ConScape}}
 \usage{
 Grid(affinities, sources, targets, costs)
 }
 \arguments{
-\item{affinities}{`[SpatRaster, matrix]` \cr The affinities, represent the likelihood
-of movement. They can be provided as a `SpatRaster` representing the affinity,
+\item{affinities}{\verb{[SpatRaster, matrix]} \cr The affinities, represent the likelihood
+of movement. They can be provided as a \code{SpatRaster} representing the affinity,
 permeability, or resistance of each pixel to movement (in which case it is
 internally transformed into a matrix), or as a matrix with affinities between
 pairs of sources-targets directly.}
 
-\item{sources}{`[SpatRaster, matrix]` \cr Map or matrix presenting the habitat
+\item{sources}{\verb{[SpatRaster, matrix]} \cr Map or matrix presenting the habitat
 suitability/quality of source cells.}
 
-\item{targets}{`[SpatRaster, matrix]` \cr Map or matrix presenting the habitat
+\item{targets}{\verb{[SpatRaster, matrix]} \cr Map or matrix presenting the habitat
 suitability/quality of target cells.}
 
-\item{costs}{`[SpatRaster, matrix, character]` \cr Map or matrix presenting the
+\item{costs}{\verb{[SpatRaster, matrix, character]} \cr Map or matrix presenting the
 cost of movement through each cell. Alternatively, a string describing a transformation
-from the affinity matrix (e.g. `"x -> -log(x)"`)}
+from the affinity matrix (e.g. \code{"x -> -log(x)"})}
 }
 \value{
-A `ConScape.Grid` object within Julia.
+A \code{ConScape.Grid} object within Julia.
 }
 \description{
 Creates a Grid from affinities, sources, targets and costs.
 Affinities, sources and targets can be provided either as
-`SpatRaster` from the `terra` library or as `matrix`.
-The costs can be provided as `SpatRaster` or `matrix`,
+\code{SpatRaster} from the \code{terra} library or as \code{matrix}.
+The costs can be provided as \code{SpatRaster} or \code{matrix},
 but also as a string describing a transformation from the affinity matrix
-(e.g. `"x -> -log(x)"`).
+(e.g. \code{"x -> -log(x)"}).
 }
 \keyword{internal}

@@ -20,7 +20,7 @@ run_conscape(
 )
 }
 \arguments{
-\item{conscape_prep}{Object of class `ConScapeRtools_prep` created using the `conscape_prep` function. If NULL (Default), then `hab_target`, `hab_src`, and `mov_prob` must individually be specified.}
+\item{conscape_prep}{Object of class \code{ConScapeRtools_prep} created using the \code{conscape_prep} function. If NULL (Default), then \code{hab_target}, \code{hab_src}, and \code{mov_prob} must individually be specified.}
 
 \item{out_dir}{Directory where final ConScape outputs will be written}
 
@@ -36,15 +36,15 @@ run_conscape(
 
 \item{exp_d}{Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 150)}
 
-\item{jl_home}{Path to the `bin` directory where Julia is installed}
+\item{jl_home}{Path to the \code{bin} directory where Julia is installed}
 
 \item{parallel}{Logical. If FALSE, processing will not be done in parallel.}
 
-\item{workers}{If `parallel = TRUE`, provide the number of parallel workers to create. Default 0.5*Number of available cores}
+\item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default 0.5*Number of available cores}
 
 \item{end_multisession}{Logical. Default == FALSE}
 
-\item{clear_dir}{Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed}
+\item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 }
 \value{
 A named list with the directories where betweenness and functional connectivity outputs were written
@@ -53,7 +53,7 @@ A named list with the directories where betweenness and functional connectivity 
 This function runs ConScape (optionally in parallel) over all created landscape tiles
 }
 \details{
-In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
+In most instances, it will be easiest to prepare data for analysis using the \code{conscape_prep} function. Provide the object created from \code{conscape_prep} to the \code{conscape_prep} parameter of \code{run_conscape}. Doing this eliminates the need to manually specify \code{has_target}, \code{hab_src}, or \code{mov_prob}.
 }
 \examples{
 library(ConScapeRtools)

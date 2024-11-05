@@ -17,5 +17,5 @@ plot(r)
 
 }
 \seealso{
-[ConScapeRtools::suitability.asc] \cr
+\link{suitability.asc} \cr
 }

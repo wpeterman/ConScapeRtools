@@ -1,9 +1,9 @@
 #' Mosaic ConScape tiles into single contiguous raster
 #'
-#' @description After running [ConScapeRtools:run_conscape()], this function will reassemble tiles into a single `SpatRaster`.
+#' @description After running [run_conscape()], this function will reassemble tiles into a single `SpatRaster`.
 #'
-#' @param out_dir Directory where [ConScapeRtools:run_conscape()] results were written
-#' @param tile_trim Provide `tile_trim` value used when running [ConScapeRtools:make_tiles()]
+#' @param out_dir Directory where [run_conscape()] results were written
+#' @param tile_trim Provide `tile_trim` value used when running [make_tiles()]
 
 #' @return `SpatRaster`
 

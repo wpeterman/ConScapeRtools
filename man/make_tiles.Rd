@@ -20,20 +20,20 @@ make_tiles(
 
 \item{asc_dir}{Directory where .asc files of tiles will be written to. If NULL (Default), then files will be written to the temporary directory of the R session}
 
-\item{r}{Raster file as `SpatRaster` to be broken up into smaller tiles}
+\item{r}{Raster file as \code{SpatRaster} to be broken up into smaller tiles}
 
-\item{clear_dir}{Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed}
+\item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
 }
 \value{
-A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directory where .asc tiles were written, and the `tile_trim` value specified.
+A named list containing the \code{SpatVector}tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directory where .asc tiles were written, and the \code{tile_trim} value specified.
 }
 \description{
 This function will break a large raster into tiles of specified dimensions.
 }
 \details{
-The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` needs to be increased.
+The smaller the tiles created, the faster each can be processed. The width of the \code{tile_trim} parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then \code{tile_trim} needs to be increased.
 }
 \examples{
 library(ConScapeRtools)
@@ -60,7 +60,7 @@ target_tile <- make_tiles(tile_d = td$tile_d,
                           clear_dir = T)
 }
 \seealso{
-[tile_rast()] for subsequent making of tiles
+\code{\link[=tile_rast]{tile_rast()}} for subsequent making of tiles
 }
 \author{
 Bill Peterman

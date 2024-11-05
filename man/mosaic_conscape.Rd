@@ -7,15 +7,15 @@
 mosaic_conscape(asc_dir, tile_trim)
 }
 \arguments{
-\item{tile_trim}{Provide `tile_trim` value used when running [ConScapeRtools:make_tiles()]}
+\item{tile_trim}{Provide \code{tile_trim} value used when running \code{\link[=make_tiles]{make_tiles()}}}
 
-\item{out_dir}{Directory where [ConScapeRtools:run_conscape()] results were written}
+\item{out_dir}{Directory where \code{\link[=run_conscape]{run_conscape()}} results were written}
 }
 \value{
-`SpatRaster`
+\code{SpatRaster}
 }
 \description{
-After running [ConScapeRtools:run_conscape()], this function will reassemble tiles into a single `SpatRaster`.
+After running \code{\link[=run_conscape]{run_conscape()}}, this function will reassemble tiles into a single \code{SpatRaster}.
 }
 \examples{
 library(ConScapeRtools)
@@ -77,7 +77,7 @@ cs_fcon <- mosaic_conscape(asc_dir = cs_run$outdir_fcon,
 plot(c(cs_btwn, cs_fcon))
 }
 \seealso{
-[make_tiles()] and [run_conscape()] \cr
+\code{\link[=make_tiles]{make_tiles()}} and \code{\link[=run_conscape]{run_conscape()}} \cr
 }
 \author{
 Bill Peterman

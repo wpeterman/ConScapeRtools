@@ -7,9 +7,9 @@
 tile_design(r_mov, r_target, max_d, theta = 0.1, jl_home)
 }
 \arguments{
-\item{r_mov}{`SpatRaster` representing movement probabilities}
+\item{r_mov}{\code{SpatRaster} representing movement probabilities}
 
-\item{r_target}{`SpatRaster` representing landscape target quality}
+\item{r_target}{\code{SpatRaster} representing landscape target quality}
 
 \item{max_d}{Presumed maximum movement distance (measured in meters) through ideal habitat}
 
@@ -18,14 +18,14 @@ tile_design(r_mov, r_target, max_d, theta = 0.1, jl_home)
 \item{jl_home}{Path to the bin directory where Julia resides}
 }
 \value{
-A named list with parameters for creating tiles with [conscape_prep()] or [tile_rast()]
+A named list with parameters for creating tiles with \code{\link[=conscape_prep]{conscape_prep()}} or \code{\link[=tile_rast]{tile_rast()}}
 }
 \description{
 Used to determine the tile size, trim width, exp_d decay value given properties of data inputs.
 }
 \details{
-`r_mov` SpatRaster must be in a projected coordinate reference system.
-Relies on functions borrowed from the `ConScapeR` package (https://github.com/ConScape/ConScapeR).
+\code{r_mov} SpatRaster must be in a projected coordinate reference system.
+Relies on functions borrowed from the \code{ConScapeR} package (https://github.com/ConScape/ConScapeR).
 }
 \examples{
 library(ConScapeRtools)

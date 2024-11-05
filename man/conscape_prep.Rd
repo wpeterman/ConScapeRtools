@@ -2,7 +2,7 @@
 % Please edit documentation in R/conscape_prep.R
 \name{conscape_prep}
 \alias{conscape_prep}
-\title{Wrapper function to prepare data for `run_conscape`}
+\title{Wrapper function to prepare data for \code{run_conscape}}
 \usage{
 conscape_prep(
   tile_d,
@@ -22,24 +22,24 @@ conscape_prep(
 
 \item{asc_dir}{Directory where .asc files of tiles will be written to. If NULL (Default), then files will be written to the temporary directory of the R session}
 
-\item{r_target}{`SpatRaster` representing target qualities. May be the same as `r_src`}
+\item{r_target}{\code{SpatRaster} representing target qualities. May be the same as \code{r_src}}
 
-\item{r_mov}{`SpatRaster` representing movement probabilities}
+\item{r_mov}{\code{SpatRaster} representing movement probabilities}
 
-\item{r_src}{`SpatRaster` representing source qualities. May be the same as `r_target`}
+\item{r_src}{\code{SpatRaster} representing source qualities. May be the same as \code{r_target}}
 
-\item{clear_dir}{Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed}
+\item{clear_dir}{Logical (Default = FALSE). Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
 }
 \value{
-A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
+A named list of class \code{ConScapeRtools_prep} containing the \code{SpatVector}tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the \code{tile_trim} value, and the \code{landmark} value specified.
 }
 \description{
-This function will run teh `make_tiles` and `tile_rast` functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
+This function will run the \code{make_tiles} and \code{tile_rast} functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
 }
 \details{
-The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` and potentially `tile_d` need to be increased.
+The smaller the tiles created, the faster each can be processed. The width of the \code{tile_trim} parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then \code{tile_trim} and potentially \code{tile_d} need to be increased.
 }
 \examples{
 library(ConScapeRtools)
@@ -84,7 +84,7 @@ prep <- conscape_prep(tile_d = tile_d,
                       landmark = landmark)
 }
 \seealso{
-[tile_design()], [tile_rast()] and [make_tiles()]
+\code{\link[=tile_design]{tile_design()}}, \code{\link[=tile_rast]{tile_rast()}} and \code{\link[=make_tiles]{make_tiles()}}
 }
 \author{
 Bill Peterman

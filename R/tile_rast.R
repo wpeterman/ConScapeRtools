@@ -1,6 +1,6 @@
 #' Break raster into small tiles
 #'
-#' @description This uses objects created by the [ConScapeRtools:make_tiles()] function to create identical tiles from other `SpatRaster` objects.
+#' @description This uses objects created by the [make_tiles()] function to create identical tiles from other `SpatRaster` objects.
 #'
 #' @param r Raster file as `SpatRaster` to be broken up into smaller tiles
 #' @param make_tiles Object created from  [make_tiles()] function
@@ -10,7 +10,7 @@
 
 #' @export
 #' @example examples/tile_rast_example.R
-#' @seealso [make_tile()] for initial creation of tiles
+#' @seealso [make_tiles()] for initial creation of tiles
 #' @author Bill Peterman
 
 tile_rast <- function(r,

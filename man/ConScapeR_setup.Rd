@@ -2,26 +2,26 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{ConScapeR_setup}
 \alias{ConScapeR_setup}
-\title{Launch the Julia installation from R and load the `ConScape` library in Julia}
+\title{Launch the Julia installation from R and load the \code{ConScape} library in Julia}
 \usage{
 ConScapeR_setup(julia_path, install_libraries = FALSE)
 }
 \arguments{
-\item{julia_path}{`[character]` \cr The directory for the Julia bin, e.g.
+\item{julia_path}{\verb{[character]} \cr The directory for the Julia bin, e.g.
 "C:/Programs/Julia-1.9.3/bin".}
 
-\item{install_libraries}{`[logical]` \cr If `FALSE` (default), Julia will be
+\item{install_libraries}{\verb{[logical]} \cr If \code{FALSE} (default), Julia will be
 launched and the required libraries will be loaded without installing them.
-If `TRUE`, the libraries will be (re-)installed in Julia.}
+If \code{TRUE}, the libraries will be (re-)installed in Julia.}
 }
 \value{
 NULL.
 }
 \description{
-This function starts a Julia session from R and imports the `ConScape` library
+This function starts a Julia session from R and imports the \code{ConScape} library
 to be used from R. It assumes that Julia is already installed in the system
-and the path to its executables is given as the `julia_path` argument.
-The first time the function is ran, it is best to set `install_libraries = TRUE`
-to install the `ConScape` library in Julia.
+and the path to its executables is given as the \code{julia_path} argument.
+The first time the function is ran, it is best to set \code{install_libraries = TRUE}
+to install the \code{ConScape} library in Julia.
 }
 \keyword{internal}

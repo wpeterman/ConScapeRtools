@@ -7,19 +7,19 @@
 tile_rast(r, make_tiles, out_dir, clear_dir = FALSE)
 }
 \arguments{
-\item{r}{Raster file as `SpatRaster` to be broken up into smaller tiles}
+\item{r}{Raster file as \code{SpatRaster} to be broken up into smaller tiles}
 
-\item{make_tiles}{Object created from  [make_tiles()] function}
+\item{make_tiles}{Object created from  \code{\link[=make_tiles]{make_tiles()}} function}
 
-\item{out_dir}{Directory where .asc files of tiles will be written. This should be different directory from the `make_tiles` `asc_dir`}
+\item{out_dir}{Directory where .asc files of tiles will be written. This should be different directory from the \code{make_tiles} \code{asc_dir}}
 
-\item{clear_dir}{Should existing files in the `out_dir` be overwritten? This function must have an empty `out_dir` to proceed}
+\item{clear_dir}{Should existing files in the \code{out_dir} be overwritten? This function must have an empty \code{out_dir} to proceed}
 }
 \value{
 A named list with the path to the directory where .asc tiles were written
 }
 \description{
-This uses objects created by the [ConScapeRtools:make_tiles()] function to create identical tiles from other `SpatRaster` objects.
+This uses objects created by the \code{\link[=make_tiles]{make_tiles()}} function to create identical tiles from other \code{SpatRaster} objects.
 }
 \examples{
 library(ConScapeRtools)
@@ -51,7 +51,7 @@ mov_tile <- tile_rast(r = resist,
                       clear_dir = T)
 }
 \seealso{
-[make_tile()] for initial creation of tiles
+\code{\link[=make_tiles]{make_tiles()}} for initial creation of tiles
 }
 \author{
 Bill Peterman

@@ -2,15 +2,15 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{betweenness_qweighted}
 \alias{betweenness_qweighted}
-\title{Wrapper for the `betweenness_qweighted` function of `ConScape`}
+\title{Wrapper for the \code{betweenness_qweighted} function of \code{ConScape}}
 \usage{
 betweenness_qweighted(h)
 }
 \arguments{
-\item{h}{`[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.}
+\item{h}{\verb{[GridRSP]} \cr The output from the \code{\link[ConScapeR:GridRSP]{ConScapeR::GridRSP()}} function.}
 }
 \value{
-`matrix`
+\code{matrix}
 }
 \description{
 Computes the quality-weighted betweenness for a ConScape.GridRSP object.

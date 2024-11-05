@@ -7,13 +7,13 @@
 vec2mat(vec, g)
 }
 \arguments{
-\item{vec}{`[matrix]` \cr Matrix to be converted}
+\item{vec}{\verb{[matrix]} \cr Matrix to be converted}
 
-\item{g}{`[Grid]` \cr Template raster, usually one of those used in the
-[ConScapeR::Grid()] function.}
+\item{g}{\verb{[Grid]} \cr Template raster, usually one of those used in the
+\code{\link[ConScapeR:Grid]{ConScapeR::Grid()}} function.}
 }
 \value{
-`[matrix]`
+\verb{[matrix]}
 }
 \description{
 Convert a node vector to matrix

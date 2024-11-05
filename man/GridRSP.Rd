@@ -2,18 +2,18 @@
 % Please edit documentation in R/jlConnectoR.R
 \name{GridRSP}
 \alias{GridRSP}
-\title{Wrapper for the GridRSP function of `ConScape`}
+\title{Wrapper for the GridRSP function of \code{ConScape}}
 \usage{
 GridRSP(g, theta)
 }
 \arguments{
-\item{g}{`[Grid]` \cr The output from the [ConScapeR::Grid()] function.}
+\item{g}{\verb{[Grid]} \cr The output from the \code{\link[ConScapeR:Grid]{ConScapeR::Grid()}} function.}
 
-\item{theta}{`[numeric]` \cr The randomness parameter theta. Lower `theta` values
+\item{theta}{\verb{[numeric]} \cr The randomness parameter theta. Lower \code{theta} values
 represent a more random walk, and higher values a more least-cost path behavior.}
 }
 \value{
-A `ConScape.GridRSP` object within Julia.
+A \code{ConScape.GridRSP} object within Julia.
 }
 \description{
 Creates a GridRSP from a ConScape.Grid and the randomness parameter. Theta closer to zero gives a more random movement,
