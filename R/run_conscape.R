@@ -20,7 +20,7 @@
 #' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
 #'
 #' @export
-#' @examples examples/run_conscape_example.R
+#' @example examples/run_conscape_example.R
 #' @author Bill Peterman
 
 run_conscape <- function(conscape_prep = NULL,

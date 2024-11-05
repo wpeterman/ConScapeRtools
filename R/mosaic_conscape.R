@@ -8,7 +8,7 @@
 #' @return `SpatRaster`
 
 #' @export
-#' @examples examples/mosaic_conscape_example.R
+#' @example examples/mosaic_conscape_example.R
 #' @seealso [make_tiles()] and [run_conscape()] \cr
 #' @author Bill Peterman
 

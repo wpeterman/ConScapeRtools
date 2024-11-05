@@ -16,7 +16,7 @@
 #'
 #'
 #' @export
-#' @examples examples/conscape_prep_example.R
+#' @example examples/conscape_prep_example.R
 #' @seealso [tile_design()], [tile_rast()] and [make_tiles()]
 #' @author Bill Peterman
 

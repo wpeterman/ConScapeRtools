@@ -36,7 +36,28 @@ This function will break a large raster into tiles of specified dimensions.
 The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` needs to be increased.
 }
 \examples{
-examples/make_tiles_example.R
+library(ConScapeRtools)
+
+## Import data
+s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+source <- terra::rast(s)
+
+a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+resist <- terra::rast(a)
+
+jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+
+## Run tile design to get parameters
+td <- tile_design(r_mov = resist,
+                  r_target = source,
+                  max_d = 7000,
+                  theta = 0.1,
+                  jl_home = jl_home)
+
+target_tile <- make_tiles(tile_d = td$tile_d,
+                          tile_trim = td$tile_trim,
+                          r = source,
+                          clear_dir = T)
 }
 \seealso{
 [tile_rast()] for subsequent making of tiles

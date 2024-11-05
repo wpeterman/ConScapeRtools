@@ -9,7 +9,7 @@
 #' @return A named list with the path to the directory where .asc tiles were written
 
 #' @export
-#' @examples examples/tile_rast_example.R
+#' @example examples/tile_rast_example.R
 #' @seealso [make_tile()] for initial creation of tiles
 #' @author Bill Peterman
 

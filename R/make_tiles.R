@@ -14,7 +14,7 @@
 #'
 #'
 #' @export
-#' @examples examples/make_tiles_example.R
+#' @example examples/make_tiles_example.R
 #' @seealso [tile_rast()] for subsequent making of tiles
 #' @author Bill Peterman
 

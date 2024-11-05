@@ -56,7 +56,56 @@ This function runs ConScape (optionally in parallel) over all created landscape 
 In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
 }
 \examples{
-examples/run_conscape_example.R
+library(ConScapeRtools)
+
+## Import data
+s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+source <- terra::rast(s)
+
+a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+resist <- terra::rast(a)
+
+jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+
+td <- tile_design(r_mov = resist,
+                  r_target = source,
+                  max_d = 7000,
+                  theta = 0.1,
+                  jl_home = jl_home)
+
+## Tile dimension
+tile_d <- td$tile_d
+
+# How much to trim tiles
+tile_trim <- td$tile_trim
+
+# Makes computation more efficient
+landmark <- 5L # Must be an integer, not numeric
+
+# Controls level of randomness of paths
+theta <- td$theta
+
+# Controls rate of decay with distance
+exp_d <- td$exp_d
+
+## Prepare data for analysis
+prep <- conscape_prep(tile_d = tile_d,
+                      tile_trim = tile_trim,
+                      r_target = source,
+                      r_mov = resist,
+                      r_src = source,
+                      clear_dir = T,
+                      landmark = landmark)
+
+## Run ConScape
+cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                       conscape_prep = prep,
+                       theta = theta,
+                       exp_d = exp_d,
+                       jl_home = jl_home,
+                       parallel = T,
+                       workers = 6,
+                       end_multisession = T)
 }
 \author{
 Bill Peterman

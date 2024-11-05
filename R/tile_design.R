@@ -10,7 +10,7 @@
 #' @return A named list with parameters for creating tiles with [conscape_prep()] or [tile_rast()]
 
 #' @export
-#' @examples examples/tile_design_example.R
+#' @example examples/tile_design_example.R
 #' @author Bill Peterman
 #' @details
 #' `r_mov` SpatRaster must be in a projected coordinate reference system.
