@@ -2,8 +2,8 @@
 #'
 #' @description This function runs ConScape (optionally in parallel) over all created landscape tiles
 #'
-#' @param out_dir Directory where final ConScape outputs will be written
 #' @param conscape_prep Object of class `ConScapeRtools_prep` created using the `conscape_prep` function. If NULL (Default), then `hab_target`, `hab_src`, and `mov_prob` must individually be specified.
+#' @param out_dir Directory where final ConScape outputs will be written
 #' @param hab_target Directory with habitat target tiles
 #' @param hab_src Directory with habitat source tiles
 #' @param mov_prob Directory with movement probability tiles
@@ -23,8 +23,7 @@
 #' @examples examples/run_conscape_example.R
 #' @author Bill Peterman
 
-run_conscape <- function(data_dir,
-                         conscape_prep = NULL,
+run_conscape <- function(conscape_prep = NULL,
                          out_dir,
                          hab_target = NULL,
                          hab_src = NULL,
@@ -56,6 +55,7 @@ run_conscape <- function(data_dir,
     hab_target <- list.files(target_dir, pattern = "\\.asc$")
     hab_src <- list.files(src_dir, pattern = "\\.asc$")
     mov_prob <- list.files(mov_dir, pattern = "\\.asc$")
+    landmark <- conscape_prep$landmark
   }
 
   if(class(hab_target)[[1]] == 'SpatRaster' |

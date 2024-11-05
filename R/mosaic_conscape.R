@@ -36,6 +36,7 @@ mosaic_conscape <- function(asc_dir,
   }
 
   rc <- sprc(crop_rast)
-  r_mosaic <- mosaic(rc, fun = 'mean')
+  # r_mosaic <- mosaic(rc, fun = 'mean')
+  r_mosaic <- merge(rc)
   return(r_mosaic)
 }

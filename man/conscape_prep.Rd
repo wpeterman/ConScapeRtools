@@ -33,7 +33,7 @@ conscape_prep(
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
 }
 \value{
-A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, and the `tile_trim` value specified.
+A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
 }
 \description{
 This function will run teh `make_tiles` and `tile_rast` functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
@@ -45,7 +45,7 @@ The smaller the tiles created, the faster each can be processed. The width of th
 examples/conscape_prep_example.R
 }
 \seealso{
-[tile_rast()]  and [make_tiles()] for individual function calls
+[tile_design()], [tile_rast()] and [make_tiles()]
 }
 \author{
 Bill Peterman

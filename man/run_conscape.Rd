@@ -5,12 +5,11 @@
 \title{Run ConScape}
 \usage{
 run_conscape(
-  data_dir,
   conscape_prep = NULL,
   out_dir,
-  hab_target,
-  hab_src,
-  mov_prob,
+  hab_target = NULL,
+  hab_src = NULL,
+  mov_prob = NULL,
   landmark = 10L,
   theta = 0.01,
   exp_d = 150,

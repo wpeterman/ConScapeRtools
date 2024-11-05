@@ -10,14 +10,14 @@
 #' @param r_src `SpatRaster` representing source qualities. May be the same as `r_target`
 #' @param clear_dir Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
-#' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, and the `tile_trim` value specified.
+#' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
 #' @details
 #' The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` and potentially `tile_d` need to be increased.
 #'
 #'
 #' @export
 #' @examples examples/conscape_prep_example.R
-#' @seealso [tile_rast()]  and [make_tiles()] for individual function calls
+#' @seealso [tile_design()], [tile_rast()] and [make_tiles()]
 #' @author Bill Peterman
 
 conscape_prep <- function(tile_d,
@@ -159,7 +159,8 @@ conscape_prep <- function(tile_d,
                src = src_tile$asc_dir,
                target = write_dir,
                mov = mov_tile$asc_dir,
-               tile_trim = tile_trim)
+               tile_trim = tile_trim,
+               landmark = landmark)
 
   class(out2) <- 'ConScapeRtools_prep'
   return(out2)
