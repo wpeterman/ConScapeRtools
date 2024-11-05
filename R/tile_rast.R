@@ -18,6 +18,7 @@ tile_rast <- function(r,
                       out_dir,
                       clear_dir = FALSE){
   ## Extend raster
+  trim <- make_tiles$tile_trim
   extnd <- ext(r) + trim
   r_e <- extend(r, extnd)
   r_e[is.na(r_e)] <- 0
