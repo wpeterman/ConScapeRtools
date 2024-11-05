@@ -18,7 +18,7 @@ tile_design(r_mov, r_target, max_d, theta = 0.1, jl_home)
 \item{jl_home}{Path to the bin directory where Julia resides}
 }
 \value{
-A named list with the path to the directory where .asc tiles were written
+A named list with parameters for creating tiles with [conscape_prep()] or [tile_rast()]
 }
 \description{
 Used to determine the tile size, trim width, exp_d decay value given properties of data inputs.
