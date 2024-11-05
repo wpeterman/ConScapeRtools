@@ -6,7 +6,8 @@
 #' @param r_target `SpatRaster` representing landscape target quality
 #' @param max_d Presumed maximum movement distance (measured in meters) through ideal habitat
 #' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.1)
-#' @return A named list with the path to the directory where .asc tiles were written
+#' @param jl_home Path to the bin directory where Julia resides
+#' @return A named list with parameters for creating tiles with [conscape_prep()] or [tile_rast()]
 
 #' @export
 #' @examples examples/tile_design_example.R

@@ -14,6 +14,8 @@ tile_design(r_mov, r_target, max_d, theta = 0.1, jl_home)
 \item{max_d}{Presumed maximum movement distance (measured in meters) through ideal habitat}
 
 \item{theta}{Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.1)}
+
+\item{jl_home}{Path to the bin directory where Julia resides}
 }
 \value{
 A named list with the path to the directory where .asc tiles were written
