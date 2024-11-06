@@ -43,15 +43,15 @@ conscape_prep <- function(tile_d,
   }
 
   ## Check resolution
-  if(res(r_target) != res(r_mov)){
+  if(res(r_target)[1] != res(r_mov)[1]){
     stop('`r_target` and `r_mov` have different resolutions!')
   }
 
-  if(res(r_target) != res(r_src)){
+  if(res(r_target)[1] != res(r_src)[1]){
     stop('`r_target` and `r_src` have different resolutions!')
   }
 
-  if(res(r_mov) != res(r_src)){
+  if(res(r_mov)[1] != res(r_src)[1]){
     stop('`r_mov` and `r_src` have different resolutions!')
   }
 
