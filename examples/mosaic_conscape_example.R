@@ -50,8 +50,8 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        end_multisession = T)
 
 ## Put output tiles together
-cs_btwn <- mosaic_conscape(asc_dir = cs_run$outdir_btwn,
+cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
                            tile_trim = tile_trim)
-cs_fcon <- mosaic_conscape(asc_dir = cs_run$outdir_fcon,
+cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
                            tile_trim = tile_trim)
 plot(c(cs_btwn, cs_fcon))

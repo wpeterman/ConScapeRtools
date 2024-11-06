@@ -3,7 +3,7 @@
 #' @description After running [run_conscape()], this function will reassemble tiles into a single `SpatRaster`.
 #'
 #' @param out_dir Directory where [run_conscape()] results were written
-#' @param tile_trim Provide `tile_trim` value used when running [make_tiles()]
+#' @param tile_trim Provide `tile_trim` value used when running [conscape_prep()] or [make_tiles()]
 
 #' @return `SpatRaster`
 
@@ -12,9 +12,9 @@
 #' @seealso [make_tiles()] and [run_conscape()] \cr
 #' @author Bill Peterman
 
-mosaic_conscape <- function(asc_dir,
+mosaic_conscape <- function(out_dir,
                             tile_trim) {
-  asc_files <- list.files(asc_dir,
+  asc_files <- list.files(out_dir,
                           pattern = "\\.asc$",
                           full.names = T)
 
