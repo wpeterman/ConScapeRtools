@@ -4,7 +4,7 @@
 #'
 #' @param out_dir Directory where [run_conscape()] results were written
 #' @param tile_trim Provide `tile_trim` value used when running [conscape_prep()] or [make_tiles()]
-
+#' @param method Either 'mosaic' (Default) or 'merge' to combine raster tiles together
 #' @return `SpatRaster`
 
 #' @export
@@ -13,7 +13,10 @@
 #' @author Bill Peterman
 
 mosaic_conscape <- function(out_dir,
-                            tile_trim) {
+                            tile_trim,
+                            method = c('mosaic', 'merge')) {
+  method <- match.arg(method)
+
   asc_files <- list.files(out_dir,
                           pattern = "\\.asc$",
                           full.names = T)
@@ -36,7 +39,11 @@ mosaic_conscape <- function(out_dir,
   }
 
   rc <- sprc(crop_rast)
-  # r_mosaic <- mosaic(rc, fun = 'mean')
-  r_mosaic <- merge(rc)
+
+  if(method == 'mosaic'){
+    r_mosaic <- mosaic(rc, fun = 'mean')
+  } else {
+    r_mosaic <- merge(rc)
+  }
   return(r_mosaic)
 }

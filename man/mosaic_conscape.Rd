@@ -4,12 +4,14 @@
 \alias{mosaic_conscape}
 \title{Mosaic ConScape tiles into single contiguous raster}
 \usage{
-mosaic_conscape(out_dir, tile_trim)
+mosaic_conscape(out_dir, tile_trim, method = c("mosaic", "merge"))
 }
 \arguments{
 \item{out_dir}{Directory where \code{\link[=run_conscape]{run_conscape()}} results were written}
 
 \item{tile_trim}{Provide \code{tile_trim} value used when running \code{\link[=conscape_prep]{conscape_prep()}} or \code{\link[=make_tiles]{make_tiles()}}}
+
+\item{method}{Either 'mosaic' (Default) or 'merge' to combine raster tiles together}
 }
 \value{
 \code{SpatRaster}
@@ -71,7 +73,8 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
 
 ## Put output tiles together
 cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
-                           tile_trim = tile_trim)
+                           tile_trim = tile_trim,
+                           method = 'mosaic')
 cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
                            tile_trim = tile_trim)
 plot(c(cs_btwn, cs_fcon))

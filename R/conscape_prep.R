@@ -28,6 +28,33 @@ conscape_prep <- function(tile_d,
                           r_src,
                           clear_dir = FALSE,
                           landmark = 10L) {
+
+  ## Check extents
+  if(ext(r_target) != ext(r_mov)){
+    stop('`r_target` and `r_mov` have different extents!')
+  }
+
+  if(ext(r_target) != ext(r_src)){
+    stop('`r_target` and `r_src` have different extents!')
+  }
+
+  if(ext(r_mov) != ext(r_src)){
+    stop('`r_mov` and `r_src` have different extents!')
+  }
+
+  ## Check resolution
+  if(res(r_target) != res(r_mov)){
+    stop('`r_target` and `r_mov` have different resolutions!')
+  }
+
+  if(res(r_target) != res(r_src)){
+    stop('`r_target` and `r_src` have different resolutions!')
+  }
+
+  if(res(r_mov) != res(r_src)){
+    stop('`r_mov` and `r_src` have different resolutions!')
+  }
+
   r_ext <- ext(r_target)
   extnd <- r_ext + tile_trim
   r_e <- extend(r_target, extnd)

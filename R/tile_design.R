@@ -26,7 +26,7 @@ tile_design <- function(r_mov,
                         r_target,
                         max_d,
                         theta = 0.1,
-                        jl_home){
+                        jl_home) {
 
   threshold <- 0.025
   r_res <- res(r_mov)
