@@ -55,30 +55,30 @@ conscape_prep <- function(tile_d,
     stop('`r_mov` and `r_src` have different resolutions!')
   }
 
-  r_ext <- ext(r_target)
+  r_ext <- ext(r_src)
   extnd <- r_ext + tile_trim
-  r_e <- extend(r_target, extnd)
+  r_e <- extend(r_src, extnd)
   r_e[is.na(r_e)] <- 0
   r_ext <- ext(r_e)
 
   e <- ext(r_ext[1], r_ext[1] + tile_d,
            r_ext[4] - tile_d, r_ext[4])
-  t <- as.polygons(e, crs = crs(r_target))
+  t <- as.polygons(e, crs = crs(r_src))
 
   f_shift.x <- ext(t)
 
-  shift <- tile_d - (2*tile_trim) - (2*res(r_target)[1])
+  shift <- tile_d - (2*tile_trim) - (2*res(r_src)[1])
 
   while(f_shift.x[2] < r_ext[2]){
     f_shift.x[1:2] <- (f_shift.x[1:2] + shift)
 
     if(f_shift.x[2] < r_ext[2]){
-      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
+      t2 <- as.polygons(f_shift.x, crs = crs(r_src))
       t <- c(t, t2)
     } else {
       f_shift.x[2] <- r_ext[2]
       f_shift.x[1] <- (f_shift.x[2] -  tile_d)
-      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
+      t2 <- as.polygons(f_shift.x, crs = crs(r_src))
       t <- c(t, t2)
     }
   } ## End while
@@ -110,7 +110,7 @@ conscape_prep <- function(tile_d,
 
   ## Focal buffer
   ## Alt method
-  overlap <- (3*res(r_target)[1])
+  overlap <- (3*res(r_src)[1])
   s <- vect()
   for(i in 1:length(all_r)){
     fc <- all_r[i]
@@ -175,16 +175,16 @@ conscape_prep <- function(tile_d,
                         out_dir = file.path(out$asc_dir, 'mov'),
                         clear_dir = T)
 
-  src_tile <- tile_rast(r = r_src,
-                        make_tiles = out,
-                        out_dir = file.path(out$asc_dir, 'src'),
-                        clear_dir = T)
+  target_tile <- tile_rast(r = r_target,
+                           make_tiles = out,
+                           out_dir = file.path(out$asc_dir, 'target'),
+                           clear_dir = T)
 
   out2 <- list(cs_tiles = all_r[select_rast],
                tile_num = select_rast,
                asc_dir = write_dir,
-               src = src_tile$asc_dir,
-               target = write_dir,
+               src = write_dir,
+               target = target_tile$asc_dir,
                mov = mov_tile$asc_dir,
                tile_trim = tile_trim,
                landmark = landmark)
