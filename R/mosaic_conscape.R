@@ -4,6 +4,7 @@
 #'
 #' @param out_dir Directory where [run_conscape()] results were written
 #' @param tile_trim Provide `tile_trim` value used when running [conscape_prep()] or [make_tiles()]
+#' @param mask Default = NULL. `SpatRaster` indicating regions of the landscape that could potentially have pheasants
 #' @param method Either 'mosaic' (Default) or 'merge' to combine raster tiles together
 #' @return `SpatRaster`
 
@@ -14,6 +15,7 @@
 
 mosaic_conscape <- function(out_dir,
                             tile_trim,
+                            mask = NULL,
                             method = c('mosaic', 'merge')) {
   method <- match.arg(method)
 
@@ -45,5 +47,12 @@ mosaic_conscape <- function(out_dir,
   } else {
     r_mosaic <- merge(rc)
   }
-  return(r_mosaic)
+
+  if(is.null(mask)){
+    final <- r_mosaic
+  } else {
+    final <- r_mosaic * mask
+
+  }
+  return(final)
 }

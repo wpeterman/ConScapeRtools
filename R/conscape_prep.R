@@ -8,6 +8,7 @@
 #' @param r_target `SpatRaster` representing target qualities. May be the same as `r_src`
 #' @param r_mov `SpatRaster` representing movement probabilities
 #' @param r_src `SpatRaster` representing source qualities. May be the same as `r_target`
+#' @param target_threshold Value of r_target that is meaningful for movement. Values less `target_threshold` will be set to NA and masked.
 #' @param clear_dir Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
 #' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
@@ -26,8 +27,15 @@ conscape_prep <- function(tile_d,
                           r_target,
                           r_mov,
                           r_src,
+                          target_threshold,
                           clear_dir = FALSE,
                           landmark = 10L) {
+
+  # method <- match.arg(method)
+  method <- 'both'
+  t_mask <- r_target
+  t_mask[t_mask < target_threshold] <- 0
+  t_mask[t_mask != 0] <- 1
 
   ## Check extents
   if(ext(r_target) != ext(r_mov)){
@@ -55,30 +63,31 @@ conscape_prep <- function(tile_d,
     stop('`r_mov` and `r_src` have different resolutions!')
   }
 
-  r_ext <- ext(r_src)
+  r_target[r_target < target_threshold] <- NA
+  r_ext <- ext(r_target)
   extnd <- r_ext + tile_trim
-  r_e <- extend(r_src, extnd)
-  r_e[is.na(r_e)] <- 0
+  r_e <- extend(r_target, extnd, fill = NA)
+  # r_e[is.na(r_e)] <- 0 #NA
   r_ext <- ext(r_e)
 
   e <- ext(r_ext[1], r_ext[1] + tile_d,
            r_ext[4] - tile_d, r_ext[4])
-  t <- as.polygons(e, crs = crs(r_src))
+  t <- as.polygons(e, crs = crs(r_target))
 
   f_shift.x <- ext(t)
 
-  shift <- tile_d - (2*tile_trim) - (2*res(r_src)[1])
+  shift <- tile_d - (2*tile_trim) - (2*res(r_target)[1])
 
   while(f_shift.x[2] < r_ext[2]){
     f_shift.x[1:2] <- (f_shift.x[1:2] + shift)
 
     if(f_shift.x[2] < r_ext[2]){
-      t2 <- as.polygons(f_shift.x, crs = crs(r_src))
+      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
       t <- c(t, t2)
     } else {
       f_shift.x[2] <- r_ext[2]
       f_shift.x[1] <- (f_shift.x[2] -  tile_d)
-      t2 <- as.polygons(f_shift.x, crs = crs(r_src))
+      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
       t <- c(t, t2)
     }
   } ## End while
@@ -110,7 +119,7 @@ conscape_prep <- function(tile_d,
 
   ## Focal buffer
   ## Alt method
-  overlap <- (3*res(r_src)[1])
+  overlap <- (1*res(r_target)[1]) ## Orig = 3
   s <- vect()
   for(i in 1:length(all_r)){
     fc <- all_r[i]
@@ -126,31 +135,57 @@ conscape_prep <- function(tile_d,
   r_list <- lapply(1:length(all_r), function(x)
     terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
 
+  # t_list <- lapply(1:length(all_r), function(x)
+  #   terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
+
   r_list.crop <- lapply(1:length(all_r), function(x)
     terra::mask(crop(r_e, ext(s[x])), s[x]))
 
+  ## Updated function
+  # na_rast <- lapply(1:length(r_list.crop), function(x)
+  #   global(r_list.crop[[x]], 'sum', na.rm = T)[1]) |> unlist() |> as.vector()
   na_rast <- lapply(1:length(r_list.crop), function(x)
-    minmax(r_list.crop[[x]])[1]) |> unlist()
+    minmax(r_list.crop[[x]])[1]) |> unlist() |> as.vector()
 
 
   agg_list <- lapply(1:length(r_list), function(x)
     terra::aggregate(r_list[[x]], fact = I(floor(landmark*2)), fun = 'mean'))
 
+  ## Updated Function
   na_rast2 <- lapply(1:length(agg_list), function(x)
-    minmax(agg_list[[x]])[1]) |> unlist()
+    minmax(agg_list[[x]])[1]) |> unlist() #|> as.vector()
+  # na_rast2 <- lapply(1:length(agg_list), function(x)
+  #   global(agg_list[[x]], 'sum', na.rm = T)[1]) |> unlist() |> as.vector()
 
-  select_rast <- which(!is.nan(na_rast) & !is.nan(na_rast2))
+  if(method == 'landmark'){
+    select_rast <- which(na_rast2 != 0)
+  } else if(method == 'tile') {
+    select_rast <- which(na_rast != 0)
+  } else {
+    select_rast <- which(na_rast != 0 & na_rast2 != 0)
+  }
 
   if(is.null(asc_dir)){
     write_dir <- paste0(tempdir(),"\\asc\\")
+    suppressWarnings(dir.create(paste0(write_dir,"\\mask\\"), recursive = T))
+
   } else {
     write_dir <- asc_dir
+    dir.create(paste0(write_dir,"\\mask\\"), recursive = T)
+
   }
 
-  if(!dir.exists(write_dir))
+  if(!dir.exists(write_dir)){
     dir.create(write_dir, recursive = T)
+    dir.create(paste0(write_dir,"\\mask\\"), recursive = T)
+  }
 
   write_dir <- normalizePath(write_dir)
+  mask_dir <- normalizePath(paste0(write_dir,"\\mask\\"))
+
+
+  writeRaster(t_mask, paste0(mask_dir, "\\mask.asc"),
+              overwrite = T, NAflag = -9999)
 
   if(length(list.files(write_dir)) > 0 & isFALSE(clear_dir)){
     stop("Files currently exist in the specified directory. Set `clear_dir = TRUE` to remove these files.")
@@ -158,7 +193,10 @@ conscape_prep <- function(tile_d,
     unlink(paste0(write_dir, "\\*"), force = T)
   }
 
+
   for(i in 1:length(select_rast)){
+    # r_NA <- r_list[[select_rast[i]]]
+    # r_NA[r_NA == 0] <- -9999
     writeRaster(r_list[[select_rast[i]]],
                 filename = paste0(write_dir, '\\r_', select_rast[i], '.asc'),
                 NAflag = -9999,
@@ -175,16 +213,16 @@ conscape_prep <- function(tile_d,
                         out_dir = file.path(out$asc_dir, 'mov'),
                         clear_dir = T)
 
-  target_tile <- tile_rast(r = r_target,
-                           make_tiles = out,
-                           out_dir = file.path(out$asc_dir, 'target'),
-                           clear_dir = T)
+  src_tile <- tile_rast(r = r_src,
+                        make_tiles = out,
+                        out_dir = file.path(out$asc_dir, 'src'),
+                        clear_dir = T)
 
   out2 <- list(cs_tiles = all_r[select_rast],
                tile_num = select_rast,
                asc_dir = write_dir,
-               src = write_dir,
-               target = target_tile$asc_dir,
+               src = src_tile$asc_dir, #write_dir,
+               target = write_dir,#target_tile$asc_dir,
                mov = mov_tile$asc_dir,
                tile_trim = tile_trim,
                landmark = landmark)

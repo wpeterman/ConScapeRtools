@@ -20,8 +20,8 @@ tile_rast <- function(r,
   ## Extend raster
   trim <- make_tiles$tile_trim
   extnd <- ext(r) + trim
-  r_e <- extend(r, extnd)
-  r_e[is.na(r_e)] <- 0
+  r_e <- extend(r, extnd, fill = NA)
+  # r_e[is.na(r_e)] <- 0 #NA
 
   cs_tiles <- make_tiles$cs_tiles
   tile_num <- make_tiles$tile_num
@@ -52,6 +52,8 @@ tile_rast <- function(r,
   cnt <- 0
   for(i in select_rast){
     cnt <- cnt + 1
+    # r_NA <- r_list[[cnt]]
+    # r_NA[r_NA == 0] <- -9999
     writeRaster(r_list[[cnt]],
                 filename = paste0(write_dir, '\\r_', i, '.asc'),
                 NAflag = -9999,

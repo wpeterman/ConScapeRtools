@@ -1,4 +1,4 @@
-function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res, land_mark, theta, exp_d, iter)
+function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res, land_mark, theta, exp_d, NA_val, iter)
 
 # set folders
 # datadir = joinpath(target_dir);
@@ -35,12 +35,12 @@ collect(values(meta_p))[1:end .!= 3]
 collect(values(meta_p))[1:end .!= 3] == collect(values(meta_s))[1:end .!= 3]
 
 non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_target)))
-mov_prob[non_matches] .= -9999
-hab_qual_target[non_matches] .= -9999;
+mov_prob[non_matches] .= NA_val
+hab_qual_target[non_matches] .= NA_val;
 
 non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_source)))
-mov_prob[non_matches] .= -9999
-hab_qual_source[non_matches] .= -9999;
+mov_prob[non_matches] .= NA_val
+hab_qual_source[non_matches] .= NA_val;
 
 adjacency_matrix = ConScape.graph_matrix_from_raster(mov_prob)
 g = ConScape.Grid(size(mov_prob)...,

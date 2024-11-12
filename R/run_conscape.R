@@ -10,12 +10,13 @@
 #' @param clear_dir Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
 #' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.01)
-#' @param exp_d Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 150)
+#' @param exp_d Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 50)
+#' @param NA_val Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)
 #' @param jl_home Path to the `bin` directory where Julia is installed
 #' @param parallel Logical. If FALSE, processing will not be done in parallel.
 #' @param workers If `parallel = TRUE`, provide the number of parallel workers to create. Default 0.5*Number of available cores
 #' @param end_multisession Logical. Default == FALSE
-#' @return A named list with the directories where betweenness and functional connectivity outputs were written
+#' @return A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
 #' @details
 #' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
 #'
@@ -31,6 +32,7 @@ run_conscape <- function(conscape_prep = NULL,
                          landmark = 10L,
                          theta = 0.01,
                          exp_d = 150,
+                         NA_val = 1e-50,
                          jl_home,
                          parallel = FALSE,
                          workers = availableCores()/2,
@@ -56,6 +58,8 @@ run_conscape <- function(conscape_prep = NULL,
     hab_src <- list.files(src_dir, pattern = "\\.asc$")
     mov_prob <- list.files(mov_dir, pattern = "\\.asc$")
     landmark <- conscape_prep$landmark
+    target_mask <- rast(file.path(conscape_prep$asc_dir, 'mask', "mask.asc"))
+    # target_mask <- conscape_prep$mask
   }
 
   if(class(hab_target)[[1]] == 'SpatRaster' |
@@ -124,6 +128,7 @@ run_conscape <- function(conscape_prep = NULL,
                                   .landmark = landmark,
                                   .theta = theta,
                                   .exp_d = exp_d,
+                                  .NA_val = NA_val,
                                   future.seed = TRUE
       ),
       silent = T) ## End future_lapply
@@ -159,6 +164,7 @@ run_conscape <- function(conscape_prep = NULL,
                                     .landmark = landmark,
                                     .theta = theta,
                                     .exp_d = exp_d,
+                                    .NA_val = NA_val,
                                     future.seed = TRUE
         ),
         silent = T) ## End future_lapply
@@ -197,6 +203,7 @@ run_conscape <- function(conscape_prep = NULL,
         julia_assign("landmark", landmark)
         julia_assign("theta", theta)
         julia_assign("exp_d", exp_d)
+        julia_assign("NA_val", NA_val)
         julia_assign("iter", iter)
 
         julia_command("conscape(
@@ -210,17 +217,38 @@ run_conscape <- function(conscape_prep = NULL,
                 landmark,
                 theta,
                 exp_d,
+                NA_val,
                 iter);")
 
         setTxtProgressBar(pb,i)
       } ## End for loop
       close(pb)
     } ## End ifelse
+
     out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
                 outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
-    return(out)
-  }
-} ## End function
+
+    btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
+                            tile_trim = tile_trim,
+                            method = 'mosaic')
+    fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
+                            tile_trim = tile_trim,
+                            method = 'mosaic')
+
+    if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
+      crs(btwn) <- crs(fcon) <- crs(target_mask)
+      target_mask[target_mask == 0] <- NA
+      btwn[is.na(target_mask)] <- NA
+      fcon[is.na(target_mask)] <- NA
+    }
+
+out <- list(btwn = btwn,
+            fcon = fcon,
+            outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+            outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+return(out)
+}
+  } ## End function
 
 #' @importFrom parallelly availableCores
 #' @importFrom future plan multisession sequential
@@ -240,7 +268,8 @@ cs_par.func <- function(i,
                         .out_dir,
                         .landmark,
                         .theta,
-                        .exp_d){
+                        .exp_d,
+                        .NA_val){
 
   julia_setup(.jl_home, rebuild = T)
   julia_library("ConScape")
@@ -264,6 +293,7 @@ cs_par.func <- function(i,
   julia_assign("landmark", .landmark)
   julia_assign("theta", .theta)
   julia_assign("exp_d", .exp_d)
+  julia_assign("NA_val", .NA_val)
   julia_assign("iter", iter)
 
   julia_command("conscape(
@@ -277,5 +307,6 @@ cs_par.func <- function(i,
                 landmark,
                 theta,
                 exp_d,
+                NA_val,
                 iter);")
 }

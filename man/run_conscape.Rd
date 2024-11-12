@@ -13,6 +13,7 @@ run_conscape(
   landmark = 10L,
   theta = 0.01,
   exp_d = 150,
+  NA_val = 1e-50,
   jl_home,
   parallel = FALSE,
   workers = availableCores()/2,
@@ -34,7 +35,9 @@ run_conscape(
 
 \item{theta}{Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.01)}
 
-\item{exp_d}{Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 150)}
+\item{exp_d}{Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 50)}
+
+\item{NA_val}{Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)}
 
 \item{jl_home}{Path to the \code{bin} directory where Julia is installed}
 
@@ -47,7 +50,7 @@ run_conscape(
 \item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 }
 \value{
-A named list with the directories where betweenness and functional connectivity outputs were written
+A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
 }
 \description{
 This function runs ConScape (optionally in parallel) over all created landscape tiles
