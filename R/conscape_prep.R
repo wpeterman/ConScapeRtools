@@ -8,7 +8,7 @@
 #' @param r_target `SpatRaster` representing target qualities. May be the same as `r_src`
 #' @param r_mov `SpatRaster` representing movement probabilities
 #' @param r_src `SpatRaster` representing source qualities. May be the same as `r_target`
-#' @param target_threshold Value of r_target that is meaningful for movement. Values less `target_threshold` will be set to NA and masked.
+#' @param target_threshold Value of r_target that is meaningful for movement (Default = 0). Values less `target_threshold` will be set to NA and masked.
 #' @param clear_dir Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
 #' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
@@ -27,7 +27,7 @@ conscape_prep <- function(tile_d,
                           r_target,
                           r_mov,
                           r_src,
-                          target_threshold,
+                          target_threshold = 0,
                           clear_dir = FALSE,
                           landmark = 10L) {
 

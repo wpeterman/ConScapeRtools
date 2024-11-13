@@ -1,7 +1,7 @@
 Package: ConScapeRtools
 Type: Package
 Title: Run ConScape with large landscapes from R
-Version: 0.2.0
+Version: 0.2.1
 Author: Bill Peterman
 Maintainer: Bill Peterman <peterman.73@osu.edu>
 Description: A package to facilitate the analysis of large landscapes with the Julia package ConScape from R.

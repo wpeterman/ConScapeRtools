@@ -11,7 +11,7 @@ conscape_prep(
   r_target,
   r_mov,
   r_src,
-  target_threshold,
+  target_threshold = 0,
   clear_dir = FALSE,
   landmark = 10L
 )
@@ -29,7 +29,7 @@ conscape_prep(
 
 \item{r_src}{\code{SpatRaster} representing source qualities. May be the same as \code{r_target}}
 
-\item{target_threshold}{Value of r_target that is meaningful for movement. Values less \code{target_threshold} will be set to NA and masked.}
+\item{target_threshold}{Value of r_target that is meaningful for movement (Default = 0). Values less \code{target_threshold} will be set to NA and masked.}
 
 \item{clear_dir}{Logical (Default = FALSE). Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 

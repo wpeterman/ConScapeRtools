@@ -35,7 +35,7 @@ collect(values(meta_p))[1:end .!= 3]
 collect(values(meta_p))[1:end .!= 3] == collect(values(meta_s))[1:end .!= 3]
 
 non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_target)))
-mov_prob[non_matches] .= NA_val
+mov_prob[non_matches] .= 0
 hab_qual_target[non_matches] .= NA_val;
 
 non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_source)))
