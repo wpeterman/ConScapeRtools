@@ -46,7 +46,6 @@ tile_design <- function(r_mov,
   diag(rmat) <- mx_p
   target <- mov <- rast(nrows = dim[1], ncols = dim[1],
                         vals = unlist(rmat),
-                        # vals = mx_p[[1]],
                         resolution = r_res, crs = r_crs,
                         xmin = 0, xmax = r_res[1] * dim[1],
                         ymin = 0, ymax = r_res[1] * dim[1])

@@ -59,7 +59,7 @@ run_conscape <- function(conscape_prep = NULL,
     mov_prob <- list.files(mov_dir, pattern = "\\.asc$")
     landmark <- conscape_prep$landmark
     target_mask <- rast(file.path(conscape_prep$asc_dir, 'mask', "mask.asc"))
-    # target_mask <- conscape_prep$mask
+    tile_trim <- conscape_prep$tile_trim
   }
 
   if(class(hab_target)[[1]] == 'SpatRaster' |
