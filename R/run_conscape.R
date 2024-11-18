@@ -12,6 +12,7 @@
 #' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.01)
 #' @param exp_d Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 50)
 #' @param NA_val Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)
+#' @param mosaic Logical. Default = TRUE. The tiles from the ConScape run will be combined into a single raster.
 #' @param jl_home Path to the `bin` directory where Julia is installed
 #' @param parallel Logical. If FALSE, processing will not be done in parallel.
 #' @param workers If `parallel = TRUE`, provide the number of parallel workers to create. Default 0.5*Number of available cores
@@ -33,6 +34,7 @@ run_conscape <- function(conscape_prep = NULL,
                          theta = 0.01,
                          exp_d = 150,
                          NA_val = 1e-50,
+                         mosaic = TRUE,
                          jl_home,
                          parallel = FALSE,
                          workers = availableCores()/2,
@@ -228,25 +230,31 @@ run_conscape <- function(conscape_prep = NULL,
     out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
                 outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
 
-    btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
-                            tile_trim = tile_trim,
-                            method = 'mosaic')
-    fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
-                            tile_trim = tile_trim,
-                            method = 'mosaic')
+    if(isTRUE(mosaic)){
+      btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
+                              tile_trim = tile_trim,
+                              method = 'mosaic')
+      fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
+                              tile_trim = tile_trim,
+                              method = 'mosaic')
 
-    if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
-      crs(btwn) <- crs(fcon) <- crs(target_mask)
-      target_mask[target_mask == 0] <- NA
-      btwn[is.na(target_mask)] <- NA
-      fcon[is.na(target_mask)] <- NA
+      if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
+        crs(btwn) <- crs(fcon) <- crs(target_mask)
+        target_mask[target_mask == 0] <- NA
+        btwn[is.na(target_mask)] <- NA
+        fcon[is.na(target_mask)] <- NA
+      }
+
+      out <- list(btwn = btwn,
+                  fcon = fcon,
+                  outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+                  outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+      return(out)
+    } else {
+      out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+                  outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
     }
 
-out <- list(btwn = btwn,
-            fcon = fcon,
-            outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-            outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
-return(out)
 }
   } ## End function
 
