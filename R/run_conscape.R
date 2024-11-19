@@ -240,6 +240,7 @@ run_conscape <- function(conscape_prep = NULL,
 
       if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
         crs(btwn) <- crs(fcon) <- crs(target_mask)
+        target_mask <- crop(target_mask, fcon)
         target_mask[target_mask == 0] <- NA
         btwn[is.na(target_mask)] <- NA
         fcon[is.na(target_mask)] <- NA
