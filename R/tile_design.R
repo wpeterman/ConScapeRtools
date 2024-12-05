@@ -3,6 +3,7 @@
 #' @description Used to determine the tile size, trim width, exp_d decay value given properties of data inputs.
 #'
 #' @param r_mov `SpatRaster` representing movement probabilities
+#' @param r_source `SpatRaster` representing landscape source quality
 #' @param r_target `SpatRaster` representing landscape target quality
 #' @param max_d Presumed maximum movement distance (measured in meters) through ideal habitat
 #' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.1)
@@ -23,6 +24,7 @@
 
 
 tile_design <- function(r_mov,
+                        r_source,
                         r_target,
                         max_d,
                         theta = 0.1,
@@ -39,17 +41,19 @@ tile_design <- function(r_mov,
 
   ## Max Values
   mx_p <- global(r_mov, 'max', na.rm = T)
+  mx_src <- global(r_source, 'max', na.rm = T)
   mx_target <- global(r_target, 'max', na.rm = T)
 
   ## Create rast
   rmat <- matrix(NaN, dim[1], dim[1]) #mx_p
   diag(rmat) <- mx_p
-  target <- mov <- rast(nrows = dim[1], ncols = dim[1],
-                        vals = unlist(rmat),
-                        resolution = r_res, crs = r_crs,
-                        xmin = 0, xmax = r_res[1] * dim[1],
-                        ymin = 0, ymax = r_res[1] * dim[1])
+  src <- target <- mov <- rast(nrows = dim[1], ncols = dim[1],
+                               vals = unlist(rmat),
+                               resolution = r_res, crs = r_crs,
+                               xmin = 0, xmax = r_res[1] * dim[1],
+                               ymin = 0, ymax = r_res[1] * dim[1])
   target[target > 0] <- mx_target[[1]]
+  src[src > 0] <- mx_src[[1]]
   e_dist <- as.matrix(dist(crds(target)))[,1]
 
   max_cell <- which.min(abs(e_dist - max_d))
@@ -59,7 +63,7 @@ tile_design <- function(r_mov,
 
   # Create ConScape Grid
   g <- Grid(affinities = mov,
-            sources = target,
+            sources = src,
             targets = target,
             costs = "x -> -log(x)")
 
