@@ -11,7 +11,7 @@ mosaic_conscape(out_dir, tile_trim, mask = NULL, method = c("mosaic", "merge"))
 
 \item{tile_trim}{Provide \code{tile_trim} value used when running \code{\link[=conscape_prep]{conscape_prep()}} or \code{\link[=make_tiles]{make_tiles()}}}
 
-\item{mask}{Default = NULL. \code{SpatRaster} indicating regions of the landscape that could potentially have pheasants}
+\item{mask}{Default = NULL. Binary \code{SpatRaster} indicating regions of the landscape that could potentially be occupied.}
 
 \item{method}{Either 'mosaic' (Default) or 'merge' to combine raster tiles together}
 }

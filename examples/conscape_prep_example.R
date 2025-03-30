@@ -10,7 +10,7 @@ resist <- terra::rast(a)
 jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
 
 td <- tile_design(r_mov = resist,
-                  r_target = source,
+                  r_source = source,
                   max_d = 7000,
                   theta = 0.1,
                   jl_home = jl_home)

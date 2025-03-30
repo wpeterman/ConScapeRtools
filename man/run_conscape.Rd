@@ -14,6 +14,7 @@ run_conscape(
   theta = 0.01,
   exp_d = 150,
   NA_val = 1e-50,
+  mosaic = TRUE,
   jl_home,
   parallel = FALSE,
   workers = availableCores()/2,
@@ -39,6 +40,8 @@ run_conscape(
 
 \item{NA_val}{Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)}
 
+\item{mosaic}{Logical. Default = TRUE. The tiles from the ConScape run will be combined into a single raster.}
+
 \item{jl_home}{Path to the \code{bin} directory where Julia is installed}
 
 \item{parallel}{Logical. If FALSE, processing will not be done in parallel.}
@@ -56,7 +59,7 @@ A named list with the betweenness and functional connectivity rasters as well as
 This function runs ConScape (optionally in parallel) over all created landscape tiles
 }
 \details{
-In most instances, it will be easiest to prepare data for analysis using the \code{conscape_prep} function. Provide the object created from \code{conscape_prep} to the \code{conscape_prep} parameter of \code{run_conscape}. Doing this eliminates the need to manually specify \code{has_target}, \code{hab_src}, or \code{mov_prob}.
+In most instances, it will be easiest to prepare data for analysis using the \code{conscape_prep} function. Provide the object created from \code{conscape_prep} to the \code{conscape_prep} parameter of \code{run_conscape}. Doing this eliminates the need to manually specify \code{landmark}, \code{hab_target}, \code{hab_src}, or \code{mov_prob}.
 }
 \examples{
 library(ConScapeRtools)

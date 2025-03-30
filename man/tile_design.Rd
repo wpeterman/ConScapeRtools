@@ -4,12 +4,21 @@
 \alias{tile_design}
 \title{Function to determine suitable tiling and analysis parameters}
 \usage{
-tile_design(r_mov, r_target, max_d, theta = 0.1, jl_home)
+tile_design(
+  r_mov,
+  r_source = NULL,
+  r_target = NULL,
+  max_d,
+  theta = 0.1,
+  jl_home
+)
 }
 \arguments{
 \item{r_mov}{\code{SpatRaster} representing movement probabilities}
 
-\item{r_target}{\code{SpatRaster} representing landscape target quality}
+\item{r_source}{\code{SpatRaster} representing landscape source quality (Default = NULL)}
+
+\item{r_target}{\code{SpatRaster} representing landscape target quality (Default = NULL)}
 
 \item{max_d}{Presumed maximum movement distance (measured in meters) through ideal habitat}
 

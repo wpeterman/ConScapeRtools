@@ -3,8 +3,8 @@
 #' @description Used to determine the tile size, trim width, exp_d decay value given properties of data inputs.
 #'
 #' @param r_mov `SpatRaster` representing movement probabilities
-#' @param r_source `SpatRaster` representing landscape source quality
-#' @param r_target `SpatRaster` representing landscape target quality
+#' @param r_source `SpatRaster` representing landscape source quality (Default = NULL)
+#' @param r_target `SpatRaster` representing landscape target quality (Default = NULL)
 #' @param max_d Presumed maximum movement distance (measured in meters) through ideal habitat
 #' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.1)
 #' @param jl_home Path to the bin directory where Julia resides
@@ -21,14 +21,20 @@
 #' @importFrom crayon %+% green red bold cyan
 #' @importFrom JuliaConnectoR juliaImport juliaEval juliaImport
 
-
-
 tile_design <- function(r_mov,
-                        r_source,
-                        r_target,
+                        r_source = NULL,
+                        r_target = NULL,
                         max_d,
                         theta = 0.1,
                         jl_home) {
+
+  if (!is.null(r_source) && is.null(r_target)) {
+    r_target <- r_source
+    message("r_target not provided. Using r_source as r_target.")
+  } else if (is.null(r_source) && !is.null(r_target)) {
+    r_source <- r_target
+    message("r_source not provided. Using r_target as r_source.")
+  }
 
   threshold <- 0.025
   r_res <- res(r_mov)
@@ -37,7 +43,6 @@ tile_design <- function(r_mov,
   cntr_cell <- floor(median(1:dim[1]))
   cntr_coord <- c(cntr_cell * r_res[1],
                   cntr_cell * r_res[1])
-
 
   ## Max Values
   mx_p <- global(r_mov, 'max', na.rm = T)
@@ -98,7 +103,6 @@ tile_design <- function(r_mov,
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'
   return(out)
-
 }
 
 # Optimization function ------------------------------------------------

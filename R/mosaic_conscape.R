@@ -4,7 +4,7 @@
 #'
 #' @param out_dir Directory where [run_conscape()] results were written
 #' @param tile_trim Provide `tile_trim` value used when running [conscape_prep()] or [make_tiles()]
-#' @param mask Default = NULL. `SpatRaster` indicating regions of the landscape that could potentially have pheasants
+#' @param mask Default = NULL. Binary `SpatRaster` indicating regions of the landscape that could potentially be occupied.
 #' @param method Either 'mosaic' (Default) or 'merge' to combine raster tiles together
 #' @return `SpatRaster`
 

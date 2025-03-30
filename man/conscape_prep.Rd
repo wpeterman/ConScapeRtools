@@ -39,7 +39,7 @@ conscape_prep(
 A named list of class \code{ConScapeRtools_prep} containing the \code{SpatVector}tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the \code{tile_trim} value, and the \code{landmark} value specified.
 }
 \description{
-This function will run the \code{make_tiles} and \code{tile_rast} functions to break large raster into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
+This function will run the \code{make_tiles} and \code{tile_rast} functions to break large rasters into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
 }
 \details{
 The smaller the tiles created, the faster each can be processed. The width of the \code{tile_trim} parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then \code{tile_trim} and potentially \code{tile_d} need to be increased.
@@ -57,7 +57,7 @@ resist <- terra::rast(a)
 jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
 
 td <- tile_design(r_mov = resist,
-                  r_target = source,
+                  r_source = source,
                   max_d = 7000,
                   theta = 0.1,
                   jl_home = jl_home)

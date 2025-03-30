@@ -19,7 +19,7 @@
 #' @param end_multisession Logical. Default == FALSE
 #' @return A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
 #' @details
-#' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `has_target`, `hab_src`, or `mov_prob`.
+#' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `landmark`, `hab_target`, `hab_src`, or `mov_prob`.
 #'
 #' @export
 #' @example examples/run_conscape_example.R
@@ -52,6 +52,8 @@ run_conscape <- function(conscape_prep = NULL,
            force = T)
   }
 
+  single_rast <- FALSE
+
   if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
     target_dir <- conscape_prep$target
     src_dir <- conscape_prep$src
@@ -68,10 +70,11 @@ run_conscape <- function(conscape_prep = NULL,
      class(hab_src)[[1]] == 'SpatRaster' |
      class(mov_prob)[[1]] == 'SpatRaster'){
     if(class(hab_target)[[1]] == 'SpatRaster'){
+      single_rast <- TRUE
       hab_target_dir <- basename(terra::sources(hab_target))
       if(isFALSE(dir.exists(hab_target_dir))){
         hab_target_dir <- paste0(tempdir(),'\\hab_target.asc')
-        writeRaster(hab_target, hab_target_dir, overwrite = T)
+        suppressWarnings(try(writeRaster(hab_target, hab_target_dir, overwrite = T, NAflag = -9999), silent = T))
         hab_target <- hab_target_dir
       }
     }
@@ -80,7 +83,7 @@ run_conscape <- function(conscape_prep = NULL,
       hab_src_dir <- basename(terra::sources(hab_src))
       if(isFALSE(dir.exists(hab_src_dir))){
         hab_src_dir <- paste0(tempdir(),'\\hab_src.asc')
-        writeRaster(hab_src, hab_src_dir, overwrite = T)
+        suppressWarnings(try(writeRaster(hab_src, hab_src_dir, overwrite = T, NAflag = -9999), silent = T))
         hab_src <- hab_src_dir
       }
     }
@@ -89,14 +92,14 @@ run_conscape <- function(conscape_prep = NULL,
       mov_prob_dir <- basename(terra::sources(mov_prob))
       if(isFALSE(dir.exists(mov_prob_dir))){
         mov_prob_dir <- paste0(tempdir(),'\\mov_prob.asc')
-        writeRaster(mov_prob, mov_prob_dir, overwrite = T)
+        suppressWarnings(try(writeRaster(mov_prob, mov_prob_dir, overwrite = T, NAflag = -9999), silent = T))
         mov_prob <- mov_prob_dir
       }
     }
 
 
   } else {
-    if(isFALSE(dir.exists(hab_target))){
+    if(isFALSE(file.exists(hab_target))){
       stop("Specify either a SpatRaster object or path to directory containing *.asc files")
     }
 
@@ -104,18 +107,54 @@ run_conscape <- function(conscape_prep = NULL,
       target_dir <- hab_target
       src_dir <- hab_src
       mov_dir <- mov_prob
-      hab_target <- list.files(hab_target, pattern = "\\.asc$")
-      hab_src <- list.files(hab_src, pattern = "\\.asc$")
-      mov_prob <- list.files(mov_prob, pattern = "\\.asc$")
+      hab_target <- ifelse(grepl(".asc", basename(hab_target)), hab_target, list.files(hab_target, pattern = "\\.asc$"))
+      hab_src <- ifelse(grepl(".asc", basename(hab_src)), hab_src, list.files(hab_src, pattern = "\\.asc$"))
+      mov_prob <- ifelse(grepl(".asc", basename(mov_prob)), mov_prob, list.files(mov_prob, pattern = "\\.asc$"))
     }
+  }
+  if(isTRUE(parallel)) {
 
-    if(isTRUE(parallel)) {
+    # Parallel ----------------------------------------------------------------
+    plan(multisession, workers = workers)
 
-      # Parallel ----------------------------------------------------------------
-      plan(multisession, workers = workers)
+    # julia_parallel(workers = workers,
+    #                julia_home = jl_home)
 
-      # julia_parallel(workers = workers,
-      #                julia_home = jl_home)
+    try(cs_out <- future_lapply(1:length(hab_target),
+                                FUN = cs_par.func,
+                                .jl_home = jl_home,
+                                .hab_target = hab_target,
+                                .hab_src = hab_src,
+                                .mov_prob = mov_prob,
+                                .src_dir = src_dir,
+                                .mov_dir = mov_dir,
+                                .target_dir = target_dir,
+                                .out_dir = out_dir,
+                                .landmark = landmark,
+                                .theta = theta,
+                                .exp_d = exp_d,
+                                .NA_val = NA_val,
+                                future.seed = TRUE
+    ),
+    silent = T) ## End future_lapply
+
+    ## Check for success
+    btwn_files <- length(list.files(normalizePath(file.path(out_dir, "btwn")),
+                                    pattern = "\\.asc$"))
+    fcon_files <- length(list.files(normalizePath(file.path(out_dir, "fcon")),
+                                    pattern = "\\.asc$"))
+    attempt <- 1
+
+    while(isTRUE((length(hab_target) != btwn_files) | (length(hab_target) != fcon_files))){
+      attempt <- attempt + 1
+      cat(paste0("\n\nParallel execution failed! Trying again...attempt #", attempt))
+
+
+      # DEBUG -------------------------------------------------------------------
+      browser()
+
+      julia_parallel(workers = availableCores()/2,
+                     julia_home = jl_home)
 
       try(cs_out <- future_lapply(1:length(hab_target),
                                   FUN = cs_par.func,
@@ -140,75 +179,41 @@ run_conscape <- function(conscape_prep = NULL,
                                       pattern = "\\.asc$"))
       fcon_files <- length(list.files(normalizePath(file.path(out_dir, "fcon")),
                                       pattern = "\\.asc$"))
-      attempt <- 1
-
-      while(isTRUE((length(hab_target) != btwn_files) | (length(hab_target) != fcon_files))){
-        attempt <- attempt + 1
-        cat(paste0("\n\nParallel execution failed! Trying again...attempt #", attempt))
+    } ## End while loop
 
 
-        # DEBUG -------------------------------------------------------------------
-        browser()
+    if(isTRUE(end_multisession)){
+      plan(sequential)
+    }
 
-        julia_parallel(workers = availableCores()/2,
-                       julia_home = jl_home)
+  } else {  ## End parallel
 
-        try(cs_out <- future_lapply(1:length(hab_target),
-                                    FUN = cs_par.func,
-                                    .jl_home = jl_home,
-                                    .hab_target = hab_target,
-                                    .hab_src = hab_src,
-                                    .mov_prob = mov_prob,
-                                    .src_dir = src_dir,
-                                    .mov_dir = mov_dir,
-                                    .target_dir = target_dir,
-                                    .out_dir = out_dir,
-                                    .landmark = landmark,
-                                    .theta = theta,
-                                    .exp_d = exp_d,
-                                    .NA_val = NA_val,
-                                    future.seed = TRUE
-        ),
-        silent = T) ## End future_lapply
+    iters <- max(length(hab_target),1)
 
-        ## Check for success
-        btwn_files <- length(list.files(normalizePath(file.path(out_dir, "btwn")),
-                                        pattern = "\\.asc$"))
-        fcon_files <- length(list.files(normalizePath(file.path(out_dir, "fcon")),
-                                        pattern = "\\.asc$"))
-      } ## End while loop
+    pb <- txtProgressBar(min = 0, max = iters,
+                         initial = 0, char = "+", style = 3)
 
+    for(i in 1:iters){
 
-      if(isTRUE(end_multisession)){
-        plan(sequential)
-      }
+      iter <- paste0('-iter_', i)
+      r_target <- hab_target[i]
+      r_source <- hab_src[i]
+      r_res <- mov_prob[i]
 
-    } else {  ## End parallel
+      julia_assign("src_dir", src_dir)
+      julia_assign("mov_dir", mov_dir)
+      julia_assign("target_dir", target_dir)
+      julia_assign("out_dir", out_dir)
+      julia_assign("r_target", r_target)
+      julia_assign("r_source", r_source)
+      julia_assign("r_res", r_res)
+      julia_assign("landmark", landmark)
+      julia_assign("theta", theta)
+      julia_assign("exp_d", exp_d)
+      julia_assign("NA_val", NA_val)
+      julia_assign("iter", iter)
 
-      pb <- txtProgressBar(min = 0, max = length(hab_target),
-                           initial = 0, char = "+", style = 3)
-
-      for(i in 1:length(hab_target)){
-
-        iter <- paste0('-iter_', i)
-        r_target <- hab_target[i]
-        r_source <- hab_src[i]
-        r_res <- mov_prob[i]
-
-        julia_assign("src_dir", src_dir)
-        julia_assign("mov_dir", mov_dir)
-        julia_assign("target_dir", target_dir)
-        julia_assign("out_dir", out_dir)
-        julia_assign("r_target", r_target)
-        julia_assign("r_source", r_source)
-        julia_assign("r_res", r_res)
-        julia_assign("landmark", landmark)
-        julia_assign("theta", theta)
-        julia_assign("exp_d", exp_d)
-        julia_assign("NA_val", NA_val)
-        julia_assign("iter", iter)
-
-        julia_command("conscape(
+      julia_command("conscape(
                 src_dir,
                 mov_dir,
                 target_dir,
@@ -222,42 +227,49 @@ run_conscape <- function(conscape_prep = NULL,
                 NA_val,
                 iter);")
 
-        setTxtProgressBar(pb,i)
-      } ## End for loop
-      close(pb)
-    } ## End ifelse
+      setTxtProgressBar(pb,i)
+    } ## End for loop
+    close(pb)
+  } ## End ifelse
 
+  # out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+  #             outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+
+  if(isTRUE(mosaic) & isFALSE(single_rast)){
+    btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
+                            tile_trim = tile_trim,
+                            method = 'mosaic')
+    fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
+                            tile_trim = tile_trim,
+                            method = 'mosaic')
+
+    if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
+      crs(btwn) <- crs(fcon) <- crs(target_mask)
+      target_mask <- crop(target_mask, fcon)
+      target_mask[target_mask == 0] <- NA
+      btwn[is.na(target_mask)] <- NA
+      fcon[is.na(target_mask)] <- NA
+    }
+
+    out <- list(btwn = btwn,
+                fcon = fcon,
+                outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+                outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+  } else {
     out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
                 outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
 
-    if(isTRUE(mosaic)){
-      btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
-                              tile_trim = tile_trim,
-                              method = 'mosaic')
-      fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
-                              tile_trim = tile_trim,
-                              method = 'mosaic')
-
-      if(!is.null(conscape_prep) & class(conscape_prep) == 'ConScapeRtools_prep'){
-        crs(btwn) <- crs(fcon) <- crs(target_mask)
-        target_mask <- crop(target_mask, fcon)
-        target_mask[target_mask == 0] <- NA
-        btwn[is.na(target_mask)] <- NA
-        fcon[is.na(target_mask)] <- NA
-      }
-
-      out <- list(btwn = btwn,
-                  fcon = fcon,
-                  outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                  outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
-      return(out)
-    } else {
-      out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                  outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+    if(isTRUE(single_rast)){
+      out <- rast(list(btwn = rast(list.files(normalizePath(file.path(out_dir, "btwn")),
+                                              full.names = T)),
+                       fcon = rast(list.files(normalizePath(file.path(out_dir, "fcon")),
+                                              full.names = T))))
     }
+  }
 
-}
-  } ## End function
+  return(out)
+
+} ## End function
 
 #' @importFrom parallelly availableCores
 #' @importFrom future plan multisession sequential
