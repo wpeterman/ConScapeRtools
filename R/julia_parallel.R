@@ -12,28 +12,34 @@
 #' @author Bill Peterman
 
 julia_parallel <- function(workers,
-                           julia_home,
-                           attempts = 10){
+                           jl_home,
+                           attempts = 9){
   # conscape.jl <- system.file('data/conscape.jl', package = 'ConScapeRtools')
   cat("\nSetting up Julia...\n")
-  julia_setup(julia_home)
-  julia_library("ConScape")
-  julia_library("SparseArrays")
-  julia_library("Statistics")
-  julia_library("Plots")
-  julia_source(system.file('data/conscape.jl', package = 'ConScapeRtools'))
+  # julia <- juliaSetup(JULIA_BINDIR = .jl_home)
+  # juliaEval('using ConScape, SparseArrays, Statistics, Plots')
+  # juliaEval(paste0('include("', system.file('data/conscape.jl', package = 'ConScapeRtools'), '")'))
+  #
+  # # iter <- paste0('-iter_', i)
+  # juliaEval("conscape", .src_dir, .mov_dir, .target_dir, .out_dir,
+  #           .hab_target[i], .hab_src[i], .mov_prob[i],
+  #           .landmark, .theta, .exp_d, .NA_val, iter)
+
 
   test_func <- function(i,
                         x,
-                        julia_home,
-                        conscape.jl){
-    julia_setup(julia_home)
-    julia_library("ConScape")
-    julia_library("SparseArrays")
-    julia_library("Statistics")
-    julia_library("Plots")
-    julia_source(system.file('data/conscape.jl', package = 'ConScapeRtools'))
-    julia_call("sqrt", x[i] )
+                        jl_home){
+    if(!juliaSetupOk())
+      Sys.setenv(JULIA_BINDIR = jl_home)
+    if(!juliaSetupOk())
+      stop("Check that the path to the Julia binary directory is correct")
+    juliaEval('using ConScape, SparseArrays, Statistics, Plots')
+    juliaEval(paste0('include("', system.file('data/conscape.jl', package = 'ConScapeRtools'), '")'))
+
+    iter <- paste0('-iter_', i)
+
+    juliaSqrt <- juliaFun("sqrt")
+    juliaCall("map", juliaSqrt, x[i] )
   }
 
   x <- 0:100
@@ -43,7 +49,7 @@ julia_parallel <- function(workers,
     cat(paste0("Attempt #", attempt, " to create parallel workers.\n\n"))
     plan(multisession, workers = workers)
     suppressMessages(try(y <- future_lapply(1:length(x),
-                                            test_func, x, julia_home,
+                                            test_func, x, jl_home,
                                             future.seed = 1), silent = T))
   }
   plan(sequential) #### If we set to sequential here does that carry for the rest of the script?

@@ -20,7 +20,8 @@
 #' @return A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
 #' @details
 #' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `landmark`, `hab_target`, `hab_src`, or `mov_prob`.
-#'
+
+#' @importFrom JuliaConnectoR juliaImport juliaEval juliaSetupOk juliaGet juliaCall
 #' @export
 #' @example examples/run_conscape_example.R
 #' @author Bill Peterman
@@ -39,12 +40,15 @@ run_conscape <- function(conscape_prep = NULL,
                          parallel = FALSE,
                          workers = availableCores()/2,
                          end_multisession = FALSE){
-  julia_setup(jl_home, rebuild = T)
-  julia_library("ConScape")
-  julia_library("SparseArrays")
-  julia_library("Statistics")
-  julia_library("Plots")
-  julia_source(system.file('data/conscape.jl', package = 'ConScapeRtools'))
+  if(!juliaSetupOk())
+    Sys.setenv(JULIA_BINDIR = jl_home)
+  if(!juliaSetupOk()){
+    stop("Check that the path to the Julia binary directory is correct")
+  }
+  suppressMessages({juliaEval("Base.redirect_stdout(devnull); Base.redirect_stderr(devnull)")})
+
+  juliaEval('using ConScape, SparseArrays, Statistics, Plots')
+  juliaEval(paste0('include("', system.file('data/conscape.jl', package = 'ConScapeRtools'), '")'))
 
   if(dir.exists(out_dir)){
     unlink(out_dir,
@@ -117,9 +121,6 @@ run_conscape <- function(conscape_prep = NULL,
     # Parallel ----------------------------------------------------------------
     plan(multisession, workers = workers)
 
-    # julia_parallel(workers = workers,
-    #                julia_home = jl_home)
-
     try(cs_out <- future_lapply(1:length(hab_target),
                                 FUN = cs_par.func,
                                 .jl_home = jl_home,
@@ -153,8 +154,9 @@ run_conscape <- function(conscape_prep = NULL,
       # DEBUG -------------------------------------------------------------------
       browser()
 
-      julia_parallel(workers = availableCores()/2,
-                     julia_home = jl_home)
+      julia_parallel(workers = workers,
+                     # workers = availableCores()/2,
+                     jl_home = jl_home)
 
       try(cs_out <- future_lapply(1:length(hab_target),
                                   FUN = cs_par.func,
@@ -200,40 +202,19 @@ run_conscape <- function(conscape_prep = NULL,
       r_source <- hab_src[i]
       r_res <- mov_prob[i]
 
-      julia_assign("src_dir", src_dir)
-      julia_assign("mov_dir", mov_dir)
-      julia_assign("target_dir", target_dir)
-      julia_assign("out_dir", out_dir)
-      julia_assign("r_target", r_target)
-      julia_assign("r_source", r_source)
-      julia_assign("r_res", r_res)
-      julia_assign("landmark", landmark)
-      julia_assign("theta", theta)
-      julia_assign("exp_d", exp_d)
-      julia_assign("NA_val", NA_val)
-      julia_assign("iter", iter)
-
-      julia_command("conscape(
-                src_dir,
-                mov_dir,
-                target_dir,
-                out_dir,
-                r_target,
-                r_source,
-                r_res,
-                landmark,
-                theta,
-                exp_d,
-                NA_val,
-                iter);")
+      # conscape_fun <- juliaGet("conscape")
+      suppressMessages({juliaCall('conscape',
+                                  src_dir, mov_dir, target_dir, out_dir,
+                                  r_target, r_source, r_res,
+                                  landmark, theta, exp_d, NA_val, iter)})
 
       setTxtProgressBar(pb,i)
     } ## End for loop
     close(pb)
   } ## End ifelse
 
-  # out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-  #             outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+  out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
+              outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
 
   if(isTRUE(mosaic) & isFALSE(single_rast)){
     btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
@@ -266,6 +247,7 @@ run_conscape <- function(conscape_prep = NULL,
                                               full.names = T))))
     }
   }
+  juliaEval("Base.redirect_stdout(Base.stdout); Base.redirect_stderr(Base.stderr)")
 
   return(out)
 
@@ -277,7 +259,6 @@ run_conscape <- function(conscape_prep = NULL,
 #' @importFrom utils setTxtProgressBar txtProgressBar
 NULL
 
-## Parallel function -- JuliaCall
 cs_par.func <- function(i,
                         .jl_home,
                         .hab_target,
@@ -292,42 +273,19 @@ cs_par.func <- function(i,
                         .exp_d,
                         .NA_val){
 
-  julia_setup(.jl_home, rebuild = T)
-  julia_library("ConScape")
-  julia_library("SparseArrays")
-  julia_library("Statistics")
-  julia_library("Plots")
-  julia_source(system.file('data/conscape.jl', package = 'ConScapeRtools'))
+  if(!juliaSetupOk())
+    Sys.setenv(JULIA_BINDIR = .jl_home)
+  if(!juliaSetupOk())
+    stop("Check that the path to the Julia binary directory is correct")
+  suppressMessages({juliaEval('using ConScape, SparseArrays, Statistics, Plots')})
+  juliaEval(paste0('include("', system.file('data/conscape.jl', package = 'ConScapeRtools'), '")'))
+  juliaEval("Base.redirect_stdout(devnull); Base.redirect_stderr(devnull)")
 
   iter <- paste0('-iter_', i)
-  r_target <- .hab_target[i]
-  r_source <- .hab_src[i]
-  r_res <- .mov_prob[i]
 
-  julia_assign("src_dir", .src_dir)
-  julia_assign("mov_dir", .mov_dir)
-  julia_assign("target_dir", .target_dir)
-  julia_assign("out_dir", .out_dir)
-  julia_assign("r_target", r_target)
-  julia_assign("r_source", r_source)
-  julia_assign("r_res", r_res)
-  julia_assign("landmark", .landmark)
-  julia_assign("theta", .theta)
-  julia_assign("exp_d", .exp_d)
-  julia_assign("NA_val", .NA_val)
-  julia_assign("iter", iter)
-
-  julia_command("conscape(
-                src_dir,
-                mov_dir,
-                target_dir,
-                out_dir,
-                r_target,
-                r_source,
-                r_res,
-                landmark,
-                theta,
-                exp_d,
-                NA_val,
-                iter);")
+  suppressMessages({juliaCall('conscape',
+                              .src_dir, .mov_dir, .target_dir, .out_dir,
+                              .hab_target[i], .hab_src[i], .mov_prob[i],
+                              .landmark, .theta, .exp_d, .NA_val, iter)})
+  juliaEval("Base.redirect_stdout(Base.stdout); Base.redirect_stderr(Base.stderr)")
 }

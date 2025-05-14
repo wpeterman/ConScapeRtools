@@ -52,7 +52,10 @@ mosaic_conscape <- function(out_dir,
     final <- r_mosaic
   } else {
     final <- r_mosaic * mask
-
   }
+
+  r_name <- names(final)
+  r_name <- sub("-.*", "", r_name)
+  names(final) <- r_name
   return(final)
 }

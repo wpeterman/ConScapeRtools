@@ -4,14 +4,14 @@
 \alias{julia_parallel}
 \title{Setup Julia for parallel processing}
 \usage{
-julia_parallel(workers, julia_home, attempts = 10)
+julia_parallel(workers, jl_home, attempts = 9)
 }
 \arguments{
 \item{workers}{Number of parallel workers to create}
 
-\item{julia_home}{Path to the Julia 'bin' directory}
-
 \item{attempts}{Number of attempts to try and process files}
+
+\item{julia_home}{Path to the Julia 'bin' directory}
 }
 \value{
 NULL.

@@ -19,7 +19,7 @@
 #'
 #' @rdname tile_design
 #' @importFrom crayon %+% green red bold cyan
-#' @importFrom JuliaConnectoR juliaImport juliaEval juliaImport
+#' @importFrom JuliaConnectoR juliaEval juliaImport juliaSetupOk juliaFun
 
 tile_design <- function(r_mov,
                         r_source = NULL,
@@ -27,6 +27,9 @@ tile_design <- function(r_mov,
                         max_d,
                         theta = 0.1,
                         jl_home) {
+  Sys.setenv(JULIA_BINDIR = jl_home)
+  if(!juliaSetupOk())
+    stop("Check that the path to the Julia binary directory is correct")
 
   if (!is.null(r_source) && is.null(r_target)) {
     r_target <- r_source
@@ -64,7 +67,8 @@ tile_design <- function(r_mov,
   max_cell <- which.min(abs(e_dist - max_d))
 
   ## Julia
-  ConScapeR_setup(jl_home)
+  juliaEval("Base.redirect_stdout(devnull); Base.redirect_stderr(devnull)")
+  suppressMessages({ConScapeR_setup(jl_home)})
 
   # Create ConScape Grid
   g <- Grid(affinities = mov,
@@ -102,6 +106,7 @@ tile_design <- function(r_mov,
             "`tile_d` should be at least: " %+% red$bold(out$tile_d) %+%",\n\n",
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'
+  juliaEval("Base.redirect_stdout(Base.stdout); Base.redirect_stderr(Base.stderr)")
   return(out)
 }
 
