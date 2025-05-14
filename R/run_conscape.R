@@ -119,7 +119,9 @@ run_conscape <- function(conscape_prep = NULL,
   if(isTRUE(parallel)) {
 
     # Parallel ----------------------------------------------------------------
+    options(connectionObserver = NULL)  # Disables connection tracking
     plan(multisession, workers = workers)
+    options(future.globals.packages = c("stats"))
 
     try(cs_out <- future_lapply(1:length(hab_target),
                                 FUN = cs_par.func,
