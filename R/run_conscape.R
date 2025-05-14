@@ -122,7 +122,7 @@ run_conscape <- function(conscape_prep = NULL,
     options(connectionObserver = NULL)  # Disables connection tracking
     plan(multisession, workers = workers)
     options(future.globals.packages = c("stats"))
-
+    suppressWarnings({
     try(cs_out <- future_lapply(1:length(hab_target),
                                 FUN = cs_par.func,
                                 .jl_home = jl_home,
@@ -139,7 +139,8 @@ run_conscape <- function(conscape_prep = NULL,
                                 .NA_val = NA_val,
                                 future.seed = TRUE
     ),
-    silent = T) ## End future_lapply
+    silent = T)
+      })## End future_lapply
 
     ## Check for success
     btwn_files <- length(list.files(normalizePath(file.path(out_dir, "btwn")),
