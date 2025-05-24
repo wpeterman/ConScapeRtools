@@ -48,7 +48,7 @@ run_conscape(
 
 \item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default 0.5*Number of available cores}
 
-\item{end_multisession}{Logical. Default == FALSE}
+\item{end_multisession}{Logical. (Default = FALSE)}
 
 \item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 }
