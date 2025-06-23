@@ -15,18 +15,27 @@
 #'
 #' @return NULL.
 #' @keywords internal
+#' @noRd
+#' @importFrom JuliaConnectoR juliaLet
 #'
 ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
 
   Sys.setenv(JULIA_BINDIR = julia_path)
 
+  # List of required packages
+  required_pkgs <- c("ConScape", "SparseArrays", "Statistics")
+
+  # Run the check and install function
+  check_and_install_julia_pkgs(required_pkgs)
+
   if (install_libraries){
-    Pkg <- JuliaConnectoR::juliaImport("Pkg")
-    JuliaConnectoR::juliaEval("Pkg.add(\"ConScape\")")
-    JuliaConnectoR::juliaEval("Pkg.add(\"SparseArrays\")")
+    Pkg <- juliaImport("Pkg")
+    juliaEval("Pkg.add(\"ConScape\")")
+    juliaEval("Pkg.add(\"SparseArrays\")")
+    juliaEval("Pkg.add(\"Statistics\")")
   }
-  SA <- JuliaConnectoR::juliaImport("SparseArrays")
-  CS <- JuliaConnectoR::juliaImport("ConScape")
+  SA <- juliaImport("SparseArrays")
+  CS <- juliaImport("ConScape")
 }
 
 #' Wrapper for the Grid function of `ConScape`
@@ -53,27 +62,27 @@ ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
 #'
 #' @return A `ConScape.Grid` object within Julia.
 #' @keywords internal
-#'
+#' @noRd
 Grid <- function(affinities, sources, targets, costs) {
   # affinities
-  if (class(affinities)[1] == "SpatRaster") {
+  if (inherits(affinities, "SpatRaster")) {
     affinities <- terra::as.matrix(affinities, wide = T)
   }
   # sources
-  if (class(sources)[1] == "SpatRaster") {
+  if (inherits(sources, "SpatRaster")) {
     sources <- terra::as.matrix(sources, wide = T)
   }
   # targets
-  if (class(targets)[1] == "SpatRaster") {
+  if (inherits(targets, "SpatRaster")) {
     targets <- terra::as.matrix(targets, wide = T)
   }
   # costs
-  if (class(costs)[1] == "SpatRaster") {
+  if (inherits(costs, "SpatRaster")) {
     costs <- terra::as.matrix(costs, wide = T)
   }
 
   # check NaNs
-  if (class(costs)[1] == "matrix") {
+  if (inherits(costs, "matrix")) {
     nans <- is.nan(sources) | is.nan(targets) | is.nan(affinities) | is.nan(costs)
     costs[nans] <- NaN
   } else {
@@ -84,8 +93,8 @@ Grid <- function(affinities, sources, targets, costs) {
   affinities[nans] <- NaN
 
   # create Grid
-  if (class(costs) == "character"){
-    g <- JuliaConnectoR::juliaLet(
+  if (inherits(costs, "character")){
+    g <- juliaLet(
       paste0("ConScape.Grid(size(affinities)...,
               affinities=ConScape.graph_matrix_from_raster(affinities),
               source_qualities=sources,
@@ -93,7 +102,7 @@ Grid <- function(affinities, sources, targets, costs) {
               costs=ConScape.mapnz(", costs, ", ConScape.graph_matrix_from_raster(affinities)))"),
       affinities=affinities, sources=sources, targets=targets)
   } else {
-    g <- JuliaConnectoR::juliaLet("ConScape.Grid(size(affinities)...,
+    g <- juliaLet("ConScape.Grid(size(affinities)...,
                   affinities=ConScape.graph_matrix_from_raster(affinities),
                   source_qualities=sources,
                   target_qualities=SparseArrays.sparse(targets),
@@ -108,10 +117,11 @@ Grid <- function(affinities, sources, targets, costs) {
 #'
 #' @param mat `[matrix]` \cr Matrix to be converted.
 #' @param rast `[SpatRaster]` \cr Template raster, usually one of those used in the
-#' [ConScapeR::Grid()] function.
+#' `ConScapeR::Grid` function.
 #'
 #' @return `[SpatRaster]`
 #' @keywords internal
+#' @noRd
 #'
 mat2rast <- function(mat, rast){
   rast2 <- terra::rast(mat, extent = terra::ext(rast), crs = terra::crs(rast))
@@ -122,13 +132,14 @@ mat2rast <- function(mat, rast){
 #'
 #' @param vec `[matrix]` \cr Matrix to be converted
 #' @param g `[Grid]` \cr Template raster, usually one of those used in the
-#' [ConScapeR::Grid()] function.
+#' `ConScapeR::Grid` function.
 #'
 #' @return `[matrix]`
 #' @keywords internal
+#' @noRd
 #'
 vec2mat <- function(vec, g){
-  mat <- JuliaConnectoR::juliaLet("ConScape._vec_to_grid(g, vec)", g=g, vec=vec)
+  mat <- juliaLet("ConScape._vec_to_grid(g, vec)", g=g, vec=vec)
   return(mat)
 }
 
@@ -139,15 +150,16 @@ vec2mat <- function(vec, g){
 #' Note that the computation becomes numerically unstable as theta becomes really small or large.
 #' See Van Moorter et al. (2023, Methods in Ecology and Evolution) for more details.
 #'
-#' @param g `[Grid]` \cr The output from the [ConScapeR::Grid()] function.
+#' @param g `[Grid]` \cr The output from the `ConScapeR::Grid` function.
 #' @param theta `[numeric]` \cr The randomness parameter theta. Lower `theta` values
 #' represent a more random walk, and higher values a more least-cost path behavior.
 #'
 #' @return A `ConScape.GridRSP` object within Julia.
 #' @keywords internal
+#' @noRd
 #'
 GridRSP <- function(g, theta) {
-  h <- JuliaConnectoR::juliaLet("ConScape.GridRSP(g, θ=theta)", g=g, theta=theta)
+  h <- juliaLet("ConScape.GridRSP(g, θ=theta)", g=g, theta=theta)
   return(h)
 }
 
@@ -156,13 +168,14 @@ GridRSP <- function(g, theta) {
 #' Computes the quality-weighted betweenness for a ConScape.GridRSP object.
 #' See Van Moorter et al. (2023, Methods in Ecology and Evolution) for more details.
 #'
-#' @param h `[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.
+#' @param h `[GridRSP]` \cr The output from the `ConScapeR::Grid` function.
 #'
 #' @return `matrix`
 #' @keywords internal
+#' @noRd
 #'
 betweenness_qweighted <- function(h) {
-  betw <- JuliaConnectoR::juliaLet("ConScape.betweenness_qweighted(h)", h=h)
+  betw <- juliaLet("ConScape.betweenness_qweighted(h)", h=h)
   return(betw)
 }
 
@@ -171,15 +184,16 @@ betweenness_qweighted <- function(h) {
 #' Computes the quality- and proximity-weighted betweenness for a ConScape.GridRSP object.
 #' See Van Moorter et al. (2023, Methods in Ecology and Evolution) for more details.
 #'
-#' @param h `[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.
+#' @param h `[GridRSP]` \cr The output from the `ConScapeR::Grid` function.
 #' @param alpha `[numeric]` \cr The distance scaling for the exponential distance
 #' to proximity transformation.
 #'
 #' @return `matrix`
 #' @keywords internal
+#' @noRd
 #'
 betweenness_kweighted <- function(h, alpha) {
-  betw <- JuliaConnectoR::juliaLet("ConScape.betweenness_kweighted(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
+  betw <- juliaLet("ConScape.betweenness_kweighted(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
   return(betw)
 }
 
@@ -188,15 +202,16 @@ betweenness_kweighted <- function(h, alpha) {
 #' Computes the habitat functionality for a ConScape.GridRSP object.
 #' See Van Moorter et al. (2023, Methods in Ecology and Evolution) for more details.
 #'
-#' @param h `[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.
+#' @param h `[GridRSP]` \cr The output from the `ConScapeR::Grid` function.
 #' @param alpha `[numeric]` \cr The distance scaling for the exponential distance to
 #' proximity transformation.
 #'
 #' @return A `matrix` with loca (pixel) measures of habitat functionality.
 #' @keywords internal
+#' @noRd
 #'
 connected_habitat <- function(h, alpha) {
-  func <- JuliaConnectoR::juliaLet("ConScape.connected_habitat(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
+  func <- juliaLet("ConScape.connected_habitat(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
   return(func)
 }
 
@@ -205,15 +220,57 @@ connected_habitat <- function(h, alpha) {
 #' Computes the RSP expected cost between all sources and non-zero targets.
 #' See Van Moorter et al. (2023, Methods in Ecology and Evolution) for more details.
 #'
-#' @param h `[GridRSP]` \cr The output from the [ConScapeR::GridRSP()] function.
+#' @param h `[GridRSP]` \cr The output from the `ConScapeR::Grid` function.
 #'
 #' @keywords internal
+#' @noRd
 #'
 expected_cost <- function(h) {
-  dists = JuliaConnectoR::juliaLet("ConScape.expected_cost(h)", h=h)
+  dists = juliaLet("ConScape.expected_cost(h)", h=h)
   return(dists)
 }
 
 
 
 
+
+# Function to check and install packages
+check_and_install_julia_pkgs <- function(pkgs) {
+
+  # Check each package
+  for (pkg in pkgs) {
+    # Improved check that properly handles the catch clause
+    is_installed <- juliaEval(paste0(
+      'using Pkg; ',
+      'try ',
+      '    using ', pkg, '; ',
+      '    true ',
+      'catch e ',
+      '    false ',
+      'end'
+    ))
+
+    if (!is_installed) {
+      message("Installing Julia package: ", pkg)
+      tryCatch({
+        juliaEval(paste0('using Pkg; Pkg.add("', pkg, '")'))
+        message("Successfully installed: ", pkg)
+      }, error = function(e) {
+        warning("Failed to install package ", pkg, ": ", e$message)
+      })
+    } else {
+      message("Julia package ", pkg, " is already installed")
+    }
+  }
+
+  # Final verification that packages can be loaded
+  message("\nVerifying package loading:")
+  for (pkg in pkgs) {
+    tryCatch({
+      juliaEval(paste0('using ', pkg))
+      message("Successfully loaded: ", pkg)
+    }, error = function(e) {
+      warning("Failed to load package ", pkg, ": ", e$message)
+    })
+  }
+}

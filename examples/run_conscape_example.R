@@ -1,10 +1,10 @@
 library(ConScapeRtools)
 
 ## Import data
-s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 source <- terra::rast(s)
 
-a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
 jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
@@ -46,5 +46,5 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        jl_home = jl_home,
                        parallel = T,
-                       workers = 6,
-                       end_multisession = T)
+                       workers = 6)
+plot(cs_run)

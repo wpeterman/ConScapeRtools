@@ -20,6 +20,7 @@
 #' @example examples/conscape_prep_example.R
 #' @seealso [tile_design()], [tile_rast()] and [make_tiles()]
 #' @author Bill Peterman
+#' @importFrom terra writeVector
 
 conscape_prep <- function(tile_d,
                           tile_trim,
@@ -217,6 +218,8 @@ conscape_prep <- function(tile_d,
                         make_tiles = out,
                         out_dir = file.path(out$asc_dir, 'src'),
                         clear_dir = T)
+
+  writeVector(all_r[select_rast], paste0(write_dir,"/tiles.shp"), overwrite = T)
 
   out2 <- list(cs_tiles = all_r[select_rast],
                tile_num = select_rast,

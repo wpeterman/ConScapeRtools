@@ -10,6 +10,7 @@ run_conscape(
   hab_target = NULL,
   hab_src = NULL,
   mov_prob = NULL,
+  clear_dir = TRUE,
   landmark = 10L,
   theta = 0.01,
   exp_d = 150,
@@ -17,8 +18,8 @@ run_conscape(
   mosaic = TRUE,
   jl_home,
   parallel = FALSE,
-  workers = availableCores()/2,
-  end_multisession = FALSE
+  workers = 1,
+  progress = TRUE
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ run_conscape(
 \item{hab_src}{Directory with habitat source tiles}
 
 \item{mov_prob}{Directory with movement probability tiles}
+
+\item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
 
@@ -46,11 +49,9 @@ run_conscape(
 
 \item{parallel}{Logical. If FALSE, processing will not be done in parallel.}
 
-\item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default 0.5*Number of available cores}
+\item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default = 2}
 
-\item{end_multisession}{Logical. (Default = FALSE)}
-
-\item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
+\item{progress}{Logical. If \code{TRUE}, progress of processing will be reported.}
 }
 \value{
 A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
@@ -60,15 +61,17 @@ This function runs ConScape (optionally in parallel) over all created landscape 
 }
 \details{
 In most instances, it will be easiest to prepare data for analysis using the \code{conscape_prep} function. Provide the object created from \code{conscape_prep} to the \code{conscape_prep} parameter of \code{run_conscape}. Doing this eliminates the need to manually specify \code{landmark}, \code{hab_target}, \code{hab_src}, or \code{mov_prob}.
+
+If \code{parallel = TRUE} and \code{progress = TRUE}, progress updates will be reported, but may be inconsistent.
 }
 \examples{
 library(ConScapeRtools)
 
 ## Import data
-s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 source <- terra::rast(s)
 
-a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
 jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
@@ -110,8 +113,8 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        jl_home = jl_home,
                        parallel = T,
-                       workers = 6,
-                       end_multisession = T)
+                       workers = 6)
+plot(cs_run)
 }
 \author{
 Bill Peterman

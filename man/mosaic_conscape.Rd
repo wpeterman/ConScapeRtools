@@ -70,8 +70,7 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        jl_home = jl_home,
                        parallel = T,
-                       workers = 5,
-                       end_multisession = T)
+                       workers = 5)
 
 ## Put output tiles together
 cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,

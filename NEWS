@@ -1,0 +1,5 @@
+ConScapeRtools 0.4.0
+---------
+* Initiated NEWS file
+* Updated parallel processing to occur within Julia
+* Added general `plot` method

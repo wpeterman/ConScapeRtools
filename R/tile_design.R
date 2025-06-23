@@ -19,7 +19,9 @@
 #'
 #' @rdname tile_design
 #' @importFrom crayon %+% green red bold cyan
-#' @importFrom JuliaConnectoR juliaEval juliaImport juliaSetupOk juliaFun
+#' @importFrom JuliaConnectoR juliaEval juliaImport juliaSetupOk juliaFun stopJulia
+#' @importFrom stats dist median optimize
+#'
 
 tile_design <- function(r_mov,
                         r_source = NULL,
@@ -68,7 +70,8 @@ tile_design <- function(r_mov,
 
   ## Julia
   juliaEval("Base.redirect_stdout(devnull); Base.redirect_stderr(devnull)")
-  suppressMessages({ConScapeR_setup(jl_home)})
+  invisible({ConScapeR_setup(jl_home)})
+
 
   # Create ConScape Grid
   g <- Grid(affinities = mov,
@@ -107,6 +110,7 @@ tile_design <- function(r_mov,
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'
   juliaEval("Base.redirect_stdout(Base.stdout); Base.redirect_stderr(Base.stderr)")
+  stopJulia()
   return(out)
 }
 
