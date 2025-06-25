@@ -1,3 +1,7 @@
+ConScapeRtools 0.4.2
+---------
+* Added option to parallelize using threading or distributed processing in Julia
+
 ConScapeRtools 0.4.1
 ---------
 * Added progress tracking to `conscape_prep`

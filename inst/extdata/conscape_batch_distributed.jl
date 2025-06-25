@@ -1,5 +1,8 @@
 using Distributed
-# addprocs()
+using Logging
+using ConScape
+using SparseArrays
+using Statistics
 
 @everywhere begin
     using Logging

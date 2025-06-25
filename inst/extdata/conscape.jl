@@ -1,4 +1,7 @@
 using Logging
+using ConScape
+using SparseArrays
+using Statistics
 
 function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res,
                   land_mark, theta, exp_d, NA_val, iter)

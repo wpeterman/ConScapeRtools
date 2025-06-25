@@ -197,6 +197,12 @@ betweenness_kweighted <- function(h, alpha) {
   return(betw)
 }
 
+coarse_grid <- function(g, land_mark){
+  coarse <- juliaLet("ConScape.coarse_graining(g, land_mark)",
+                      g=g, land_mark = land_mark)
+  return(coarse)
+}
+
 #' Wrapper for the `connected_habitat` function of `ConScape`
 #'
 #' Computes the habitat functionality for a ConScape.GridRSP object.

@@ -69,9 +69,7 @@ tile_design <- function(r_mov,
   max_cell <- which.min(abs(e_dist - max_d))
 
   ## Julia
-  juliaEval("Base.redirect_stdout(devnull); Base.redirect_stderr(devnull)")
   invisible({ConScapeR_setup(jl_home)})
-
 
   # Create ConScape Grid
   g <- Grid(affinities = mov,
@@ -109,7 +107,7 @@ tile_design <- function(r_mov,
             "`tile_d` should be at least: " %+% red$bold(out$tile_d) %+%",\n\n",
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'
-  juliaEval("Base.redirect_stdout(Base.stdout); Base.redirect_stderr(Base.stderr)")
+  invisible(juliaEval('1+1'))
   stopJulia()
   return(out)
 }

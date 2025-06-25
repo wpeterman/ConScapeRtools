@@ -40,11 +40,40 @@ prep <- conscape_prep(tile_d = tile_d,
                       landmark = landmark)
 
 ## Run ConScape
+## No parallelization
+cs_run.serial <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                              conscape_prep = prep,
+                              theta = theta,
+                              exp_d = exp_d,
+                              jl_home = jl_home,
+                              parallel = F)
+
+## Threaded parallel
+cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                            conscape_prep = prep,
+                            theta = theta,
+                            exp_d = exp_d,
+                            jl_home = jl_home,
+                            parallel = T,
+                            workers = 4)
+
+## Threaded parallel
+cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                           conscape_prep = prep,
+                           theta = theta,
+                           exp_d = exp_d,
+                           jl_home = jl_home,
+                           parallel = T,
+                           workers = 4,
+                           distributed = TRUE)
+plot(cs_run.dist)
+
+## No tiling --> Only attempt with small to moderate sized rasters!
 cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-                       conscape_prep = prep,
+                       hab_target = source,
+                       hab_src = source,
+                       mov_prob = resist,
                        theta = theta,
                        exp_d = exp_d,
-                       jl_home = jl_home,
-                       parallel = T,
-                       workers = 6)
-plot(cs_run)
+                       jl_home = jl_home)
+
