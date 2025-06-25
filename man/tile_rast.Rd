@@ -4,7 +4,7 @@
 \alias{tile_rast}
 \title{Break raster into small tiles}
 \usage{
-tile_rast(r, make_tiles, out_dir, clear_dir = FALSE)
+tile_rast(r, make_tiles, out_dir, clear_dir = FALSE, progress = FALSE)
 }
 \arguments{
 \item{r}{Raster file as \code{SpatRaster} to be broken up into smaller tiles}
@@ -14,6 +14,8 @@ tile_rast(r, make_tiles, out_dir, clear_dir = FALSE)
 \item{out_dir}{Directory where .asc files of tiles will be written. This should be different directory from the \code{make_tiles} \code{asc_dir}}
 
 \item{clear_dir}{Should existing files in the \code{out_dir} be overwritten? This function must have an empty \code{out_dir} to proceed}
+
+\item{progress}{Logical. If \code{TRUE}, processing progress will be reported.}
 }
 \value{
 A named list with the path to the directory where .asc tiles were written

@@ -58,9 +58,9 @@ run_conscape <- function(conscape_prep = NULL,
     if(length(list.files(out_dir)) > 0 & isFALSE(clear_dir)){
       stop("\nFiles currently exist in `out_dir`.\nEither manually delete them, or set `clear_dir = TRUE`")
     } else {
-    unlink(out_dir,
-           recursive = T,
-           force = T)
+      unlink(out_dir,
+             recursive = T,
+             force = T)
     }
   } else {
     dir.create(out_dir, recursive = TRUE)
@@ -156,11 +156,11 @@ run_conscape <- function(conscape_prep = NULL,
     invisible(juliaEval(conscape_batch_file))
 
     max_retries <- 5L
-    invisible(batch_out <- juliaCall("conscape_batch",
-                                     src_dir, mov_dir, target_dir, out_dir,
-                                     hab_target, hab_src, mov_prob,
-                                     landmark, theta, exp_d, NA_val,
-                                     max_retries, progress))
+    invisible(cs_out <- juliaCall("conscape_batch",
+                                  src_dir, mov_dir, target_dir, out_dir,
+                                  hab_target, hab_src, mov_prob,
+                                  landmark, theta, exp_d, NA_val,
+                                  max_retries, progress))
     # batch_out <- tryCatch({juliaCall("conscape_batch",
     #                                          src_dir, mov_dir, target_dir, out_dir,
     #                                          hab_target, hab_src, mov_prob,
@@ -188,7 +188,7 @@ run_conscape <- function(conscape_prep = NULL,
     if(isTRUE((length(hab_target) != btwn_files) | (length(hab_target) != fcon_files))){
       # attempt <- attempt + 1
       # cat(paste0("\n\nParallel execution failed! Trying again...attempt #", attempt))
-      warning("\n\nParallel execution failed!")
+      warning("\n\nParallel execution failed for some or all tiles!\nInspect results carefully.\n")
 
       # DEBUG -------------------------------------------------------------------
       # browser()
@@ -217,10 +217,10 @@ run_conscape <- function(conscape_prep = NULL,
       r_source <- hab_src
       r_res <- mov_prob
 
-      suppressMessages({juliaCall('conscape',
-                                  src_dir, mov_dir, target_dir, out_dir,
-                                  r_target, r_source, r_res,
-                                  landmark, theta, exp_d, NA_val, iter)})
+      suppressMessages({cs_out <- juliaCall('conscape',
+                                            src_dir, mov_dir, target_dir, out_dir,
+                                            r_target, r_source, r_res,
+                                            landmark, theta, exp_d, NA_val, iter)})
     } else {
 
 
@@ -238,17 +238,17 @@ run_conscape <- function(conscape_prep = NULL,
         r_source <- hab_src[i]
         r_res <- mov_prob[i]
 
-        suppressMessages({juliaCall('conscape',
-                                    src_dir, mov_dir, target_dir, out_dir,
-                                    r_target, r_source, r_res,
-                                    landmark, theta, exp_d, NA_val, iter)})
+        suppressMessages({cs_out <- juliaCall('conscape',
+                                              src_dir, mov_dir, target_dir, out_dir,
+                                              r_target, r_source, r_res,
+                                              landmark, theta, exp_d, NA_val, iter)})
 
         if(isTRUE(progress)){
           setTxtProgressBar(pb,i)
         }
       } ## End for loop
     } ## End single ifelse
-    close(pb)
+    if(exists("pb")) close(pb)
   } ## End parallel ifelse
 
   out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
@@ -273,10 +273,12 @@ run_conscape <- function(conscape_prep = NULL,
     out <- list(btwn = btwn,
                 fcon = fcon,
                 outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+                outdir_fcon = normalizePath(file.path(out_dir, "fcon")),
+                cs_log = cs_out)
   } else {
     out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+                outdir_fcon = normalizePath(file.path(out_dir, "fcon")),
+                cs_log = cs_out)
 
     if(isTRUE(single_rast)){
       out <- rast(list(btwn = rast(list.files(normalizePath(file.path(out_dir, "btwn")),

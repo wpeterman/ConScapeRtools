@@ -11,6 +11,7 @@
 #' @param target_threshold Value of r_target that is meaningful for movement (Default = 0). Values less `target_threshold` will be set to NA and masked.
 #' @param clear_dir Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
 #' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
+#' @param progress Logical. If `TRUE`, processing progress will be reported.
 #' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
 #' @details
 #' The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` and potentially `tile_d` need to be increased.
@@ -21,6 +22,7 @@
 #' @seealso [tile_design()], [tile_rast()] and [make_tiles()]
 #' @author Bill Peterman
 #' @importFrom terra writeVector
+#' @importFrom utils txtProgressBar setTxtProgressBar
 
 conscape_prep <- function(tile_d,
                           tile_trim,
@@ -30,7 +32,8 @@ conscape_prep <- function(tile_d,
                           r_src,
                           target_threshold = 0,
                           clear_dir = FALSE,
-                          landmark = 10L) {
+                          landmark = 10L,
+                          progress = TRUE) {
 
   # method <- match.arg(method)
   method <- 'both'
@@ -194,6 +197,10 @@ conscape_prep <- function(tile_d,
     unlink(paste0(write_dir, "\\*"), force = T)
   }
 
+  # Initialize progress bar only if progress=TRUE
+  if(exists("progress") && isTRUE(progress)) {
+    pb <- txtProgressBar(min = 0, max = length(select_rast), style = 3)
+  }
 
   for(i in 1:length(select_rast)){
     # r_NA <- r_list[[select_rast[i]]]
@@ -202,7 +209,15 @@ conscape_prep <- function(tile_d,
                 filename = paste0(write_dir, '\\r_', select_rast[i], '.asc'),
                 NAflag = -9999,
                 overwrite = TRUE)
+
+    if(exists("pb")) {
+      setTxtProgressBar(pb, i,
+                        title = "Processing target rasters...")
+    }
   }
+
+  # Close progress bar if it exists
+  if(exists("pb")) close(pb)
 
   out <- list(cs_tiles = all_r[select_rast],
               tile_num = select_rast,
@@ -212,12 +227,14 @@ conscape_prep <- function(tile_d,
   mov_tile <- tile_rast(r = r_mov,
                         make_tiles = out,
                         out_dir = file.path(out$asc_dir, 'mov'),
-                        clear_dir = T)
+                        clear_dir = T,
+                        progress = progress)
 
   src_tile <- tile_rast(r = r_src,
                         make_tiles = out,
                         out_dir = file.path(out$asc_dir, 'src'),
-                        clear_dir = T)
+                        clear_dir = T,
+                        progress = progress)
 
   writeVector(all_r[select_rast], paste0(write_dir,"/tiles.shp"), overwrite = T)
 

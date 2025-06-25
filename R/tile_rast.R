@@ -6,6 +6,7 @@
 #' @param make_tiles Object created from  [make_tiles()] function
 #' @param out_dir Directory where .asc files of tiles will be written. This should be different directory from the `make_tiles` `asc_dir`
 #' @param clear_dir Should existing files in the `out_dir` be overwritten? This function must have an empty `out_dir` to proceed
+#' @param progress Logical. If `TRUE`, processing progress will be reported.
 #' @return A named list with the path to the directory where .asc tiles were written
 
 #' @export
@@ -16,7 +17,8 @@
 tile_rast <- function(r,
                       make_tiles,
                       out_dir,
-                      clear_dir = FALSE){
+                      clear_dir = FALSE,
+                      progress = FALSE){
   ## Extend raster
   trim <- make_tiles$tile_trim
   extnd <- ext(r) + trim
@@ -50,15 +52,26 @@ tile_rast <- function(r,
   }
 
   cnt <- 0
+  # Initialize progress bar only if progress=TRUE
+  if(exists("progress") && isTRUE(progress)) {
+    pb <- txtProgressBar(min = 0, max = length(select_rast), style = 3)
+  }
   for(i in select_rast){
     cnt <- cnt + 1
-    # r_NA <- r_list[[cnt]]
-    # r_NA[r_NA == 0] <- -9999
+
+    if(exists("pb")) {
+      setTxtProgressBar(pb, cnt,
+                        title = paste0("Processing ", basename(write_dir)," rasters..."))
+    }
+
     writeRaster(r_list[[cnt]],
                 filename = paste0(write_dir, '\\r_', i, '.asc'),
                 NAflag = -9999,
                 overwrite = TRUE)
   }
+
+  # Close progress bar if it exists
+  if(exists("pb")) close(pb)
 
   out <- list(asc_dir = write_dir)
 }

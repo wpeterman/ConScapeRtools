@@ -13,7 +13,8 @@ conscape_prep(
   r_src,
   target_threshold = 0,
   clear_dir = FALSE,
-  landmark = 10L
+  landmark = 10L,
+  progress = TRUE
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ conscape_prep(
 \item{clear_dir}{Logical (Default = FALSE). Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 
 \item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
+
+\item{progress}{Logical. If \code{TRUE}, processing progress will be reported.}
 }
 \value{
 A named list of class \code{ConScapeRtools_prep} containing the \code{SpatVector}tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the \code{tile_trim} value, and the \code{landmark} value specified.
