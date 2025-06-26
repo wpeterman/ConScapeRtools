@@ -19,7 +19,9 @@ run_conscape(
   jl_home,
   parallel = FALSE,
   workers = 1,
-  progress = TRUE
+  distributed = FALSE,
+  progress = TRUE,
+  parallel_R = FALSE
 )
 }
 \arguments{
@@ -27,11 +29,11 @@ run_conscape(
 
 \item{out_dir}{Directory where final ConScape outputs will be written}
 
-\item{hab_target}{Directory with habitat target tiles}
+\item{hab_target}{Directory with habitat target tiles. Alternatively, a \code{SpatRaster}.}
 
-\item{hab_src}{Directory with habitat source tiles}
+\item{hab_src}{Directory with habitat source tiles. Alternatively, a \code{SpatRaster}.}
 
-\item{mov_prob}{Directory with movement probability tiles}
+\item{mov_prob}{Directory with movement probability tiles. Alternatively, a \code{SpatRaster}.}
 
 \item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
 
@@ -51,7 +53,11 @@ run_conscape(
 
 \item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default = 2}
 
+\item{distributed}{Logical. If \code{parallel = TRUE}, you can choose parallelize using Julia distributed processing (\code{TRUE}) or threading (\code{FALSE})}
+
 \item{progress}{Logical. If \code{TRUE}, progress of processing will be reported.}
+
+\item{parallel_R}{Logical. If \code{TRUE}, parallel processign will be done from R.}
 }
 \value{
 A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
@@ -78,7 +84,7 @@ jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
 
 td <- tile_design(r_mov = resist,
                   r_target = source,
-                  max_d = 7000,
+                  max_d = 10000,
                   theta = 0.1,
                   jl_home = jl_home)
 
@@ -107,14 +113,52 @@ prep <- conscape_prep(tile_d = tile_d,
                       landmark = landmark)
 
 ## Run ConScape
+## No parallelization
+cs_run.serial <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                              conscape_prep = prep,
+                              theta = theta,
+                              exp_d = exp_d,
+                              jl_home = jl_home,
+                              parallel = F)
+
+## Parallel within R
+cs_run.r <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                         conscape_prep = prep,
+                         theta = theta,
+                         exp_d = exp_d,
+                         jl_home = jl_home,
+                         parallel = T,
+                         workers = 4,
+                         parallel_R = TRUE)
+## Threaded parallel
+cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                              conscape_prep = prep,
+                              theta = theta,
+                              exp_d = exp_d,
+                              jl_home = jl_home,
+                              parallel = T,
+                              workers = 4)
+
+## Threaded parallel
+cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                            conscape_prep = prep,
+                            theta = theta,
+                            exp_d = exp_d,
+                            jl_home = jl_home,
+                            parallel = T,
+                            workers = 4,
+                            distributed = TRUE)
+plot(cs_run.dist)
+
+## No tiling --> Only attempt with small to moderate sized rasters!
 cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-                       conscape_prep = prep,
+                       hab_target = source,
+                       hab_src = source,
+                       mov_prob = resist,
                        theta = theta,
                        exp_d = exp_d,
-                       jl_home = jl_home,
-                       parallel = T,
-                       workers = 6)
-plot(cs_run)
+                       jl_home = jl_home)
+
 }
 \author{
 Bill Peterman

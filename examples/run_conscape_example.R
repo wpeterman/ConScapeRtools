@@ -11,7 +11,7 @@ jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
 
 td <- tile_design(r_mov = resist,
                   r_target = source,
-                  max_d = 7000,
+                  max_d = 10000,
                   theta = 0.1,
                   jl_home = jl_home)
 
@@ -48,24 +48,33 @@ cs_run.serial <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                               jl_home = jl_home,
                               parallel = F)
 
+## Parallel within R
+cs_run.r <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                         conscape_prep = prep,
+                         theta = theta,
+                         exp_d = exp_d,
+                         jl_home = jl_home,
+                         parallel = T,
+                         workers = 4,
+                         parallel_R = TRUE)
 ## Threaded parallel
 cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+                              conscape_prep = prep,
+                              theta = theta,
+                              exp_d = exp_d,
+                              jl_home = jl_home,
+                              parallel = T,
+                              workers = 4)
+
+## Threaded parallel
+cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                             conscape_prep = prep,
                             theta = theta,
                             exp_d = exp_d,
                             jl_home = jl_home,
                             parallel = T,
-                            workers = 4)
-
-## Threaded parallel
-cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-                           conscape_prep = prep,
-                           theta = theta,
-                           exp_d = exp_d,
-                           jl_home = jl_home,
-                           parallel = T,
-                           workers = 4,
-                           distributed = TRUE)
+                            workers = 4,
+                            distributed = TRUE)
 plot(cs_run.dist)
 
 ## No tiling --> Only attempt with small to moderate sized rasters!
