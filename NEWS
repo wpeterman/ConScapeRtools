@@ -1,3 +1,7 @@
+ConScapeRtools 0.4.4
+---------
+* Update `tile_design` to more precisely estimate needed tile dimensions
+
 ConScapeRtools 0.4.3
 ---------
 * Added option to parallelize within R

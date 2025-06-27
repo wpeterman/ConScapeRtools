@@ -332,12 +332,14 @@ run_conscape <- function(conscape_prep = NULL,
     class(out) <- "ConScapeResults"
 
     if(isTRUE(single_rast)){
-      out <- rast(list(btwn = rast(list.files(normalizePath(file.path(out_dir, "btwn")),
-                                              full.names = T)),
-                       fcon = rast(list.files(normalizePath(file.path(out_dir, "fcon")),
-                                              full.names = T))))
-      # class(out) <- c("ConScapeResults", class(out))
+      btwn <- rast(list.files(normalizePath(file.path(out_dir, "btwn")),
+                             full.names = T))
+      fcon <- rast(list.files(normalizePath(file.path(out_dir, "fcon")),
+                             full.names = T))
+      crs(btwn) <- crs(fcon) <- crs(mov_prob)
 
+      out <- rast(list(btwn = btwn,
+                       fcon = fcon))
     }
   }
 

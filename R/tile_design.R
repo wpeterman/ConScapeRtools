@@ -91,9 +91,14 @@ tile_design <- function(r_mov,
                     maximum = T)
 
   ## Tile size
-  prox <- exp(-dists[,1] * (1/exp_d$maximum))
-  tile_d <- ceiling((e_dist[which.min(abs(prox - 0.01))] * 1.65) / r_res[1])[[1]] * r_res[1]
-  tile_max <- ceiling((e_dist[which.min(abs(prox - 0.001))] * 1.7) / r_res[1])[[1]] * r_res[1]
+  # if(method == "empirical"){
+    tile_d <- floor(exp_distance(p = 0.99, lambda = 1/exp_d$maximum)) * r_res[1]
+    tile_max <- ceiling(exp_distance(p = 0.999, lambda = 1/exp_d$maximum)) * r_res[1]
+  # } else {
+  #   prox <- exp(-dists[,1] * (1/exp_d$maximum))
+  #   tile_d <- ceiling((e_dist[which.min(abs(prox - 0.01))] * 1.65) / r_res[1])[[1]] * r_res[1]
+  #   tile_max <- ceiling((e_dist[which.min(abs(prox - 0.001))] * 1.7) / r_res[1])[[1]] * r_res[1]
+  # }
   tile_trim <- ceiling((tile_max - tile_d) / r_res[1])[[1]] * r_res[1]
 
   out <- list(exp_d = as.numeric(round(exp_d$maximum,1)),
@@ -121,4 +126,18 @@ exp_opt <- function(x, dists, cell, threshold){
     y <- -9999
   }
   return(y)
+}
+
+#' Calculate the distance for a given cumulative density in a negative exponential distribution
+#' @noRd
+
+exp_distance <- function(p, lambda) {
+  if (p <= 0 || p >= 1) {
+    stop("Cumulative density `p` must be between 0 and 1 (exclusive).")
+  }
+  if (lambda <= 0) {
+    stop("Rate parameter `lambda` must be positive.")
+  }
+  x <- -log(1 - p) / lambda
+  return(x)
 }

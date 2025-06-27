@@ -86,7 +86,8 @@ td <- tile_design(r_mov = resist,
                   r_target = source,
                   max_d = 10000,
                   theta = 0.1,
-                  jl_home = jl_home)
+                  jl_home = jl_home,
+                  method = 'empirical')
 
 ## Tile dimension
 tile_d <- td$tile_d
@@ -139,7 +140,7 @@ cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                               parallel = T,
                               workers = 4)
 
-## Threaded parallel
+## Distributed parallel
 cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                             conscape_prep = prep,
                             theta = theta,
@@ -157,8 +158,10 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        mov_prob = resist,
                        theta = theta,
                        exp_d = exp_d,
+                       landmark = landmark,
                        jl_home = jl_home)
 
+plot((cs_run.dist$fcon - cs_run$fcon)<0.25)
 }
 \author{
 Bill Peterman
