@@ -13,8 +13,7 @@ td <- tile_design(r_mov = resist,
                   r_target = source,
                   max_d = 10000,
                   theta = 0.1,
-                  jl_home = jl_home,
-                  method = 'empirical')
+                  jl_home = jl_home)
 
 ## Tile dimension
 tile_d <- td$tile_d
