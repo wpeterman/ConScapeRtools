@@ -86,5 +86,3 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        landmark = landmark,
                        jl_home = jl_home)
-
-plot((cs_run.dist$fcon - cs_run$fcon)<0.25)

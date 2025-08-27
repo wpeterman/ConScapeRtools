@@ -80,10 +80,10 @@ conscape_prep <- function(tile_d,
 
   f_shift.x <- ext(t)
 
-  shift <- tile_d - (2*tile_trim) - (2*res(r_target)[1])
+  shift_ <- tile_d - (2*tile_trim) - (2*res(r_target)[1])
 
   while(f_shift.x[2] < r_ext[2]){
-    f_shift.x[1:2] <- (f_shift.x[1:2] + shift)
+    f_shift.x[1:2] <- (f_shift.x[1:2] + shift_)
 
     if(f_shift.x[2] < r_ext[2]){
       t2 <- as.polygons(f_shift.x, crs = crs(r_target))
@@ -101,11 +101,11 @@ conscape_prep <- function(tile_d,
   ## Shift y
   all_r <- r2_poly <- r1_poly
   while(ext(r2_poly)[3] > r_ext[3]){
-    y_min <- (ext(r2_poly)[3] -  shift)
+    y_min <- (ext(r2_poly)[3] -  shift_)
 
     if(y_min > r_ext[3]){
       r2_poly <- shift(r2_poly, dx = 0,
-                       dy = (-1 * shift))
+                       dy = (-1 * shift_))
 
       all_r <- c(all_r, r2_poly)
     } else {
