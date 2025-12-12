@@ -11,8 +11,8 @@ jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
 
 td <- tile_design(r_mov = resist,
                   r_target = source,
-                  max_d = 10000,
-                  theta = 0.1,
+                  max_d = 8500,
+                  theta = 0.25,
                   jl_home = jl_home)
 
 ## Tile dimension
@@ -86,3 +86,10 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        landmark = landmark,
                        jl_home = jl_home)
+
+plot(cs_run.serial$fcon - cs_run$fcon, main = "Tiled minus untiled")
+plot(cs_run.serial$fcon, main = "Tiled")
+plot(cs_run$fcon, main = "Untiled")
+layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
+layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
+

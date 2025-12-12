@@ -2,26 +2,79 @@
 % Please edit documentation in R/mosaic_conscape.R
 \name{mosaic_conscape}
 \alias{mosaic_conscape}
-\title{Mosaic ConScape tiles into single contiguous raster}
+\title{Mosaic ConScape tiles into a single raster}
 \usage{
-mosaic_conscape(out_dir, tile_trim, mask = NULL, method = c("mosaic", "merge"))
+mosaic_conscape(
+  out_dir,
+  mask = NULL,
+  tile_trim,
+  method = c("merge", "mosaic"),
+  crs = NULL
+)
 }
 \arguments{
-\item{out_dir}{Directory where \code{\link[=run_conscape]{run_conscape()}} results were written}
+\item{out_dir}{Directory where ConScape tile outputs (e.g., \code{"btwn"}
+or \code{"fcon"} subdirectories produced by \code{\link[=run_conscape]{run_conscape()}}) were
+written. All \verb{*.asc} and \verb{*.tif} files in this directory are
+treated as tiles belonging to a single surface.}
 
-\item{tile_trim}{Provide \code{tile_trim} value used when running \code{\link[=conscape_prep]{conscape_prep()}} or \code{\link[=make_tiles]{make_tiles()}}}
+\item{mask}{Optional binary \code{SpatRaster} indicating regions of the
+landscape that are considered valid (e.g., potential habitat).
+Cells with 0 are set to 0 in the output, and cells with \code{NA} in the
+mask become \code{NA} in the output. If provided, it should typically be
+the same mask written by \code{\link[=conscape_prep]{conscape_prep()}}.}
 
-\item{mask}{Default = NULL. Binary \code{SpatRaster} indicating regions of the landscape that could potentially be occupied.}
+\item{tile_trim}{Width (in map units) of the overlapping margins to
+remove from each tile before mosaicking. This should match the
+\code{tile_trim} value stored in the \code{"ConScapeRtools_prep"} object
+returned by \code{\link[=conscape_prep]{conscape_prep()}}, or an equivalent value used when
+creating tiles manually.}
 
-\item{method}{Either 'mosaic' (Default) or 'merge' to combine raster tiles together}
+\item{method}{Character string indicating how to combine overlapping
+tiles. \code{"merge"} (default) fills gaps using the first non-\code{NA} tile
+encountered, while \code{"mosaic"} averages values where tiles overlap.}
+
+\item{crs}{Optional coordinate reference system to assign to the
+merged raster. Can be a proj4string, EPSG code (e.g. \code{"EPSG:4326"}),
+or a CRS taken from a \code{SpatRaster}. If \code{NULL} (default), the CRS of
+the first tile is retained.}
 }
 \value{
-\code{SpatRaster}
+A \code{SpatRaster} representing the mosaicked ConScape surface, with
+overlapping tile margins removed, tiles combined according to
+\code{method}, an optional CRS set, and (if provided) masked to the input
+\code{mask}.
 }
 \description{
-After running \code{\link[=run_conscape]{run_conscape()}}, this function will reassemble tiles into a single \code{SpatRaster}.
+After running \code{\link[=run_conscape]{run_conscape()}} on tiled landscapes, this function
+reassembles the tile-level outputs into a single \code{SpatRaster}. Tiles
+are optionally trimmed to remove overlapping margins, combined either
+by merging or averaging, and then (optionally) masked to the original
+analysis area.
+}
+\details{
+For each tile, \code{tile_trim} is converted to a number of rows and
+columns and trimmed symmetrically from all sides. To avoid trimming
+away entire tiles, the trim width is capped at at most half the tile
+width/height in cells. If \code{tile_trim} is too large relative to tile
+dimensions, no trimming is applied to that tile.
+
+After trimming, tiles are combined into a single \code{SpatRaster} using
+either \code{\link[terra:merge]{terra::merge()}} (\code{method = "merge"}) or \code{\link[terra:mosaic]{terra::mosaic()}}
+(\verb{method = "mosaic", fun = "mean"}). If a \code{mask} is supplied, the
+function checks for compatible CRS, then crops and/or resamples the
+mosaicked raster to match the mask's extent and resolution (using
+nearest-neighbour resampling if needed) before applying the mask via
+cell-wise multiplication.
+
+This function is typically called internally by \code{\link[=run_conscape]{run_conscape()}} when
+\code{mosaic = TRUE}, but it can also be used directly to post-process
+ConScape tile outputs.
 }
 \examples{
+# example code
+
+\dontrun{
 library(ConScapeRtools)
 
 ## Import data
@@ -31,10 +84,10 @@ source <- terra::rast(s)
 a <- system.file("data/affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
-jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+jl_home <- "/path/to/julia/bin"
 
 td <- tile_design(r_mov = resist,
-                  r_target = source,
+                  r_source = source,
                   max_d = 7000,
                   theta = 0.1,
                   jl_home = jl_home)
@@ -46,7 +99,7 @@ tile_d <- td$tile_d
 tile_trim <- td$tile_trim
 
 # Makes computation more efficient
-landmark <- 2L # Must be an integer, not numeric
+landmark <- 5L # Must be an integer, not numeric
 
 # Controls level of randomness of paths
 theta <- td$theta
@@ -63,25 +116,18 @@ prep <- conscape_prep(tile_d = tile_d,
                       clear_dir = T,
                       landmark = landmark)
 
-## Run ConScape
-cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-                       conscape_prep = prep,
-                       theta = theta,
-                       exp_d = exp_d,
-                       jl_home = jl_home,
-                       parallel = T,
-                       workers = 5)
+cs_res <- run_conscape(conscape_prep = prep,
+                       out_dir = "conscape_out",
+                       jl_home = jl_home)
 
-## Put output tiles together
 cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
-                           tile_trim = tile_trim,
-                           method = 'mosaic')
+                           method = 'mosaic',
+                           crs = crs(source))
 cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
-                           tile_trim = tile_trim)
+                           tile_trim = tile_trim,
+                           crs = crs(source))
 plot(c(cs_btwn, cs_fcon))
-}
-\seealso{
-\code{\link[=make_tiles]{make_tiles()}} and \code{\link[=run_conscape]{run_conscape()}} \cr
+}#' @seealso [conscape_prep()], [run_conscape()], [make_tiles()]
 }
 \author{
 Bill Peterman

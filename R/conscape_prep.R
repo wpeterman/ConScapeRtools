@@ -1,26 +1,126 @@
-#' Wrapper function to prepare data for `run_conscape`
+#' Prepare rasters and tiles for `run_conscape()`
 #'
-#' @description This function will run the `make_tiles` and `tile_rast` functions to break large rasters into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
+#' @description
+#' Convenience wrapper that (i) checks that all input rasters are compatible,
+#' (ii) designs a landmark–aligned tiling scheme with [make_tiles()], (iii)
+#' applies the same tiling to the target, source, and movement rasters via
+#' [tile_rast()], and (iv) writes a binary mask that is used later by
+#' [run_conscape()] and [mosaic_conscape()].
 #'
-#' @param tile_d Dimensions (in meters) of tiles
-#' @param tile_trim The amount of border to be trimmed from tiles after running ConScape (meters)
-#' @param asc_dir Directory where .asc files of tiles will be written to. If NULL (Default), then files will be written to the temporary directory of the R session
-#' @param r_target `SpatRaster` representing target qualities. May be the same as `r_src`
-#' @param r_mov `SpatRaster` representing movement probabilities
-#' @param r_src `SpatRaster` representing source qualities. May be the same as `r_target`
-#' @param target_threshold Value of r_target that is meaningful for movement (Default = 0). Values less `target_threshold` will be set to NA and masked.
-#' @param clear_dir Logical (Default = FALSE). Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
-#' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
-#' @param progress Logical. If `TRUE`, processing progress will be reported.
-#' @return A named list of class `ConScapeRtools_prep` containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the `tile_trim` value, and the `landmark` value specified.
+#' @param tile_d Target interior tile width in map units (e.g., meters).
+#'   Internally, tile dimensions are converted to a number of cells and rounded
+#'   up to the nearest multiple of `landmark` to ensure that coarse–graining
+#'   windows in ConScape align across tiles.
+#' @param tile_trim Minimum overlap width between neighbouring tiles, in map
+#'   units. The actual overlap used may be increased so that the overlap in
+#'   cells is a multiple of `landmark`. This overlap is removed again in
+#'   [mosaic_conscape()].
+#' @param asc_dir Directory where `.asc` tiles and ancillary files will be
+#'   written. If `NULL` (default), a new directory is created under the current
+#'   R session's temporary directory.
+#' @param r_target `SpatRaster` representing target qualities. May be the same
+#'   object as `r_src`. Values below `target_threshold` are treated as
+#'   unsuitable and are masked out.
+#' @param r_mov `SpatRaster` representing movement probabilities.
+#' @param r_src `SpatRaster` representing source qualities. May be the same
+#'   object as `r_target`.
+#' @param target_threshold Numeric threshold applied to `r_target` to define
+#'   suitable habitat (default `0`). Cells with values `< target_threshold` are
+#'   coded as 0 in the mask and set to `NA` in the tiled target raster.
+#' @param clear_dir Logical (default `FALSE`). If `TRUE`, any existing contents
+#'   of `asc_dir` are deleted before tiles are written. If `FALSE` and
+#'   `asc_dir` is not empty, the function stops with an error.
+#' @param landmark Integer giving the number of pixels in the coarse–graining
+#'   window used by ConScape (the `npix` argument in `coarse_graining()`;
+#'   default `10L`). This value is used to ensure that tile dimensions and
+#'   overlaps are aligned with the coarse–graining grid.
+#' @param progress Logical. If `TRUE`, simple text messages are printed to
+#'   report tiling progress.
+#'
 #' @details
-#' The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` and potentially `tile_d` need to be increased.
+#' All three rasters (`r_target`, `r_mov`, `r_src`) must have identical extent
+#' and resolution; this is checked at the start of the function. The CRS is not
+#' modified but should be the same for all layers.
 #'
+#' A binary mask (`mask.asc`) is written to `file.path(asc_dir, "mask")` and
+#' contains 1 for cells with `r_target >= target_threshold` and 0 otherwise.
+#' This mask is used later to restrict the mosaicked ConScape outputs to the
+#' potentially occupiable landscape.
+#'
+#' Tiles are designed once using [make_tiles()] based on the thresholded target
+#' raster, and the same tile geometry is then applied to all layers via
+#' [tile_rast()]. Tile sizes and overlaps are expressed in cell units and
+#' rounded so that both tile width and overlap are multiples of `landmark`,
+#' which ensures that ConScape's coarse–grained "landmarks" fall on a common
+#' grid when tiles are reassembled.
+#'
+#' @return
+#' A named list of class `"ConScapeRtools_prep"` with elements:
+#'
+#' * `cs_tiles` – `SpatVector` of interior tile polygons.
+#' * `tile_num` – integer vector of tile IDs that contain usable data.
+#' * `asc_dir` – path to the root directory where `.asc` tiles and the mask
+#'   were written.
+#' * `src`, `target`, `mov` – subdirectories containing the source, target,
+#'   and movement tiles (as `.asc` files).
+#' * `tile_trim` – effective overlap width in map units (may be larger than
+#'   the user–supplied `tile_trim` if increased for landmark alignment).
+#' * `landmark` – the coarse–graining window size passed in via `landmark`.
+#'
+#' This object is intended to be passed directly to [run_conscape()].
 #'
 #' @export
-#' @example examples/conscape_prep_example.R
-#' @seealso [tile_design()], [tile_rast()] and [make_tiles()]
+#' @examples
+#' \dontrun{
+#' library(ConScapeRtools)
+#'
+#' ## Import data
+#' s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+#' source <- terra::rast(s)
+#'
+#' a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+#' resist <- terra::rast(a)
+#'
+#' jl_home <- "/path/to/julia/bin"
+#'
+#' td <- tile_design(r_mov = resist,
+#'                   r_source = source,
+#'                   max_d = 7000,
+#'                   theta = 0.1,
+#'                   jl_home = jl_home)
+#'
+#' ## Tile dimension
+#' tile_d <- td$tile_d
+#'
+#' # How much to trim tiles
+#' tile_trim <- td$tile_trim
+#'
+#' # Makes computation more efficient
+#' landmark <- 5L # Must be an integer, not numeric
+#'
+#' # Controls level of randomness of paths
+#' theta <- td$theta
+#'
+#' # Controls rate of decay with distance
+#' exp_d <- td$exp_d
+#'
+#' ## Prepare data for analysis
+#' prep <- conscape_prep(tile_d = tile_d,
+#'                       tile_trim = tile_trim,
+#'                       r_target = source,
+#'                       r_mov = resist,
+#'                       r_src = source,
+#'                       clear_dir = T,
+#'                       landmark = landmark)
+#'
+#' cs_res <- run_conscape(conscape_prep = prep,
+#'                        out_dir = "conscape_out",
+#'                        jl_home = jl_home)
+#' }
+#'
+#' @seealso [make_tiles()], [tile_rast()], [run_conscape()], [mosaic_conscape()]
 #' @author Bill Peterman
+
 #' @importFrom terra writeVector
 #' @importFrom utils txtProgressBar setTxtProgressBar
 
@@ -35,221 +135,109 @@ conscape_prep <- function(tile_d,
                           landmark = 10L,
                           progress = TRUE) {
 
-  # method <- match.arg(method)
-  method <- 'both'
+  ## ----- basic checks: extents and resolutions -----
+  rasters <- list(r_target = r_target, r_mov = r_mov, r_src = r_src)
+
+  # extents
+  if (!all(sapply(rasters, function(x) all.equal(ext(x), ext(r_target))))) {
+    stop("All rasters (r_target, r_mov, r_src) must have the same extent.")
+  }
+  # resolution
+  if (!all(sapply(rasters, function(x) all.equal(res(x), res(r_target))))) {
+    stop("All rasters (r_target, r_mov, r_src) must have the same resolution.")
+  }
+
+  ## ----- set up asc_dir and (optionally) clear it -----
+  if (is.null(asc_dir)) {
+    asc_dir <- file.path(tempdir(), "asc")
+  }
+  if (!dir.exists(asc_dir)) dir.create(asc_dir, recursive = TRUE)
+  asc_dir <- normalizePath(asc_dir)
+
+  # if asc_dir already has content and we don't want to clear, stop
+  if (length(list.files(asc_dir, recursive = TRUE)) > 0 && !clear_dir) {
+    stop("asc_dir is not empty. Use clear_dir = TRUE to overwrite existing contents.")
+  }
+
+  if (clear_dir) {
+    unlink(file.path(asc_dir, "*"), recursive = TRUE, force = TRUE)
+  }
+
+  ## ----- create and write mask (this is what run_conscape expects) -----
+
+  # binary mask based on target_threshold
   t_mask <- r_target
-  t_mask[t_mask < target_threshold] <- 0
-  t_mask[t_mask != 0] <- 1
+  t_mask[is.na(t_mask)] <- 0
+  t_mask[t_mask <  target_threshold] <- 0
+  t_mask[t_mask >= target_threshold] <- 1
 
-  ## Check extents
-  if(ext(r_target) != ext(r_mov)){
-    stop('`r_target` and `r_mov` have different extents!')
-  }
+  mask_dir <- file.path(asc_dir, "mask")
+  if (!dir.exists(mask_dir)) dir.create(mask_dir, recursive = TRUE)
 
-  if(ext(r_target) != ext(r_src)){
-    stop('`r_target` and `r_src` have different extents!')
-  }
+  writeRaster(
+    t_mask,
+    filename = file.path(mask_dir, "mask.asc"),
+    overwrite = TRUE,
+    NAflag   = -9999
+  )
 
-  if(ext(r_mov) != ext(r_src)){
-    stop('`r_mov` and `r_src` have different extents!')
-  }
+  ## also apply threshold to r_target for tiling
+  r_target_thr <- r_target
+  r_target_thr[r_target_thr < target_threshold] <- NA
 
-  ## Check resolution
-  if(res(r_target)[1] != res(r_mov)[1]){
-    stop('`r_target` and `r_mov` have different resolutions!')
-  }
+  ## ----- design tiles (npix / landmark aligned) -----
+  if (progress) cat("Designing tiles...\n")
+  tile_design <- make_tiles(r_target_thr,
+                            tile_d    = tile_d,
+                            tile_trim = tile_trim,
+                            landmark  = landmark)
 
-  if(res(r_target)[1] != res(r_src)[1]){
-    stop('`r_target` and `r_src` have different resolutions!')
-  }
+  ## ----- tile each raster with same design -----
+  if (progress) cat("Tiling target raster...\n")
+  target_tiles <- tile_rast(
+    r          = r_target_thr,
+    make_tiles = tile_design,
+    out_dir    = file.path(asc_dir, "target"),
+    clear_dir  = TRUE,
+    progress   = progress
+  )
 
-  if(res(r_mov)[1] != res(r_src)[1]){
-    stop('`r_mov` and `r_src` have different resolutions!')
-  }
+  if (progress) cat("Tiling movement raster...\n")
+  mov_tiles <- tile_rast(
+    r          = r_mov,
+    make_tiles = tile_design,
+    out_dir    = file.path(asc_dir, "mov"),
+    clear_dir  = TRUE,
+    progress   = progress
+  )
 
-  r_target[r_target < target_threshold] <- NA
-  r_ext <- ext(r_target)
-  extnd <- r_ext + tile_trim
-  r_e <- extend(r_target, extnd, fill = NA)
-  # r_e[is.na(r_e)] <- 0 #NA
-  r_ext <- ext(r_e)
+  if (progress) cat("Tiling source raster...\n")
+  src_tiles <- tile_rast(
+    r          = r_src,
+    make_tiles = tile_design,
+    out_dir    = file.path(asc_dir, "src"),
+    clear_dir  = TRUE,
+    progress   = progress
+  )
 
-  e <- ext(r_ext[1], r_ext[1] + tile_d,
-           r_ext[4] - tile_d, r_ext[4])
-  t <- as.polygons(e, crs = crs(r_target))
+  ## ----- write tile polygons for reference -----
+  writeVector(tile_design$cs_tiles,
+              file.path(asc_dir, "tiles.shp"),
+              overwrite = TRUE)
 
-  f_shift.x <- ext(t)
+  ## ----- return prep object -----
+  out <- list(
+    cs_tiles  = tile_design$cs_tiles,
+    tile_num  = tile_design$tile_num,
+    asc_dir   = asc_dir,
+    src       = src_tiles$asc_dir,
+    target    = target_tiles$asc_dir,
+    mov       = mov_tiles$asc_dir,
+    tile_trim = tile_design$tile_trim,   # map units, for mosaic_conscape
+    landmark  = tile_design$landmark
+  )
+  class(out) <- "ConScapeRtools_prep"
+  out
+}
 
-  shift_ <- tile_d - (2*tile_trim) - (2*res(r_target)[1])
-
-  while(f_shift.x[2] < r_ext[2]){
-    f_shift.x[1:2] <- (f_shift.x[1:2] + shift_)
-
-    if(f_shift.x[2] < r_ext[2]){
-      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
-      t <- c(t, t2)
-    } else {
-      f_shift.x[2] <- r_ext[2]
-      f_shift.x[1] <- (f_shift.x[2] -  tile_d)
-      t2 <- as.polygons(f_shift.x, crs = crs(r_target))
-      t <- c(t, t2)
-    }
-  } ## End while
-
-  r1_poly <- vect(t)
-
-  ## Shift y
-  all_r <- r2_poly <- r1_poly
-  while(ext(r2_poly)[3] > r_ext[3]){
-    y_min <- (ext(r2_poly)[3] -  shift_)
-
-    if(y_min > r_ext[3]){
-      r2_poly <- shift(r2_poly, dx = 0,
-                       dy = (-1 * shift_))
-
-      all_r <- c(all_r, r2_poly)
-    } else {
-
-      r2_poly <- shift(r2_poly, dx = 0,
-                       dy = r_ext[3] - ext(r2_poly)[3])
-      all_r <- c(all_r, r2_poly)
-    }
-  } ## End y while
-
-  all_r <- vect(all_r)
-
-  ## Get centroids
-  pts <- centroids(all_r)
-
-  ## Focal buffer
-  ## Alt method
-  overlap <- (1*res(r_target)[1]) ## Orig = 3
-  s <- vect()
-  for(i in 1:length(all_r)){
-    fc <- all_r[i]
-    fc_ <- crop(fc, ext(ext(fc)[] + c(tile_trim - overlap, -tile_trim + overlap,
-                                      tile_trim - overlap, -tile_trim + overlap)))
-    s <- c(s, fc_)
-    # plot(fc); plot(s[i], add=T, border = 'red')
-  }
-
-  s <- vect(s)
-
-  ## Break up raster
-  r_list <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
-
-  # t_list <- lapply(1:length(all_r), function(x)
-  #   terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
-
-  r_list.crop <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r_e, ext(s[x])), s[x]))
-
-  ## Updated function
-  # na_rast <- lapply(1:length(r_list.crop), function(x)
-  #   global(r_list.crop[[x]], 'sum', na.rm = T)[1]) |> unlist() |> as.vector()
-  na_rast <- lapply(1:length(r_list.crop), function(x)
-    minmax(r_list.crop[[x]])[1]) |> unlist() |> as.vector()
-
-
-  agg_list <- lapply(1:length(r_list), function(x)
-    terra::aggregate(r_list[[x]], fact = I(floor(landmark*2)), fun = 'mean'))
-
-  ## Updated Function
-  na_rast2 <- lapply(1:length(agg_list), function(x)
-    minmax(agg_list[[x]])[1]) |> unlist() #|> as.vector()
-  # na_rast2 <- lapply(1:length(agg_list), function(x)
-  #   global(agg_list[[x]], 'sum', na.rm = T)[1]) |> unlist() |> as.vector()
-
-  if(method == 'landmark'){
-    select_rast <- which(na_rast2 != 0)
-  } else if(method == 'tile') {
-    select_rast <- which(na_rast != 0)
-  } else {
-    select_rast <- which(na_rast != 0 & na_rast2 != 0)
-  }
-
-  if(is.null(asc_dir)){
-    write_dir <- paste0(tempdir(),"\\asc\\")
-    suppressWarnings(dir.create(paste0(write_dir,"\\mask\\"), recursive = T))
-
-  } else {
-    write_dir <- asc_dir
-    dir.create(paste0(write_dir,"\\mask\\"), recursive = T)
-
-  }
-
-  if(!dir.exists(write_dir)){
-    dir.create(write_dir, recursive = T)
-    dir.create(paste0(write_dir,"\\mask\\"), recursive = T)
-  }
-
-  write_dir <- normalizePath(write_dir)
-  mask_dir <- normalizePath(paste0(write_dir,"\\mask\\"))
-
-
-  writeRaster(t_mask, paste0(mask_dir, "\\mask.asc"),
-              overwrite = T, NAflag = -9999)
-
-  if(length(list.files(write_dir)) > 0 & isFALSE(clear_dir)){
-    stop("Files currently exist in the specified directory. Set `clear_dir = TRUE` to remove these files.")
-  } else {
-    unlink(paste0(write_dir, "\\*"), force = T)
-  }
-
-  # Initialize progress bar only if progress=TRUE
-  if(exists("progress") && isTRUE(progress)) {
-    pb <- txtProgressBar(min = 0, max = length(select_rast), style = 3)
-  }
-
-  for(i in 1:length(select_rast)){
-    # r_NA <- r_list[[select_rast[i]]]
-    # r_NA[r_NA == 0] <- -9999
-    writeRaster(r_list[[select_rast[i]]],
-                filename = paste0(write_dir, '\\r_', select_rast[i], '.asc'),
-                NAflag = -9999,
-                overwrite = TRUE)
-
-    if(exists("pb")) {
-      setTxtProgressBar(pb, i,
-                        title = "Processing target rasters...")
-    }
-  }
-
-  # Close progress bar if it exists
-  if(exists("pb")) close(pb)
-
-  out <- list(cs_tiles = all_r[select_rast],
-              tile_num = select_rast,
-              asc_dir = write_dir,
-              tile_trim = tile_trim)
-
-  mov_tile <- tile_rast(r = r_mov,
-                        make_tiles = out,
-                        out_dir = file.path(out$asc_dir, 'mov'),
-                        clear_dir = T,
-                        progress = progress)
-
-  src_tile <- tile_rast(r = r_src,
-                        make_tiles = out,
-                        out_dir = file.path(out$asc_dir, 'src'),
-                        clear_dir = T,
-                        progress = progress)
-
-  writeVector(all_r[select_rast], paste0(write_dir,"/tiles.shp"), overwrite = T)
-
-  out2 <- list(cs_tiles = all_r[select_rast],
-               tile_num = select_rast,
-               asc_dir = write_dir,
-               src = src_tile$asc_dir, #write_dir,
-               target = write_dir,#target_tile$asc_dir,
-               mov = mov_tile$asc_dir,
-               tile_trim = tile_trim,
-               landmark = landmark)
-
-  class(out2) <- 'ConScapeRtools_prep'
-  return(out2)
-} ## End function
-
-#' @rdname conscape_prep
 

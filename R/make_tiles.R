@@ -1,145 +1,154 @@
-#' Break raster into small tiles
+#' Compute landmark-aligned tile layout for a raster
 #'
-#' @description This function will break a large raster into tiles of specified dimensions.
+#' @description
+#' Internal helper to design a regular grid of interior tiles for a
+#' `SpatRaster`. Tile dimensions are expressed in map units but internally
+#' converted to a number of cells that is a multiple of the landmark
+#' coarse-grain window (`npix`). Tile origins are aligned to the original
+#' raster grid so that ConScape landmark nodes line up across tiles and
+#' with a full, untiled run.
 #'
-#' @param tile_d Dimensions (in meters) of tiles
-#' @param tile_trim The amount of border to be trimmed from tiles after running ConScape (meters)
-#' @param asc_dir Directory where .asc files of tiles will be written to. If NULL (Default), then files will be written to the temporary directory of the R session
-#' @param r Raster file as `SpatRaster` to be broken up into smaller tiles
-#' @param clear_dir Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
-#' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
-#' @return A named list containing the `SpatVector`tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directory where .asc tiles were written, and the `tile_trim` value specified.
+#' @param r `SpatRaster`. Raster to be partitioned into interior tiles.
+#'   Must be in a projected coordinate reference system where the cell
+#'   size is expressed in the same units as `tile_d` and `tile_trim`
+#'   (typically meters). Non-square cells are allowed but only the
+#'   x-resolution is used when computing tile sizes and overlap.
+#' @param tile_d Numeric scalar giving the *target* interior tile width
+#'   in map units (e.g., meters). The actual tile width in cells is
+#'   computed as the smallest multiple of `landmark` (in cells) that is
+#'   at least `tile_d / res(r)[1]`.
+#' @param tile_trim Numeric scalar giving the minimum requested overlap
+#'   width (in map units) to be available on each side of a tile before
+#'   trimming. This is treated as a lower bound; the effective overlap
+#'   may be larger to satisfy landmark alignment.
+#' @param landmark Integer giving the number of pixels in the
+#'   coarse-graining window (`npix`) used by ConScape. Tiles are sized
+#'   and their overlaps are constrained to be multiples of this value so
+#'   that coarse-grained nodes (landmarks) fall on consistent grid
+#'   locations across tiles. Default is `10L`.
+#'
 #' @details
-#' The smaller the tiles created, the faster each can be processed. The width of the `tile_trim` parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then `tile_trim` needs to be increased.
+#' The function works entirely in cell space but keeps all calculations
+#' anchored to the original raster grid:
 #'
+#' * The target tile width `tile_d` is converted to a raw number of
+#'   cells (`tile_cells_raw = round(tile_d / resx)`), then rounded *up*
+#'   to the nearest multiple of `landmark`, with a minimum of
+#'   `landmark` cells (`tile_cells`).
+#' * Starting column and row indices are generated with
+#'   `seq(1, ncol(r), by = tile_cells)` and
+#'   `seq(1, nrow(r), by = tile_cells)`. The last tile in each row/column
+#'   is truncated to the raster edge so that the union of tiles covers
+#'   the full extent of `r`.
+#' * For each tile, the interior extent is computed directly from
+#'   `(cs, rs, ce, re)` and the raster origin, using `xmin(r)`, `ymax(r)`
+#'   and the cell size. No padding or overlap is added at this step; the
+#'   returned polygons describe only the interior region.
 #'
-#' @export
-#' @example examples/make_tiles_example.R
-#' @seealso [tile_rast()] for subsequent making of tiles
+#' Overlap for ConScape coarse-graining is summarised as follows:
+#'
+#' * `min_cells` is the minimum required overlap in cells:
+#'   `floor(landmark / 2)` (half a coarse window on each side) and the
+#'   user-requested `tile_trim` converted to cells are both honoured by
+#'   taking their maximum.
+#' * The actual overlap in cells (`overlap_cells`) is then rounded up to
+#'   the nearest multiple of `landmark` so that landmark centres align
+#'   across tiles.
+#' * The effective overlap width in map units (`tile_trim` in the return
+#'   list) is `overlap_cells * resx`. This value can differ from the
+#'   user-supplied `tile_trim` but will always be at least as large.
+#'
+#' The interior polygons returned here are typically passed to
+#' [tile_rast()] to construct extended tiles that include the overlap on
+#' all sides. Those extended tiles are then sent to ConScape, and
+#' [mosaic_conscape()] later trims and mosaics them using the same
+#' landmark-aligned overlap.
+#'
+#' @return
+#' A named list with components:
+#'
+#' \item{cs_tiles}{`SpatVector` of interior tile polygons covering the
+#'   full extent of `r` without overlap.}
+#' \item{tile_num}{Integer vector giving the tile index
+#'   `seq_along(cs_tiles)`.}
+#' \item{overlap_cells}{Integer giving the number of cells to use as
+#'   overlap on each side of a tile (in both x and y directions). This
+#'   is a multiple of `landmark`.}
+#' \item{tile_trim}{Effective overlap width in map units
+#'   (`overlap_cells * resx`). This is the value that should be passed to
+#'   [mosaic_conscape()] and stored in `"ConScapeRtools_prep"`.}
+#' \item{landmark}{Integer; the landmark window size `npix` used for
+#'   alignment and coarse-graining.}
+#'
+#' @keywords internal
+#' @noRd
 #' @author Bill Peterman
 
-make_tiles <- function(tile_d,
+make_tiles <- function(r,
+                       tile_d,
                        tile_trim,
-                       asc_dir = NULL,
-                       r,
-                       clear_dir = FALSE,
                        landmark = 10L) {
-  r_ext <- ext(r)
-  extnd <- r_ext + tile_trim
-  r_e <- extend(r, extnd)
-  r_e[is.na(r_e)] <- 0
-  r_ext <- ext(r_e)
 
-  e <- ext(r_ext[1], r_ext[1] + tile_d,
-           r_ext[4] - tile_d, r_ext[4])
-  t <- as.polygons(e, crs = crs(r))
+  resx <- res(r)[1]
+  resy <- res(r)[2]
+  if (!isTRUE(all.equal(resx, resy))) {
+    warning("Non-square cells; using x-resolution.")
+  }
 
-  f_shift.x <- ext(t)
+  npix <- as.integer(landmark)
+  ncols <- ncol(r)
+  nrows <- nrow(r)
 
-  shift <- tile_d - (2*tile_trim) - (2*res(r)[1])
+  # tile size in cells, multiple of npix
+  tile_cells_raw <- round(tile_d / resx)
+  tile_cells <- max(npix, ceiling(tile_cells_raw / npix) * npix)
 
-  while(f_shift.x[2] < r_ext[2]){
-    f_shift.x[1:2] <- (f_shift.x[1:2] + shift)
+  col_starts <- seq(1L, ncols, by = tile_cells)
+  row_starts <- seq(1L, nrows, by = tile_cells)
 
-    if(f_shift.x[2] < r_ext[2]){
-      t2 <- as.polygons(f_shift.x, crs = crs(r))
-      t <- c(t, t2)
-    } else {
-      f_shift.x[2] <- r_ext[2]
-      f_shift.x[1] <- (f_shift.x[2] -  tile_d)
-      t2 <- as.polygons(f_shift.x, crs = crs(r))
-      t <- c(t, t2)
+  xmin_r <- xmin(r); xmax_r <- xmax(r)
+  ymin_r <- ymin(r); ymax_r <- ymax(r)
+
+  tiles_int <- vector("list", length(col_starts) * length(row_starts))
+  idx <- 1L
+
+  for (ic in seq_along(col_starts)) {
+    for (ir in seq_along(row_starts)) {
+      cs <- col_starts[ic]
+      rs <- row_starts[ir]
+      ce <- min(cs + tile_cells - 1L, ncols)
+      re <- min(rs + tile_cells - 1L, nrows)
+
+      x_min <- xmin_r + (cs - 1L) * resx
+      x_max <- xmin_r + ce        * resx
+      y_max <- ymax_r - (rs - 1L) * resy
+      y_min <- ymax_r - re        * resy
+
+      tiles_int[[idx]] <- ext(x_min, x_max, y_min, y_max)
+      idx <- idx + 1L
     }
-  } ## End while
-
-  r1_poly <- vect(t)
-
-  ## Shift y
-  all_r <- r2_poly <- r1_poly
-  while(ext(r2_poly)[3] > r_ext[3]){
-    y_min <- (ext(r2_poly)[3] -  shift)
-
-    if(y_min > r_ext[3]){
-      r2_poly <- shift(r2_poly, dx = 0,
-                       dy = (-1 * shift))
-
-      all_r <- c(all_r, r2_poly)
-    } else {
-
-      r2_poly <- shift(r2_poly, dx = 0,
-                       dy = r_ext[3] - ext(r2_poly)[3])
-      all_r <- c(all_r, r2_poly)
-    }
-  } ## End y while
-
-  all_r <- vect(all_r)
-
-  ## Get centroids
-  pts <- centroids(all_r)
-
-  ## Focal buffer
-  ## Alt method
-  overlap <- (3*res(r)[1])
-  s <- vect()
-  for(i in 1:length(all_r)){
-    fc <- all_r[i]
-    fc_ <- crop(fc, ext(ext(fc)[] + c(tile_trim - overlap, -tile_trim + overlap,
-                                      tile_trim - overlap, -tile_trim + overlap)))
-    s <- c(s, fc_)
-    # plot(fc); plot(s[i], add=T, border = 'red')
   }
 
-  s <- vect(s)
+  cs_tiles <- vect(do.call(c, lapply(tiles_int, as.polygons)))
 
-  ## Break up raster
-  r_list <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r_e, ext(all_r[x])), all_r[x]))
+  # npix = landmark (number of pixels in coarse-grain window)
+  # tile_trim = user’s requested *minimum* overlap in map units
 
-  r_list.crop <- lapply(1:length(all_r), function(x)
-    terra::mask(crop(r_e, ext(s[x])), s[x]))
+  min_cells <- max(
+    floor(npix / 2),          # need at least half-window on each side
+    ceiling(tile_trim / resx) # user minimum in cells
+  )
 
-  na_rast <- lapply(1:length(r_list.crop), function(x)
-    minmax(r_list.crop[[x]])[1]) |> unlist()
+  # force overlap_cells to be a multiple of npix
+  overlap_cells <- ceiling(min_cells / npix) * npix
+  overlap_dist  <- overlap_cells * resx      # effective tile_trim in map units
 
 
-  agg_list <- lapply(1:length(r_list), function(x)
-    terra::aggregate(r_list[[x]], fact = I(floor(landmark*2)), fun = 'mean'))
-
-  na_rast2 <- lapply(1:length(agg_list), function(x)
-    minmax(agg_list[[x]])[1]) |> unlist()
-
-  select_rast <- which(!is.nan(na_rast) & !is.nan(na_rast2))
-
-  if(is.null(asc_dir)){
-    write_dir <- paste0(tempdir(),"\\asc\\")
-  } else {
-    write_dir <- asc_dir
-  }
-
-  if(!dir.exists(write_dir))
-    dir.create(write_dir, recursive = T)
-
-  write_dir <- normalizePath(write_dir)
-
-  if(length(list.files(write_dir)) > 0 & isFALSE(clear_dir)){
-    stop("Files currently exist in the specified directory. Set `clear_dir = TRUE` to remove these files.")
-  } else {
-    unlink(paste0(write_dir, "\\*"), force = T)
-  }
-
-  for(i in 1:length(select_rast)){
-    writeRaster(r_list[[select_rast[i]]],
-                filename = paste0(write_dir, '\\r_', select_rast[i], '.asc'),
-                NAflag = -9999,
-                overwrite = TRUE)
-  }
-
-  out <- list(cs_tiles = all_r[select_rast],
-              tile_num = select_rast,
-              asc_dir = write_dir,
-              tile_trim = tile_trim)
-  return(out)
-} ## End function
-
-#' @rdname make_tiles
-
+  list(
+    cs_tiles      = cs_tiles,
+    tile_num      = seq_along(cs_tiles),
+    overlap_cells = overlap_cells,
+    tile_trim     = overlap_dist,
+    landmark      = npix
+  )
+}

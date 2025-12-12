@@ -2,7 +2,7 @@
 % Please edit documentation in R/conscape_prep.R
 \name{conscape_prep}
 \alias{conscape_prep}
-\title{Wrapper function to prepare data for \code{run_conscape}}
+\title{Prepare rasters and tiles for \code{run_conscape()}}
 \usage{
 conscape_prep(
   tile_d,
@@ -18,36 +18,87 @@ conscape_prep(
 )
 }
 \arguments{
-\item{tile_d}{Dimensions (in meters) of tiles}
+\item{tile_d}{Target interior tile width in map units (e.g., meters).
+Internally, tile dimensions are converted to a number of cells and rounded
+up to the nearest multiple of \code{landmark} to ensure that coarse–graining
+windows in ConScape align across tiles.}
 
-\item{tile_trim}{The amount of border to be trimmed from tiles after running ConScape (meters)}
+\item{tile_trim}{Minimum overlap width between neighbouring tiles, in map
+units. The actual overlap used may be increased so that the overlap in
+cells is a multiple of \code{landmark}. This overlap is removed again in
+\code{\link[=mosaic_conscape]{mosaic_conscape()}}.}
 
-\item{asc_dir}{Directory where .asc files of tiles will be written to. If NULL (Default), then files will be written to the temporary directory of the R session}
+\item{asc_dir}{Directory where \code{.asc} tiles and ancillary files will be
+written. If \code{NULL} (default), a new directory is created under the current
+R session's temporary directory.}
 
-\item{r_target}{\code{SpatRaster} representing target qualities. May be the same as \code{r_src}}
+\item{r_target}{\code{SpatRaster} representing target qualities. May be the same
+object as \code{r_src}. Values below \code{target_threshold} are treated as
+unsuitable and are masked out.}
 
-\item{r_mov}{\code{SpatRaster} representing movement probabilities}
+\item{r_mov}{\code{SpatRaster} representing movement probabilities.}
 
-\item{r_src}{\code{SpatRaster} representing source qualities. May be the same as \code{r_target}}
+\item{r_src}{\code{SpatRaster} representing source qualities. May be the same
+object as \code{r_target}.}
 
-\item{target_threshold}{Value of r_target that is meaningful for movement (Default = 0). Values less \code{target_threshold} will be set to NA and masked.}
+\item{target_threshold}{Numeric threshold applied to \code{r_target} to define
+suitable habitat (default \code{0}). Cells with values \verb{< target_threshold} are
+coded as 0 in the mask and set to \code{NA} in the tiled target raster.}
 
-\item{clear_dir}{Logical (Default = FALSE). Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
+\item{clear_dir}{Logical (default \code{FALSE}). If \code{TRUE}, any existing contents
+of \code{asc_dir} are deleted before tiles are written. If \code{FALSE} and
+\code{asc_dir} is not empty, the function stops with an error.}
 
-\item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
+\item{landmark}{Integer giving the number of pixels in the coarse–graining
+window used by ConScape (the \code{npix} argument in \code{coarse_graining()};
+default \code{10L}). This value is used to ensure that tile dimensions and
+overlaps are aligned with the coarse–graining grid.}
 
-\item{progress}{Logical. If \code{TRUE}, processing progress will be reported.}
+\item{progress}{Logical. If \code{TRUE}, simple text messages are printed to
+report tiling progress.}
 }
 \value{
-A named list of class \code{ConScapeRtools_prep} containing the \code{SpatVector}tiles created, the numeric identifier of tiles with usable data for ConScape, the path to the directories where .asc tiles were written, the \code{tile_trim} value, and the \code{landmark} value specified.
+A named list of class \code{"ConScapeRtools_prep"} with elements:
+\itemize{
+\item \code{cs_tiles} – \code{SpatVector} of interior tile polygons.
+\item \code{tile_num} – integer vector of tile IDs that contain usable data.
+\item \code{asc_dir} – path to the root directory where \code{.asc} tiles and the mask
+were written.
+\item \code{src}, \code{target}, \code{mov} – subdirectories containing the source, target,
+and movement tiles (as \code{.asc} files).
+\item \code{tile_trim} – effective overlap width in map units (may be larger than
+the user–supplied \code{tile_trim} if increased for landmark alignment).
+\item \code{landmark} – the coarse–graining window size passed in via \code{landmark}.
+}
+
+This object is intended to be passed directly to \code{\link[=run_conscape]{run_conscape()}}.
 }
 \description{
-This function will run the \code{make_tiles} and \code{tile_rast} functions to break large rasters into tiles of specified dimensions. This is a convenience wrapper to process all layers in one function call.
+Convenience wrapper that (i) checks that all input rasters are compatible,
+(ii) designs a landmark–aligned tiling scheme with \code{\link[=make_tiles]{make_tiles()}}, (iii)
+applies the same tiling to the target, source, and movement rasters via
+\code{\link[=tile_rast]{tile_rast()}}, and (iv) writes a binary mask that is used later by
+\code{\link[=run_conscape]{run_conscape()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
 }
 \details{
-The smaller the tiles created, the faster each can be processed. The width of the \code{tile_trim} parameter will depend upon the movement settings of your ConScape run. If there are obvious tiling edges and artifacts in your final surfaces, then \code{tile_trim} and potentially \code{tile_d} need to be increased.
+All three rasters (\code{r_target}, \code{r_mov}, \code{r_src}) must have identical extent
+and resolution; this is checked at the start of the function. The CRS is not
+modified but should be the same for all layers.
+
+A binary mask (\code{mask.asc}) is written to \code{file.path(asc_dir, "mask")} and
+contains 1 for cells with \code{r_target >= target_threshold} and 0 otherwise.
+This mask is used later to restrict the mosaicked ConScape outputs to the
+potentially occupiable landscape.
+
+Tiles are designed once using \code{\link[=make_tiles]{make_tiles()}} based on the thresholded target
+raster, and the same tile geometry is then applied to all layers via
+\code{\link[=tile_rast]{tile_rast()}}. Tile sizes and overlaps are expressed in cell units and
+rounded so that both tile width and overlap are multiples of \code{landmark},
+which ensures that ConScape's coarse–grained "landmarks" fall on a common
+grid when tiles are reassembled.
 }
 \examples{
+\dontrun{
 library(ConScapeRtools)
 
 ## Import data
@@ -57,7 +108,7 @@ source <- terra::rast(s)
 a <- system.file("data/affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
-jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+jl_home <- "/path/to/julia/bin"
 
 td <- tile_design(r_mov = resist,
                   r_source = source,
@@ -88,9 +139,15 @@ prep <- conscape_prep(tile_d = tile_d,
                       r_src = source,
                       clear_dir = T,
                       landmark = landmark)
+
+cs_res <- run_conscape(conscape_prep = prep,
+                       out_dir = "conscape_out",
+                       jl_home = jl_home)
+}
+
 }
 \seealso{
-\code{\link[=tile_design]{tile_design()}}, \code{\link[=tile_rast]{tile_rast()}} and \code{\link[=make_tiles]{make_tiles()}}
+\code{\link[=make_tiles]{make_tiles()}}, \code{\link[=tile_rast]{tile_rast()}}, \code{\link[=run_conscape]{run_conscape()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
 }
 \author{
 Bill Peterman

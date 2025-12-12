@@ -21,56 +21,132 @@ run_conscape(
   workers = 1,
   distributed = FALSE,
   progress = TRUE,
-  parallel_R = FALSE
+  parallel_R = FALSE,
+  tile_trim = 0
 )
 }
 \arguments{
-\item{conscape_prep}{Object of class \code{ConScapeRtools_prep} created using the \code{conscape_prep} function. If NULL (Default), then \code{hab_target}, \code{hab_src}, and \code{mov_prob} must individually be specified.}
+\item{conscape_prep}{Optional object of class \code{"ConScapeRtools_prep"}
+created by \code{\link[=conscape_prep]{conscape_prep()}}. When supplied, this provides the tile
+layout, directories for source/target/movement tiles, the mask, and
+\code{landmark} / \code{tile_trim} values. If \code{NULL} (default), the user must
+supply \code{hab_target}, \code{hab_src}, and \code{mov_prob} directly.}
 
-\item{out_dir}{Directory where final ConScape outputs will be written}
+\item{out_dir}{Directory where final ConScape outputs will be written.
+Subdirectories \code{"btwn"} and \code{"fcon"} are created inside \code{out_dir}.}
 
-\item{hab_target}{Directory with habitat target tiles. Alternatively, a \code{SpatRaster}.}
+\item{hab_target}{Either (i) a path to a directory containing target
+habitat tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as the
+target layer when running ConScape on a non-tiled landscape.}
 
-\item{hab_src}{Directory with habitat source tiles. Alternatively, a \code{SpatRaster}.}
+\item{hab_src}{Either (i) a path to a directory containing source
+habitat tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as the
+source layer when running ConScape on a non-tiled landscape.}
 
-\item{mov_prob}{Directory with movement probability tiles. Alternatively, a \code{SpatRaster}.}
+\item{mov_prob}{Either (i) a path to a directory containing movement
+probability tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as
+the movement layer when running ConScape on a non-tiled landscape.}
 
-\item{clear_dir}{Should existing files in the \code{asc_dir} be overwritten? This function must have an empty \code{asc_dir} to proceed}
+\item{clear_dir}{Logical. If \code{TRUE} (default), any existing contents
+of \code{out_dir} are removed before writing new results. If \code{FALSE} and
+\code{out_dir} is not empty, the function stops with an error.}
 
-\item{landmark}{The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape}
+\item{landmark}{Landmark value used for ConScape's \code{coarse_graining}
+(default \code{10L}). When \code{conscape_prep} is provided, this is taken
+from that object and does not need to be set manually.}
 
-\item{theta}{Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.01)}
+\item{theta}{Parameter controlling the amount of randomness in paths.
+As \code{theta} approaches 0, movement is increasingly random; as \code{theta}
+becomes large, paths approach deterministic least-cost paths.
+Default is \code{0.01}.}
 
-\item{exp_d}{Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 50)}
+\item{exp_d}{Numerator of the exponential decay function used when
+transforming distance in the movement grid (i.e. \code{exp(-dist / exp_d)}).
+Default is \code{150}. This is typically set from \code{\link[=tile_design]{tile_design()}}.}
 
-\item{NA_val}{Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)}
+\item{NA_val}{Value assigned to \code{NA} cells so that ConScape can run
+(default \code{1e-50}). This should be very small but positive.}
 
-\item{mosaic}{Logical. Default = TRUE. The tiles from the ConScape run will be combined into a single raster.}
+\item{mosaic}{Logical (default \code{TRUE}). When running on tiles
+(via \code{conscape_prep} or directory inputs), tile-level outputs are
+mosaicked into continuous rasters using \code{\link[=mosaic_conscape]{mosaic_conscape()}}. When
+running on a single raster (\code{SpatRaster} inputs), \code{mosaic} is
+ignored.}
 
-\item{jl_home}{Path to the \code{bin} directory where Julia is installed}
+\item{jl_home}{Path to the \code{bin} directory where the Julia executable
+is installed. Used by \code{JuliaConnectoR} to initialize ConScape.}
 
-\item{parallel}{Logical. If FALSE, processing will not be done in parallel.}
+\item{parallel}{Logical. If \code{FALSE} (default), tiles are processed
+serially. If \code{TRUE}, tiles are processed in parallel (either via R
+or Julia, depending on \code{parallel_R} and \code{distributed}).}
 
-\item{workers}{If \code{parallel = TRUE}, provide the number of parallel workers to create. Default = 2}
+\item{workers}{Integer number of parallel workers to use when
+\code{parallel = TRUE}. Default is \code{1}.}
 
-\item{distributed}{Logical. If \code{parallel = TRUE}, you can choose parallelize using Julia distributed processing (\code{TRUE}) or threading (\code{FALSE})}
+\item{distributed}{Logical. When \code{parallel = TRUE} and
+\code{parallel_R = FALSE}, controls whether Julia uses distributed
+workers (\code{TRUE}) or multithreading (\code{FALSE}).}
 
-\item{progress}{Logical. If \code{TRUE}, progress of processing will be reported.}
+\item{progress}{Logical. If \code{TRUE}, progress information is printed
+for serial and R-parallel runs. Progress reporting from Julia
+parallel runs may be less consistent.}
 
-\item{parallel_R}{Logical. If \code{TRUE}, parallel processign will be done from R.}
+\item{parallel_R}{Logical. If \code{TRUE}, tiles are processed in parallel
+using R (\code{future/future.apply}). If \code{FALSE} (default), parallelism
+is handled entirely within Julia.}
+
+\item{tile_trim}{Width of the overlapping border (in map units) that
+will be trimmed from each tile when mosaicking. When \code{conscape_prep}
+is supplied, this parameter is taken from that object and passed to
+\code{\link[=mosaic_conscape]{mosaic_conscape()}}. When running on a single \code{SpatRaster}, \code{tile_trim}
+controls how far the input rasters are extended (buffered) on all
+sides before ConScape is run; the output is subsequently cropped
+back to the original extent so that tiled and untiled runs are
+comparable.}
 }
 \value{
-A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
+If \code{mosaic = TRUE} and tiles are used (\code{!single_rast} internally),
+returns an object of class \code{"ConScapeResults"} containing:
+\itemize{
+\item \code{btwn} – \code{SpatRaster} of betweenness-like connectivity,
+\item \code{fcon} – \code{SpatRaster} of functional connectivity,
+\item \code{outdir_btwn} – path to the directory with tile-level betweenness
+outputs,
+\item \code{outdir_fcon} – path to the directory with tile-level functional
+connectivity outputs.
+}
+
+When run on a single \code{SpatRaster} (no tiling), the function returns a
+two-layer \code{SpatRaster} with layers named \code{"btwn"} and \code{"fcon"}.
 }
 \description{
-This function runs ConScape (optionally in parallel) over all created landscape tiles
+Run ConScape on tiled landscapes produced by \code{\link[=conscape_prep]{conscape_prep()}} or on
+single, untiled rasters. Optionally uses parallel execution (in R or
+Julia) and can mosaic tile-level outputs back into continuous rasters.
 }
 \details{
-In most instances, it will be easiest to prepare data for analysis using the \code{conscape_prep} function. Provide the object created from \code{conscape_prep} to the \code{conscape_prep} parameter of \code{run_conscape}. Doing this eliminates the need to manually specify \code{landmark}, \code{hab_target}, \code{hab_src}, or \code{mov_prob}.
+In typical workflows, data are prepared using \code{\link[=conscape_prep]{conscape_prep()}} and
+the resulting object is supplied via \code{conscape_prep}. This ensures
+that source, target, and movement tiles share the same tiling scheme,
+that coarse-graining landmarks are aligned, and that a mask and
+\code{tile_trim} value are available for mosaicking.
 
-If \code{parallel = TRUE} and \code{progress = TRUE}, progress updates will be reported, but may be inconsistent.
+If \code{conscape_prep} is not provided, the function can operate on:
+\itemize{
+\item directories of \verb{*.asc} tiles (\code{hab_target}, \code{hab_src}, \code{mov_prob}),
+or
+\item three \code{SpatRaster} objects of identical extent and resolution
+(\code{hab_target}, \code{hab_src}, \code{mov_prob}), in which case ConScape is
+run on the full (untiled) landscape.
+}
+
+When \code{parallel = TRUE}, either R-level parallelization (with
+\code{parallel_R = TRUE}) or Julia-level parallelization (with
+\code{parallel_R = FALSE}) is used. The choice between Julia threading and
+Julia distributed workers is controlled by \code{distributed}.
 }
 \examples{
+\dontrun{
 library(ConScapeRtools)
 
 ## Import data
@@ -80,12 +156,12 @@ source <- terra::rast(s)
 a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
-jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+jl_home <- "/path/to/julia/bin" # Update
 
 td <- tile_design(r_mov = resist,
                   r_target = source,
-                  max_d = 10000,
-                  theta = 0.1,
+                  max_d = 8500,
+                  theta = 0.15,
                   jl_home = jl_home)
 
 ## Tile dimension
@@ -159,7 +235,14 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
                        exp_d = exp_d,
                        landmark = landmark,
                        jl_home = jl_home)
+
+plot(cs_run.serial$fcon - cs_run$fcon, main = "Tiled minus untiled")
+plot(cs_run.serial$fcon, main = "Tiled")
+plot(cs_run$fcon, main = "Untiled")
+layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
+layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
+}#' @author Bill Peterman
 }
-\author{
-Bill Peterman
+\seealso{
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}\emph{]()}]()_]()
 }

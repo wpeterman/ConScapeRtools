@@ -1,35 +1,202 @@
 #' Run ConScape
 #'
-#' @description This function runs ConScape (optionally in parallel) over all created landscape tiles
+#' @description
+#' Run ConScape on tiled landscapes produced by [conscape_prep()] or on
+#' single, untiled rasters. Optionally uses parallel execution (in R or
+#' Julia) and can mosaic tile-level outputs back into continuous rasters.
 #'
-#' @param conscape_prep Object of class `ConScapeRtools_prep` created using the `conscape_prep` function. If NULL (Default), then `hab_target`, `hab_src`, and `mov_prob` must individually be specified.
-#' @param out_dir Directory where final ConScape outputs will be written
-#' @param hab_target Directory with habitat target tiles. Alternatively, a `SpatRaster`.
-#' @param hab_src Directory with habitat source tiles. Alternatively, a `SpatRaster`.
-#' @param mov_prob Directory with movement probability tiles. Alternatively, a `SpatRaster`.
-#' @param clear_dir Should existing files in the `asc_dir` be overwritten? This function must have an empty `asc_dir` to proceed
-#' @param landmark The landmark value used for 'coarse_graining' with ConScape (Default = 10L). Used to determine which landscape tiles have data to be processed with ConScape
-#' @param theta Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.01)
-#' @param exp_d Numerator of the exponential decay function used with the distance transformation of the movement grid (Default = 50)
-#' @param NA_val Value to assign to NA cells to ensure ConScape can run (Default = 1e-50)
-#' @param mosaic Logical. Default = TRUE. The tiles from the ConScape run will be combined into a single raster.
-#' @param jl_home Path to the `bin` directory where Julia is installed
-#' @param parallel Logical. If FALSE, processing will not be done in parallel.
-#' @param parallel_R If `TRUE`, parallelization will be done within R.
-#' @param workers If `parallel = TRUE`, provide the number of parallel workers to create. Default = 2
-#' @param distributed Logical. If `parallel = TRUE`, you can choose parallelize using Julia distributed processing (`TRUE`) or threading (`FALSE`)
-#' @param progress Logical. If `TRUE`, progress of processing will be reported.
-#' @param parallel_R Logical. If `TRUE`, parallel processign will be done from R.
-#' @return A named list with the betweenness and functional connectivity rasters as well as the directories where output tiles were written.
+#' @param conscape_prep Optional object of class `"ConScapeRtools_prep"`
+#'   created by [conscape_prep()]. When supplied, this provides the tile
+#'   layout, directories for source/target/movement tiles, the mask, and
+#'   `landmark` / `tile_trim` values. If `NULL` (default), the user must
+#'   supply `hab_target`, `hab_src`, and `mov_prob` directly.
+#' @param out_dir Directory where final ConScape outputs will be written.
+#'   Subdirectories `"btwn"` and `"fcon"` are created inside `out_dir`.
+#' @param hab_target Either (i) a path to a directory containing target
+#'   habitat tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
+#'   target layer when running ConScape on a non-tiled landscape.
+#' @param hab_src Either (i) a path to a directory containing source
+#'   habitat tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
+#'   source layer when running ConScape on a non-tiled landscape.
+#' @param mov_prob Either (i) a path to a directory containing movement
+#'   probability tiles (`*.asc`) or (ii) a single `SpatRaster` used as
+#'   the movement layer when running ConScape on a non-tiled landscape.
+#' @param clear_dir Logical. If `TRUE` (default), any existing contents
+#'   of `out_dir` are removed before writing new results. If `FALSE` and
+#'   `out_dir` is not empty, the function stops with an error.
+#' @param landmark Landmark value used for ConScape's `coarse_graining`
+#'   (default `10L`). When `conscape_prep` is provided, this is taken
+#'   from that object and does not need to be set manually.
+#' @param theta Parameter controlling the amount of randomness in paths.
+#'   As `theta` approaches 0, movement is increasingly random; as `theta`
+#'   becomes large, paths approach deterministic least-cost paths.
+#'   Default is `0.01`.
+#' @param exp_d Numerator of the exponential decay function used when
+#'   transforming distance in the movement grid (i.e. `exp(-dist / exp_d)`).
+#'   Default is `150`. This is typically set from [tile_design()].
+#' @param NA_val Value assigned to `NA` cells so that ConScape can run
+#'   (default `1e-50`). This should be very small but positive.
+#' @param mosaic Logical (default `TRUE`). When running on tiles
+#'   (via `conscape_prep` or directory inputs), tile-level outputs are
+#'   mosaicked into continuous rasters using [mosaic_conscape()]. When
+#'   running on a single raster (`SpatRaster` inputs), `mosaic` is
+#'   ignored.
+#' @param jl_home Path to the `bin` directory where the Julia executable
+#'   is installed. Used by `JuliaConnectoR` to initialize ConScape.
+#' @param parallel Logical. If `FALSE` (default), tiles are processed
+#'   serially. If `TRUE`, tiles are processed in parallel (either via R
+#'   or Julia, depending on `parallel_R` and `distributed`).
+#' @param workers Integer number of parallel workers to use when
+#'   `parallel = TRUE`. Default is `1`.
+#' @param distributed Logical. When `parallel = TRUE` and
+#'   `parallel_R = FALSE`, controls whether Julia uses distributed
+#'   workers (`TRUE`) or multithreading (`FALSE`).
+#' @param progress Logical. If `TRUE`, progress information is printed
+#'   for serial and R-parallel runs. Progress reporting from Julia
+#'   parallel runs may be less consistent.
+#' @param parallel_R Logical. If `TRUE`, tiles are processed in parallel
+#'   using R (`future/future.apply`). If `FALSE` (default), parallelism
+#'   is handled entirely within Julia.
+#' @param tile_trim Width of the overlapping border (in map units) that
+#'   will be trimmed from each tile when mosaicking. When `conscape_prep`
+#'   is supplied, this parameter is taken from that object and passed to
+#'   [mosaic_conscape()]. When running on a single `SpatRaster`, `tile_trim`
+#'   controls how far the input rasters are extended (buffered) on all
+#'   sides before ConScape is run; the output is subsequently cropped
+#'   back to the original extent so that tiled and untiled runs are
+#'   comparable.
+#'
 #' @details
-#' In most instances, it will be easiest to prepare data for analysis using the `conscape_prep` function. Provide the object created from `conscape_prep` to the `conscape_prep` parameter of `run_conscape`. Doing this eliminates the need to manually specify `landmark`, `hab_target`, `hab_src`, or `mov_prob`.
+#' In typical workflows, data are prepared using [conscape_prep()] and
+#' the resulting object is supplied via `conscape_prep`. This ensures
+#' that source, target, and movement tiles share the same tiling scheme,
+#' that coarse-graining landmarks are aligned, and that a mask and
+#' `tile_trim` value are available for mosaicking.
 #'
-#' If `parallel = TRUE` and `progress = TRUE`, progress updates will be reported, but may be inconsistent.
-
-#' @importFrom JuliaConnectoR juliaImport juliaEval juliaSetupOk juliaGet juliaCall
-#' @export
-#' @example examples/run_conscape_example.R
-#' @author Bill Peterman
+#' If `conscape_prep` is not provided, the function can operate on:
+#' * directories of `*.asc` tiles (`hab_target`, `hab_src`, `mov_prob`),
+#'   or
+#' * three `SpatRaster` objects of identical extent and resolution
+#'   (`hab_target`, `hab_src`, `mov_prob`), in which case ConScape is
+#'   run on the full (untiled) landscape.
+#'
+#' When `parallel = TRUE`, either R-level parallelization (with
+#' `parallel_R = TRUE`) or Julia-level parallelization (with
+#' `parallel_R = FALSE`) is used. The choice between Julia threading and
+#' Julia distributed workers is controlled by `distributed`.
+#'
+#' @return
+#' If `mosaic = TRUE` and tiles are used (`!single_rast` internally),
+#' returns an object of class `"ConScapeResults"` containing:
+#'
+#' * `btwn` – `SpatRaster` of betweenness-like connectivity,
+#' * `fcon` – `SpatRaster` of functional connectivity,
+#' * `outdir_btwn` – path to the directory with tile-level betweenness
+#'   outputs,
+#' * `outdir_fcon` – path to the directory with tile-level functional
+#'   connectivity outputs.
+#'
+#' When run on a single `SpatRaster` (no tiling), the function returns a
+#' two-layer `SpatRaster` with layers named `"btwn"` and `"fcon"`.
+#'
+#' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()]_]()_]()_]()
+#' @examples
+#' \dontrun{
+#' library(ConScapeRtools)
+#'
+#' ## Import data
+#' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
+#' source <- terra::rast(s)
+#'
+#' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
+#' resist <- terra::rast(a)
+#'
+#' jl_home <- "/path/to/julia/bin" # Update
+#'
+#' td <- tile_design(r_mov = resist,
+#'                   r_target = source,
+#'                   max_d = 8500,
+#'                   theta = 0.15,
+#'                   jl_home = jl_home)
+#'
+#' ## Tile dimension
+#' tile_d <- td$tile_d
+#'
+#' # How much to trim tiles
+#' tile_trim <- td$tile_trim
+#'
+#' # Makes computation more efficient
+#' landmark <- 5L # Must be an integer, not numeric
+#'
+#' # Controls level of randomness of paths
+#' theta <- td$theta
+#'
+#' # Controls rate of decay with distance
+#' exp_d <- td$exp_d
+#'
+#' ## Prepare data for analysis
+#' prep <- conscape_prep(tile_d = tile_d,
+#'                       tile_trim = tile_trim,
+#'                       r_target = source,
+#'                       r_mov = resist,
+#'                       r_src = source,
+#'                       clear_dir = T,
+#'                       landmark = landmark)
+#'
+#' ## Run ConScape
+#' ## No parallelization
+#' cs_run.serial <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+#'                               conscape_prep = prep,
+#'                               theta = theta,
+#'                               exp_d = exp_d,
+#'                               jl_home = jl_home,
+#'                               parallel = F)
+#'
+#' ## Parallel within R
+#' cs_run.r <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+#'                          conscape_prep = prep,
+#'                          theta = theta,
+#'                          exp_d = exp_d,
+#'                          jl_home = jl_home,
+#'                          parallel = T,
+#'                          workers = 4,
+#'                          parallel_R = TRUE)
+#' ## Threaded parallel
+#' cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+#'                               conscape_prep = prep,
+#'                               theta = theta,
+#'                               exp_d = exp_d,
+#'                               jl_home = jl_home,
+#'                               parallel = T,
+#'                               workers = 4)
+#'
+#' ## Distributed parallel
+#' cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+#'                             conscape_prep = prep,
+#'                             theta = theta,
+#'                             exp_d = exp_d,
+#'                             jl_home = jl_home,
+#'                             parallel = T,
+#'                             workers = 4,
+#'                             distributed = TRUE)
+#' plot(cs_run.dist)
+#'
+#' ## No tiling --> Only attempt with small to moderate sized rasters!
+#' cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
+#'                        hab_target = source,
+#'                        hab_src = source,
+#'                        mov_prob = resist,
+#'                        theta = theta,
+#'                        exp_d = exp_d,
+#'                        landmark = landmark,
+#'                        jl_home = jl_home)
+#'
+#' plot(cs_run.serial$fcon - cs_run$fcon, main = "Tiled minus untiled")
+#' plot(cs_run.serial$fcon, main = "Tiled")
+#' plot(cs_run$fcon, main = "Untiled")
+#' layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
+#' layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
+#' }#' @author Bill Peterman
 
 run_conscape <- function(conscape_prep = NULL,
                          out_dir,
@@ -47,14 +214,17 @@ run_conscape <- function(conscape_prep = NULL,
                          workers = 1,
                          distributed = FALSE,
                          progress = TRUE,
-                         parallel_R = FALSE){
+                         parallel_R = FALSE,
+                         tile_trim = 0){
   stopJulia()
   if(parallel & isFALSE(parallel_R)){
     Sys.setenv(JULIA_NUM_THREADS = workers)
   }
 
-  if(!juliaSetupOk())
+  if(!juliaSetupOk()){
     Sys.setenv(JULIA_BINDIR = jl_home)
+  }
+
   if(!juliaSetupOk()){
     stop("Check that the path to the Julia binary directory is correct")
   }
@@ -85,53 +255,98 @@ run_conscape <- function(conscape_prep = NULL,
     tile_trim <- conscape_prep$tile_trim
   }
 
-  if(inherits(hab_target,'SpatRaster') |
-     inherits(hab_src,'SpatRaster') |
-     inherits(mov_prob,'SpatRaster')){
-    if(inherits(hab_target,'SpatRaster')){
-      single_rast <- TRUE
-      iter <- 1
-      hab_target_file <- basename(terra::sources(hab_target))
-      if(isFALSE(dir.exists(hab_target_file))){
-        hab_target_write <- paste0(tempdir(),'\\hab_target.asc')
-        suppressWarnings(try(writeRaster(hab_target, hab_target_write, overwrite = T, NAflag = -9999), silent = T))
-        hab_target_dir <- dirname(hab_target_write)
+  if (inherits(hab_target, 'SpatRaster') |
+      inherits(hab_src,    'SpatRaster') |
+      inherits(mov_prob,   'SpatRaster')) {
+
+    single_rast <- TRUE
+    iter <- 1
+
+    ## optional consistency check
+    if (inherits(hab_target, 'SpatRaster') &&
+        inherits(hab_src,    'SpatRaster') &&
+        inherits(mov_prob,   'SpatRaster')) {
+
+      if (!isTRUE(all.equal(ext(hab_target), ext(hab_src))) ||
+          !isTRUE(all.equal(ext(hab_target), ext(mov_prob)))) {
+        stop("When passing SpatRasters directly, hab_target, hab_src, and mov_prob must share extent.")
+      }
+      if (!isTRUE(all.equal(res(hab_target), res(hab_src))) ||
+          !isTRUE(all.equal(res(hab_target), res(mov_prob)))) {
+        stop("When passing SpatRasters directly, hab_target, hab_src, and mov_prob must share resolution.")
       }
     }
 
-    if(inherits(hab_src,'SpatRaster')){
-      hab_src_file <- basename(terra::sources(hab_src))
-      if(isFALSE(dir.exists(hab_src_file))){
-        hab_src_write <- paste0(tempdir(),'\\hab_src.asc')
-        suppressWarnings(try(writeRaster(hab_src, hab_src_write, overwrite = T, NAflag = -9999), silent = T))
-        hab_src_dir <- dirname(hab_src_write)
-      }
+    ## helper to extend a SpatRaster by tile_trim (map units) on all sides
+    extend_if_needed <- function(r) {
+      if (!inherits(r, "SpatRaster")) return(NULL)
+      if (tile_trim <= 0) return(r)
+      e0    <- ext(r)
+      e_ext <- e0 + tile_trim   # same pattern as original prep
+      extend(r, e_ext, fill = NA)
     }
 
-    if(inherits(mov_prob,'SpatRaster')){
-      mov_prob_file <- basename(terra::sources(mov_prob))
-      if(isFALSE(dir.exists(mov_prob_file))){
-        mov_prob_write <- paste0(tempdir(),'\\mov_prob.asc')
-        suppressWarnings(try(writeRaster(mov_prob, mov_prob_write, overwrite = T, NAflag = -9999), silent = T))
-        mov_prob_dir <- dirname(mov_prob_write)
-      }
+    ## target
+    if (inherits(hab_target, 'SpatRaster')) {
+      r_use <- extend_if_needed(hab_target)
+      if (is.null(r_use)) r_use <- hab_target
+
+      hab_target_write <- file.path(tempdir(), "hab_target.asc")
+      suppressWarnings(
+        try(writeRaster(r_use, hab_target_write,
+                        overwrite = TRUE, NAflag = -9999),
+            silent = TRUE)
+      )
+      hab_target_dir <- dirname(hab_target_write)
     }
 
+    ## source
+    if (inherits(hab_src, 'SpatRaster')) {
+      r_use <- extend_if_needed(hab_src)
+      if (is.null(r_use)) r_use <- hab_src
+
+      hab_src_write <- file.path(tempdir(), "hab_src.asc")
+      suppressWarnings(
+        try(writeRaster(r_use, hab_src_write,
+                        overwrite = TRUE, NAflag = -9999),
+            silent = TRUE)
+      )
+      hab_src_dir <- dirname(hab_src_write)
+    }
+
+    ## movement
+    if (inherits(mov_prob, 'SpatRaster')) {
+      r_use <- extend_if_needed(mov_prob)
+      if (is.null(r_use)) r_use <- mov_prob
+
+      mov_prob_write <- file.path(tempdir(), "mov_prob.asc")
+      suppressWarnings(
+        try(writeRaster(r_use, mov_prob_write,
+                        overwrite = TRUE, NAflag = -9999),
+            silent = TRUE)
+      )
+      mov_prob_dir <- dirname(mov_prob_write)
+    }
 
   } else {
-    if(isFALSE(file.exists(hab_target))){
+    ## directory-based path (original behaviour)
+    if (isFALSE(file.exists(hab_target))) {
       stop("Specify either a SpatRaster object or path to directory containing *.asc files")
     }
 
-    if(is.null(conscape_prep)){
+    if (is.null(conscape_prep)) {
       target_dir <- hab_target
-      src_dir <- hab_src
-      mov_dir <- mov_prob
-      hab_target <- ifelse(grepl(".asc", basename(hab_target)), hab_target, list.files(hab_target, pattern = "\\.asc$"))
-      hab_src <- ifelse(grepl(".asc", basename(hab_src)), hab_src, list.files(hab_src, pattern = "\\.asc$"))
-      mov_prob <- ifelse(grepl(".asc", basename(mov_prob)), mov_prob, list.files(mov_prob, pattern = "\\.asc$"))
+      src_dir    <- hab_src
+      mov_dir    <- mov_prob
+      hab_target <- ifelse(grepl(".asc", basename(hab_target)), hab_target,
+                           list.files(hab_target, pattern = "\\.asc$"))
+      hab_src    <- ifelse(grepl(".asc", basename(hab_src)), hab_src,
+                           list.files(hab_src,    pattern = "\\.asc$"))
+      mov_prob   <- ifelse(grepl(".asc", basename(mov_prob)), mov_prob,
+                           list.files(mov_prob,   pattern = "\\.asc$"))
     }
   }
+
   # Parallel ----------------------------------------------------------------
   if(isTRUE(parallel)) {
 
@@ -301,17 +516,23 @@ run_conscape <- function(conscape_prep = NULL,
   out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
               outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
 
+  # browser()
+
   if(isTRUE(mosaic) & isFALSE(single_rast)){
     btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
                             tile_trim = tile_trim,
-                            method = 'mosaic')
+                            method = 'merge',
+                            mask = target_mask,
+                            crs = crs(target_mask))
     fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
                             tile_trim = tile_trim,
-                            method = 'mosaic')
+                            mask = target_mask,
+                            method = 'merge',
+                            crs = crs(target_mask))
 
     if(!is.null(conscape_prep) & inherits(conscape_prep, 'ConScapeRtools_prep')){
-      crs(btwn) <- crs(fcon) <- crs(target_mask)
-      target_mask <- crop(target_mask, fcon)
+      # crs(btwn) <- crs(fcon) <- crs(target_mask)
+      # target_mask <- crop(target_mask, fcon)
       target_mask[target_mask == 0] <- NA
       btwn[is.na(target_mask)] <- NA
       fcon[is.na(target_mask)] <- NA
@@ -322,25 +543,54 @@ run_conscape <- function(conscape_prep = NULL,
                 outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
                 outdir_fcon = normalizePath(file.path(out_dir, "fcon"))#,
                 # cs_log = cs_out
-                )
+    )
     class(out) <- "ConScapeResults"
   } else {
     out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
                 outdir_fcon = normalizePath(file.path(out_dir, "fcon"))#,
                 # cs_log = cs_out
-                )
+    )
     class(out) <- "ConScapeResults"
 
-    if(isTRUE(single_rast)){
+    if (isTRUE(single_rast)) {
       btwn <- rast(list.files(normalizePath(file.path(out_dir, "btwn")),
-                             full.names = T))
+                              full.names = TRUE))
       fcon <- rast(list.files(normalizePath(file.path(out_dir, "fcon")),
-                             full.names = T))
-      crs(btwn) <- crs(fcon) <- crs(mov_prob)
+                              full.names = TRUE))
+
+      ## determine original (pre-extension) extent
+      orig_ext <- NULL
+      if (inherits(hab_target, "SpatRaster")) {
+        orig_ext <- ext(hab_target)
+      } else if (inherits(hab_src, "SpatRaster")) {
+        orig_ext <- ext(hab_src)
+      } else if (inherits(mov_prob, "SpatRaster")) {
+        orig_ext <- ext(mov_prob)
+      }
+
+      if (!is.null(orig_ext)) {
+        btwn <- crop(btwn, orig_ext)
+        fcon <- crop(fcon, orig_ext)
+      }
+
+      if (inherits(mov_prob, "SpatRaster")) {
+        crs(btwn) <- crs(fcon) <- crs(mov_prob)
+      }
 
       out <- rast(list(btwn = btwn,
                        fcon = fcon))
     }
+
+    # if(isTRUE(single_rast)){
+    #   btwn <- rast(list.files(normalizePath(file.path(out_dir, "btwn")),
+    #                          full.names = T))
+    #   fcon <- rast(list.files(normalizePath(file.path(out_dir, "fcon")),
+    #                          full.names = T))
+    #   crs(btwn) <- crs(fcon) <- crs(mov_prob)
+    #
+    #   out <- rast(list(btwn = btwn,
+    #                    fcon = fcon))
+    # }
   }
 
   # juliaEval("GC.gc()")

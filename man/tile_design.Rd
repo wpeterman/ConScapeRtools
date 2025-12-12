@@ -2,7 +2,7 @@
 % Please edit documentation in R/tile_design.R
 \name{tile_design}
 \alias{tile_design}
-\title{Function to determine suitable tiling and analysis parameters}
+\title{Design tiling and decay parameters for ConScape}
 \usage{
 tile_design(
   r_mov,
@@ -14,29 +14,85 @@ tile_design(
 )
 }
 \arguments{
-\item{r_mov}{\code{SpatRaster} representing movement probabilities}
+\item{r_mov}{\code{SpatRaster} representing movement probabilities. Values
+should be in a projected coordinate reference system (map units in
+meters) and represent per–cell movement affinity or probability.}
 
-\item{r_source}{\code{SpatRaster} representing landscape source quality (Default = NULL)}
+\item{r_source}{Optional \code{SpatRaster} representing source quality
+(default \code{NULL}). If only \code{r_target} is provided, it is used for both
+source and target.}
 
-\item{r_target}{\code{SpatRaster} representing landscape target quality (Default = NULL)}
+\item{r_target}{Optional \code{SpatRaster} representing target quality
+(default \code{NULL}). If only \code{r_source} is provided, it is used for both
+source and target.}
 
-\item{max_d}{Presumed maximum movement distance (measured in meters) through ideal habitat}
+\item{max_d}{Presumed maximum movement distance through ideal habitat,
+in the same map units as the raster CRS (typically meters). Used to
+calibrate the exponential distance–decay parameter.}
 
-\item{theta}{Parameter to control the amount of randomness in the paths. As theta approaches 0 movement is random, whereas theta approaching infinity is optimal movement. (Default = 0.1)}
+\item{theta}{Parameter controlling path randomness in the randomized
+shortest–path model (\code{GridRSP}). As \code{theta} approaches 0, movement
+becomes increasingly random; large values approach deterministic
+least–cost paths. Default is \code{0.1}.}
 
-\item{jl_home}{Path to the bin directory where Julia resides}
+\item{jl_home}{Path to the \code{bin} directory where the Julia executable
+resides. This is passed to \code{JuliaConnectoR} and used to initialize
+the ConScape / ConScapeR environment.}
 }
 \value{
-A named list with parameters for creating tiles with \code{\link[=conscape_prep]{conscape_prep()}} or \code{\link[=tile_rast]{tile_rast()}}
+A named list of class \code{"ConScapeRtools_design"} with elements:
+\itemize{
+\item \code{exp_d} – calibrated exponential decay parameter for distance
+transformation in ConScape.
+\item \code{tile_d} – suggested minimum tile width (map units).
+\item \code{tile_trim} – suggested minimum tile overlap / trim width (map units).
+\item \code{theta} – the \code{theta} value used when calibrating \code{exp_d}.
+}
+
+The function also prints a short, colorized summary of these design
+parameters to the console.
 }
 \description{
-Used to determine the tile size, trim width, exp_d decay value given properties of data inputs.
+Uses the resolution and values of a movement–probability raster to
+derive a suitable exponential decay parameter (\code{exp_d}) and suggested
+tile width (\code{tile_d}) and overlap (\code{tile_trim}) for ConScape analyses,
+given a presumed maximum dispersal distance in ideal habitat.
+Internally, this builds a small synthetic landscape, runs ConScape's
+randomized shortest–path model, and calibrates the decay so that
+proximity at \code{max_d} matches a user–defined threshold.
 }
 \details{
-\code{r_mov} SpatRaster must be in a projected coordinate reference system.
-Relies on functions borrowed from the \code{ConScapeR} package (https://github.com/ConScape/ConScapeR).
+The input \code{r_mov} must be in a projected CRS so that cell resolution and
+\code{max_d} are expressed in compatible distance units. Only the cell
+resolution and maximum values of \code{r_mov}, \code{r_source}, and \code{r_target}
+are used: the function constructs a synthetic square landscape whose
+size is chosen to span roughly four times \code{max_d}, sets the diagonal
+of the movement grid to the maximum movement probability, and assigns
+constant maximum source and target quality.
+
+A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
+costs are computed from the center cell to all others. The decay
+parameter \code{exp_d} is chosen by 1D optimization so that the exponential
+proximity at the cell closest to \code{max_d} drops to a specified
+threshold. This \code{exp_d} is then used to derive:
+\itemize{
+\item \code{tile_d} – a suggested minimum interior tile width for ConScape runs,
+\item \code{tile_trim} – a suggested minimum overlap between tiles, chosen so
+that contributions beyond the trimmed edge are negligible under the
+calibrated decay.
+}
+
+These outputs are intended to be passed to \code{\link[=conscape_prep]{conscape_prep()}} (for
+\code{tile_d} and \code{tile_trim}) and to \code{\link[=run_conscape]{run_conscape()}} (for \code{exp_d} and
+\code{theta}).
+
+\code{r_mov} must be in a projected coordinate reference system.
+The function relies on helper routines adapted from the \code{ConScapeR}
+package (https://github.com/ConScape/ConScapeR) and uses Julia via
+\code{JuliaConnectoR}.
 }
 \examples{
+\dontrun{
 library(ConScapeRtools)
 
 ## Import data
@@ -46,13 +102,17 @@ source <- terra::rast(s)
 a <- system.file("data/affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
-jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
+jl_home <- "/path/to/julia/bin"
 
 td <- tile_design(r_mov = resist,
                   r_target = source,
                   max_d = 7000,
                   theta = 0.1,
                   jl_home = jl_home)
+}
+}
+\seealso{
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_rast]{tile_rast()}}, \code{\link[=run_conscape]{run_conscape()}}
 }
 \author{
 Bill Peterman

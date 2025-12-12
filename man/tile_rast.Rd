@@ -2,59 +2,46 @@
 % Please edit documentation in R/tile_rast.R
 \name{tile_rast}
 \alias{tile_rast}
-\title{Break raster into small tiles}
+\title{Break a raster into overlapped tiles using a predefined tiling scheme}
 \usage{
 tile_rast(r, make_tiles, out_dir, clear_dir = FALSE, progress = FALSE)
 }
 \arguments{
-\item{r}{Raster file as \code{SpatRaster} to be broken up into smaller tiles}
+\item{r}{\code{SpatRaster} to be broken into tiles.}
 
-\item{make_tiles}{Object created from  \code{\link[=make_tiles]{make_tiles()}} function}
+\item{make_tiles}{A list returned by \code{\link[=make_tiles]{make_tiles()}}, containing at minimum
+\code{cs_tiles} (interior tile polygons), \code{tile_num} (integer tile IDs),
+and \code{overlap_cells} (overlap width in cells).}
 
-\item{out_dir}{Directory where .asc files of tiles will be written. This should be different directory from the \code{make_tiles} \code{asc_dir}}
+\item{out_dir}{Directory where \code{.asc} tiles will be written. If \code{NULL},
+tiles are written to a temporary directory for the current R session.}
 
-\item{clear_dir}{Should existing files in the \code{out_dir} be overwritten? This function must have an empty \code{out_dir} to proceed}
+\item{clear_dir}{Logical; if \code{FALSE} (default) and \code{out_dir} is not empty,
+the function stops rather than overwriting existing files. If \code{TRUE},
+existing files in \code{out_dir} are removed before writing tiles.}
 
-\item{progress}{Logical. If \code{TRUE}, processing progress will be reported.}
+\item{progress}{Logical; if \code{TRUE}, a text progress bar is displayed while
+tiles are written.}
 }
 \value{
-A named list with the path to the directory where .asc tiles were written
+A named list with:
+\item{asc_dir}{Absolute path to the directory where \code{.asc} tiles were written.}
 }
 \description{
-This uses objects created by the \code{\link[=make_tiles]{make_tiles()}} function to create identical tiles from other \code{SpatRaster} objects.
+This function takes a \code{SpatRaster} and a tiling scheme created by \code{\link[=make_tiles]{make_tiles()}}
+and writes out overlapped raster tiles for use with ConScape. The tiling layout
+(interior tile footprints and overlap width) is defined entirely by \code{make_tiles},
+ensuring consistent alignment across rasters and with the landmark grid used for
+coarse graining.
 }
-\examples{
-library(ConScapeRtools)
-
-## Import data
-s <- system.file("data/suitability.asc", package = "ConScapeRtools")
-source <- terra::rast(s)
-
-a <- system.file("data/affinity.asc", package = "ConScapeRtools")
-resist <- terra::rast(a)
-
-jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
-
-## Run tile design to get parameters
-td <- tile_design(r_mov = resist,
-                  r_target = source,
-                  max_d = 7000,
-                  theta = 0.1,
-                  jl_home = jl_home)
-
-target_tile <- make_tiles(tile_d = td$tile_d,
-                          tile_trim = td$tile_trim,
-                          r = source,
-                          clear_dir = T)
-
-mov_tile <- tile_rast(r = resist,
-                      make_tiles = target_tile ,
-                      out_dir = file.path(target_tile$asc_dir, 'mov'),
-                      clear_dir = T)
+\details{
+For each interior tile polygon in \code{make_tiles$cs_tiles}, the function expands
+the extent by \code{make_tiles$overlap_cells} on all sides (in units of raster
+cells), crops the extended raster (\code{extend()} is called once on \code{r} using the
+same overlap), and writes the result as an ESRI ASCII grid with filenames of
+the form \code{"r_<tile_id>.asc"}. Because the tiling scheme is generated in cell
+space by \code{\link[=make_tiles]{make_tiles()}}, multiple rasters tiled with the same \code{make_tiles}
+object share identical tile boundaries and overlap, which is required for
+consistent landmark placement in ConScape coarse graining.
 }
-\seealso{
-\code{\link[=make_tiles]{make_tiles()}} for initial creation of tiles
-}
-\author{
-Bill Peterman
-}
+\keyword{internal}
