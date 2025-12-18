@@ -118,7 +118,7 @@
 #'                        jl_home = jl_home)
 #' }
 #'
-#' @seealso `make_tiles()`, `tile_rast()`, [run_conscape()], [mosaic_conscape()]
+#' @seealso [run_conscape()], [mosaic_conscape()]
 #' @author Bill Peterman
 
 #' @importFrom terra writeVector
@@ -196,7 +196,7 @@ conscape_prep <- function(tile_d,
   if (progress) cat("Tiling target raster...\n")
   target_tiles <- tile_rast(
     r          = r_target_thr,
-    make_tiles = tile_design,
+    tiles = tile_design,
     out_dir    = file.path(asc_dir, "target"),
     clear_dir  = TRUE,
     progress   = progress
@@ -205,7 +205,7 @@ conscape_prep <- function(tile_d,
   if (progress) cat("Tiling movement raster...\n")
   mov_tiles <- tile_rast(
     r          = r_mov,
-    make_tiles = tile_design,
+    tiles = tile_design,
     out_dir    = file.path(asc_dir, "mov"),
     clear_dir  = TRUE,
     progress   = progress
@@ -214,7 +214,7 @@ conscape_prep <- function(tile_d,
   if (progress) cat("Tiling source raster...\n")
   src_tiles <- tile_rast(
     r          = r_src,
-    make_tiles = tile_design,
+    tiles = tile_design,
     out_dir    = file.path(asc_dir, "src"),
     clear_dir  = TRUE,
     progress   = progress

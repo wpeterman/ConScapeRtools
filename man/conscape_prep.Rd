@@ -147,7 +147,7 @@ cs_res <- run_conscape(conscape_prep = prep,
 
 }
 \seealso{
-\code{make_tiles()}, \code{tile_rast()}, \code{\link[=run_conscape]{run_conscape()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
+\code{\link[=run_conscape]{run_conscape()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
 }
 \author{
 Bill Peterman
