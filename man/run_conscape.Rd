@@ -241,8 +241,11 @@ plot(cs_run.serial$fcon, main = "Tiled")
 plot(cs_run$fcon, main = "Untiled")
 layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
 layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
-}#' @author Bill Peterman
+}
 }
 \seealso{
 \code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}\emph{]()}]()_]()
+}
+\author{
+Bill Peterman
 }

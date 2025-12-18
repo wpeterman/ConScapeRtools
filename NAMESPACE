@@ -3,6 +3,7 @@
 export(conscape_prep)
 export(mosaic_conscape)
 export(plot.ConScapeResults)
+export(run_conscape)
 export(tile_design)
 importFrom(JuliaConnectoR,juliaEval)
 importFrom(JuliaConnectoR,juliaFun)

@@ -100,6 +100,7 @@
 #' two-layer `SpatRaster` with layers named `"btwn"` and `"fcon"`.
 #'
 #' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()]_]()_]()_]()
+#' @export
 #' @examples
 #' \dontrun{
 #' library(ConScapeRtools)
@@ -196,7 +197,8 @@
 #' plot(cs_run$fcon, main = "Untiled")
 #' layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
 #' layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
-#' }#' @author Bill Peterman
+#' }
+#' @author Bill Peterman
 
 run_conscape <- function(conscape_prep = NULL,
                          out_dir,
