@@ -15,6 +15,7 @@ Imports:
     utils,
     stats,
     future,
+    JuliaCall,
     future.apply
 Depends:
     R (>= 4.3),
