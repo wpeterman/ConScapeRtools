@@ -58,8 +58,8 @@
 #'   list) is `overlap_cells * resx`. This value can differ from the
 #'   user-supplied `tile_trim` but will always be at least as large.
 #'
-#' The interior polygons returned here are typically passed to
-#' [tile_rast()] to construct extended tiles that include the overlap on
+#' The interior polygons returned here are typically passed internally to
+#' `tile_rast()` to construct extended tiles that include the overlap on
 #' all sides. Those extended tiles are then sent to ConScape, and
 #' [mosaic_conscape()] later trims and mosaics them using the same
 #' landmark-aligned overlap.

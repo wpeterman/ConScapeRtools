@@ -85,7 +85,7 @@
 #'                   theta = 0.1,
 #'                   jl_home = jl_home)
 #' }
-#' @seealso [conscape_prep()], [tile_rast()], [run_conscape()]
+#' @seealso [conscape_prep()], [run_conscape()]
 #' @author Bill Peterman
 #' @details
 #' `r_mov` must be in a projected coordinate reference system.

@@ -112,7 +112,7 @@ td <- tile_design(r_mov = resist,
 }
 }
 \seealso{
-\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_rast]{tile_rast()}}, \code{\link[=run_conscape]{run_conscape()}}
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=run_conscape]{run_conscape()}}
 }
 \author{
 Bill Peterman

@@ -199,8 +199,7 @@
 #' layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
 #' }
 #' @author Bill Peterman
-#' @importFrom JuliaCall juliaCall juliaEval juliaSetupOk stopJulia
-
+#' @importFrom JuliaConnectoR juliaImport juliaEval juliaSetupOk juliaGet juliaCall stopJulia
 run_conscape <- function(conscape_prep = NULL,
                          out_dir,
                          hab_target = NULL,

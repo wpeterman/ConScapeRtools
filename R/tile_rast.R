@@ -1,14 +1,14 @@
 #' Break a raster into overlapped tiles using a predefined tiling scheme
 #'
 #' @description
-#' This function takes a `SpatRaster` and a tiling scheme created by [make_tiles()]
+#' This function takes a `SpatRaster` and a tiling scheme created internally by `make_tiles()`
 #' and writes out overlapped raster tiles for use with ConScape. The tiling layout
 #' (interior tile footprints and overlap width) is defined entirely by `make_tiles`,
 #' ensuring consistent alignment across rasters and with the landmark grid used for
 #' coarse graining.
 #'
 #' @param r `SpatRaster` to be broken into tiles.
-#' @param make_tiles A list returned by [make_tiles()], containing at minimum
+#' @param tiles A list returned by `make_tiles()`, containing at minimum
 #'   `cs_tiles` (interior tile polygons), `tile_num` (integer tile IDs),
 #'   and `overlap_cells` (overlap width in cells).
 #' @param out_dir Directory where `.asc` tiles will be written. If `NULL`,
@@ -25,21 +25,22 @@
 #' cells), crops the extended raster (`extend()` is called once on `r` using the
 #' same overlap), and writes the result as an ESRI ASCII grid with filenames of
 #' the form `"r_<tile_id>.asc"`. Because the tiling scheme is generated in cell
-#' space by [make_tiles()], multiple rasters tiled with the same `make_tiles`
+#' space by `make_tiles()`, multiple rasters tiled with the same `make_tiles`
 #' object share identical tile boundaries and overlap, which is required for
 #' consistent landmark placement in ConScape coarse graining.
 #' @return
 #' A named list with:
 #' \item{asc_dir}{Absolute path to the directory where `.asc` tiles were written.}
 #' @keywords internal
+#' @noRd
 tile_rast <- function(r,
-                      make_tiles,
+                      tiles,
                       out_dir,
                       clear_dir = FALSE,
                       progress = FALSE) {
 
-  cs_tiles      <- make_tiles$cs_tiles
-  overlap_cells <- make_tiles$overlap_cells
+  cs_tiles      <- tiles$cs_tiles
+  overlap_cells <- tiles$overlap_cells
 
   resx <- res(r)[1]
   resy <- res(r)[2]

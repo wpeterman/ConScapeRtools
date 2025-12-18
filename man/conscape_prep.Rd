@@ -75,9 +75,9 @@ This object is intended to be passed directly to \code{\link[=run_conscape]{run_
 }
 \description{
 Convenience wrapper that (i) checks that all input rasters are compatible,
-(ii) designs a landmark–aligned tiling scheme with \code{\link[=make_tiles]{make_tiles()}}, (iii)
+(ii) designs a landmark–aligned tiling scheme with \code{make_tiles()}, (iii)
 applies the same tiling to the target, source, and movement rasters via
-\code{\link[=tile_rast]{tile_rast()}}, and (iv) writes a binary mask that is used later by
+\code{tile_rast()}, and (iv) writes a binary mask that is used later by
 \code{\link[=run_conscape]{run_conscape()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
 }
 \details{
@@ -90,9 +90,9 @@ contains 1 for cells with \code{r_target >= target_threshold} and 0 otherwise.
 This mask is used later to restrict the mosaicked ConScape outputs to the
 potentially occupiable landscape.
 
-Tiles are designed once using \code{\link[=make_tiles]{make_tiles()}} based on the thresholded target
-raster, and the same tile geometry is then applied to all layers via
-\code{\link[=tile_rast]{tile_rast()}}. Tile sizes and overlaps are expressed in cell units and
+Tiles are designed once internally using \code{make_tiles()} based on the thresholded target
+raster, and the same tile geometry is then applied internally to all layers via the
+\code{tile_rast()}. Tile sizes and overlaps are expressed in cell units and
 rounded so that both tile width and overlap are multiples of \code{landmark},
 which ensures that ConScape's coarse–grained "landmarks" fall on a common
 grid when tiles are reassembled.
@@ -147,7 +147,7 @@ cs_res <- run_conscape(conscape_prep = prep,
 
 }
 \seealso{
-\code{\link[=make_tiles]{make_tiles()}}, \code{\link[=tile_rast]{tile_rast()}}, \code{\link[=run_conscape]{run_conscape()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
+\code{make_tiles()}, \code{tile_rast()}, \code{\link[=run_conscape]{run_conscape()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
 }
 \author{
 Bill Peterman

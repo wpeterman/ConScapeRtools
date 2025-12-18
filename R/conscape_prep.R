@@ -2,9 +2,9 @@
 #'
 #' @description
 #' Convenience wrapper that (i) checks that all input rasters are compatible,
-#' (ii) designs a landmark–aligned tiling scheme with [make_tiles()], (iii)
+#' (ii) designs a landmark–aligned tiling scheme with `make_tiles()`, (iii)
 #' applies the same tiling to the target, source, and movement rasters via
-#' [tile_rast()], and (iv) writes a binary mask that is used later by
+#' `tile_rast()`, and (iv) writes a binary mask that is used later by
 #' [run_conscape()] and [mosaic_conscape()].
 #'
 #' @param tile_d Target interior tile width in map units (e.g., meters).
@@ -47,9 +47,9 @@
 #' This mask is used later to restrict the mosaicked ConScape outputs to the
 #' potentially occupiable landscape.
 #'
-#' Tiles are designed once using [make_tiles()] based on the thresholded target
-#' raster, and the same tile geometry is then applied to all layers via
-#' [tile_rast()]. Tile sizes and overlaps are expressed in cell units and
+#' Tiles are designed once internally using `make_tiles()` based on the thresholded target
+#' raster, and the same tile geometry is then applied internally to all layers via the
+#' `tile_rast()`. Tile sizes and overlaps are expressed in cell units and
 #' rounded so that both tile width and overlap are multiples of `landmark`,
 #' which ensures that ConScape's coarse–grained "landmarks" fall on a common
 #' grid when tiles are reassembled.
@@ -118,7 +118,7 @@
 #'                        jl_home = jl_home)
 #' }
 #'
-#' @seealso [make_tiles()], [tile_rast()], [run_conscape()], [mosaic_conscape()]
+#' @seealso `make_tiles()`, `tile_rast()`, [run_conscape()], [mosaic_conscape()]
 #' @author Bill Peterman
 
 #' @importFrom terra writeVector
