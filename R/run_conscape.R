@@ -331,7 +331,7 @@ run_conscape <- function(conscape_prep = NULL,
     }
 
   } else {
-    ## directory-based path (original behaviour)
+    ## directory-based path
     if (isFALSE(file.exists(hab_target))) {
       stop("Specify either a SpatRaster object or path to directory containing *.asc files")
     }

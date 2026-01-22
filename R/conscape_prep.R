@@ -121,7 +121,7 @@
 #' @seealso [run_conscape()], [mosaic_conscape()]
 #' @author Bill Peterman
 
-#' @importFrom terra writeVector
+#' @importFrom terra writeVector setGDALconfig
 #' @importFrom utils txtProgressBar setTxtProgressBar
 
 conscape_prep <- function(tile_d,
@@ -134,6 +134,8 @@ conscape_prep <- function(tile_d,
                           clear_dir = FALSE,
                           landmark = 10L,
                           progress = TRUE) {
+
+  setGDALconfig("GDAL_PAM_ENABLED", "FALSE")
 
   ## ----- basic checks: extents and resolutions -----
   rasters <- list(r_target = r_target, r_mov = r_mov, r_src = r_src)
@@ -192,6 +194,10 @@ conscape_prep <- function(tile_d,
                             tile_trim = tile_trim,
                             landmark  = landmark)
 
+  tmp <- ensure_tile_id(tile_design$cs_tiles, id_col = NULL)
+  tile_design$cs_tiles <- tmp$cs_tiles
+  id_col <- tmp$id_col
+
   ## ----- tile each raster with same design -----
   if (progress) cat("Tiling target raster...\n")
   target_tiles <- tile_rast(
@@ -220,12 +226,39 @@ conscape_prep <- function(tile_d,
     progress   = progress
   )
 
+  cat("\nValidating tiles...\n")
+  # Ensure a stable sequential id exists (optional but helpful for tracking)
+  if (!("tile_id" %in% names(tile_design$cs_tiles))) {
+    tile_design$cs_tiles$tile_id <- seq_len(nrow(tile_design$cs_tiles))
+  }
+
+  val <- validate_conscape_tiles_idx(
+    target_dir = target_tiles$asc_dir,
+    source_dir = src_tiles$asc_dir,
+    move_dir   = mov_tiles$asc_dir,
+    delete_bad = TRUE,
+    quiet      = FALSE
+  )
+
+  # Subset polygons by row index, not filename-derived IDs
+  tile_design$cs_tiles <- tile_design$cs_tiles[val$ok_idx, , drop = FALSE]
+
+  # Save bookkeeping
+  tile_design$tile_idx <- val$ok_idx
+  tile_design$tile_validation <- list(
+    n_ok  = length(val$ok_idx),
+    n_bad = length(val$bad_idx),
+    bad   = val$bad_files
+  )
+
   ## ----- write tile polygons for reference -----
   writeVector(tile_design$cs_tiles,
               file.path(asc_dir, "tiles.shp"),
               overwrite = TRUE)
 
   ## ----- return prep object -----
+  setGDALconfig("GDAL_PAM_ENABLED", "TRUE")
+
   out <- list(
     cs_tiles  = tile_design$cs_tiles,
     tile_num  = tile_design$tile_num,

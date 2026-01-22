@@ -1,3 +1,7 @@
+ConScapeRtools 0.4.7
+---------
+* Updated tile validation to avoid reducing over empty grids
+
 ConScapeRtools 0.4.6
 ---------
 * Updated tile creation logic

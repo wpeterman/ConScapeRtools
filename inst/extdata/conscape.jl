@@ -39,13 +39,21 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                     end
 
                     try
-                        non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_target)))
-                        mov_prob[non_matches] .= 0
-                        hab_qual_target[non_matches] .= NA_val
+                        # --- NA handling: movement grid defines where the graph exists ---
+                        mov_nan = isnan.(mov_prob)
 
-                        non_matches = findall(xor.(isnan.(mov_prob), isnan.(hab_qual_source)))
-                        mov_prob[non_matches] .= NA_val
-                        hab_qual_source[non_matches] .= NA_val
+                        # If movement is NA somewhere, there is no graph there
+                        if any(mov_nan)
+                            mov_prob[mov_nan] .= 0.0
+                            hab_qual_source[mov_nan] .= 0.0
+                            hab_qual_target[mov_nan] .= 0.0
+                        end
+
+                        # Targets can legitimately be sparse; treat NA as "no target"
+                        hab_qual_target[isnan.(hab_qual_target)] .= 0.0
+
+                        # NA in source is just "no source"
+                        hab_qual_source[isnan.(hab_qual_source)] .= 0.0
                     catch e
                         throw(ErrorException("NA handling failed: $e"))
                     end
@@ -70,6 +78,20 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                         ConScape.coarse_graining(g, land_mark)
                     catch e
                         throw(ErrorException("coarse_graining failed: $e"))
+                    end
+
+                    # --- Preflight: if coarse-grained targets are empty, skip cleanly ---
+                    has_targets(x) = x isa SparseMatrixCSC ? (nnz(x) > 0) : any(x .> 0.0)
+
+                    if !has_targets(coarse_target_qualities)
+                        blank = fill(NaN, size(mov_prob)...)
+                        try
+                            ConScape.writeasc(joinpath(outdir_btwn, "betweenness" * iter * ".asc"), blank, meta_p)
+                            ConScape.writeasc(joinpath(outdir_fcon, "fcon" * iter * ".asc"), blank, meta_p)
+                        catch e
+                            throw(ErrorException("writeasc (blank outputs) failed: $e"))
+                        end
+                        return "skipped_empty_targets"
                     end
 
                     g_coarse = try

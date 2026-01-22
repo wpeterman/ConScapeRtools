@@ -12,28 +12,25 @@ using Statistics
     Logging.global_logger(Logging.NullLogger())
 end
 
+# NOTE: max_retries is kept for backward compatibility but no retries are performed.
 @everywhere function safe_conscape(i, src_dir, mov_dir, target_dir, out_dir,
                                    r_targets, r_sources, r_res,
                                    land_mark, theta, exp_d, NA_val,
                                    max_retries)
     iter = "-iter_$i"
-    attempt = 1
-    while attempt ≤ max_retries
-        try
-            redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    conscape(src_dir, mov_dir, target_dir, out_dir,
-                             r_targets[i], r_sources[i], r_res[i],
-                             land_mark, theta, exp_d, NA_val, iter)
-                end
+    try
+        redirect_stdout(devnull) do
+            redirect_stderr(devnull) do
+                conscape(src_dir, mov_dir, target_dir, out_dir,
+                         r_targets[i], r_sources[i], r_res[i],
+                         land_mark, theta, exp_d, NA_val, iter)
             end
-            return "ok"
-        catch e
-            if attempt == max_retries
-                return sprint((io) -> showerror(io, e, catch_backtrace()))
-            end
-            attempt += 1
         end
+        return "ok"
+    catch e
+        msg = sprint((io) -> showerror(io, e, catch_backtrace()))
+        println(msg)
+        return msg
     end
 end
 
