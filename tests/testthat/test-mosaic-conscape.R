@@ -40,6 +40,32 @@ test_that("mosaic_conscape applies zero and NA mask cells", {
   expect_equal(out_vals[3], 5)
 })
 
+test_that("mosaic_conscape can average overlapping tiles", {
+  root <- file.path(tempdir(), "mosaic-average-test")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  r1 <- make_test_raster(n = 5, vals = 2)
+  r2 <- make_test_raster(n = 5, vals = 4)
+
+  write_test_asc(r1, file.path(root, "tile-a.asc"))
+  write_test_asc(r2, file.path(root, "tile-b.asc"))
+
+  out <- mosaic_conscape(root, tile_trim = 0, method = "mosaic")
+  expect_equal(unique(terra::values(out, mat = FALSE)), 3)
+})
+
+test_that("mosaic_conscape rejects mismatched non-empty CRS values", {
+  root <- file.path(tempdir(), "mosaic-crs-test")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  r <- make_test_raster(n = 5, vals = 1, crs = "EPSG:3857")
+  mask <- make_test_raster(n = 5, vals = 1, crs = "EPSG:4326")
+  write_test_asc(r, file.path(root, "tile.asc"))
+
+  expect_error(
+    mosaic_conscape(root, mask = mask, tile_trim = 0),
+    "CRS of mask"
+  )
+})
+
 test_that("mosaic_conscape validates inputs", {
   expect_error(
     mosaic_conscape(file.path(tempdir(), "does-not-exist"), tile_trim = -1),

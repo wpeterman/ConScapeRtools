@@ -63,6 +63,31 @@ test_that("conscape_prep rejects incompatible raster geometry", {
   )
 })
 
+test_that("conscape_prep rejects incompatible raster extent", {
+  r <- make_test_raster()
+  shifted <- terra::rast(
+    nrows = 20, ncols = 20,
+    xmin = 1, xmax = 21,
+    ymin = 0, ymax = 20,
+    vals = 1
+  )
+
+  expect_error(
+    conscape_prep(
+      tile_d = 8,
+      tile_trim = 3,
+      asc_dir = file.path(tempdir(), "bad-extent-prep-test"),
+      r_target = r,
+      r_mov = shifted,
+      r_src = r,
+      clear_dir = TRUE,
+      landmark = 5L,
+      progress = FALSE
+    ),
+    "same extent"
+  )
+})
+
 test_that("conscape_prep protects non-empty output directories", {
   r <- make_test_raster()
   out_dir <- file.path(tempdir(), "non-empty-prep-test")

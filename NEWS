@@ -1,3 +1,10 @@
+ConScapeRtools 0.4.9
+---------
+* Increased unit test coverage above 75 percent
+* Added mocked tests for Julia wrappers, `tile_design`, and `run_conscape`
+* Added additional tests for CRS handling, invalid inputs, plotting, and tile IDs
+* Filtered single-raster ConScape outputs to raster files when reading results
+
 ConScapeRtools 0.4.8
 ---------
 * Cleaned package metadata and documentation for CRAN compatibility

@@ -557,8 +557,10 @@ run_conscape <- function(conscape_prep = NULL,
 
     if (isTRUE(single_rast)) {
       btwn <- terra::rast(list.files(normalizePath(file.path(out_dir, "btwn")),
+                                     pattern = "\\.asc$|\\.tif$",
                                      full.names = TRUE))
       fcon <- terra::rast(list.files(normalizePath(file.path(out_dir, "fcon")),
+                                     pattern = "\\.asc$|\\.tif$",
                                      full.names = TRUE))
 
       ## determine original (pre-extension) extent
