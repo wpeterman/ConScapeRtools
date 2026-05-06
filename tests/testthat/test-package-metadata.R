@@ -20,16 +20,18 @@ test_that("tile_design validates source and target inputs before Julia setup", {
 
 test_that("plot.ConScapeResults validates and plots result objects", {
   r <- make_test_raster(n = 3, vals = 1)
-  result <- list(btwn = r, fcon = r)
+  result <- list(btwn = r, fcon = r, elasticity_quality = r)
   class(result) <- "ConScapeResults"
 
   png_file <- tempfile(fileext = ".png")
   grDevices::png(png_file)
   expect_invisible(plot(result))
+  expect_invisible(plot(result, layers = "elasticity_quality"))
   grDevices::dev.off()
 
   expect_error(plot.ConScapeResults(list(btwn = r)), "ConScapeResults")
-  bad <- list(btwn = r)
+  bad <- list(outdirs = list(btwn = "path"))
   class(bad) <- "ConScapeResults"
-  expect_error(plot(bad), "btwn.*fcon")
+  expect_error(plot(bad), "at least one SpatRaster")
+  expect_error(plot(result, layers = "missing"), "Requested layers")
 })

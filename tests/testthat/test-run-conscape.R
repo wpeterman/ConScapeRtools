@@ -64,7 +64,7 @@ test_that("run_conscape can run a mocked single-raster workflow and crop extensi
   calls <- list()
   testthat::local_mocked_bindings(
     juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir,
-                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter) {
+                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
       calls[[length(calls) + 1L]] <<- list(
         name = name, r_target = r_target, r_source = r_source, r_res = r_res,
         landmark = landmark, theta = theta, exp_d = exp_d, iter = iter
@@ -113,7 +113,7 @@ test_that("run_conscape can run mocked tiled serial workflow and mosaic results"
 
   testthat::local_mocked_bindings(
     juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir,
-                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter) {
+                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
       write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
     },
     .env = asNamespace("ConScapeRtools")
@@ -174,4 +174,57 @@ test_that("run_conscape warns when mocked threaded execution misses outputs", {
     "Parallel execution failed"
   )
   expect_s3_class(out, "ConScapeResults")
+})
+
+test_that("run_conscape accepts ConScape-native slot aliases", {
+  mock_julia()
+  calls <- list()
+  testthat::local_mocked_bindings(
+    juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir,
+                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
+      extras <- list(...)
+      calls[[length(calls) + 1L]] <<- extras
+      write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  r <- make_test_raster(n = 6, vals = 1)
+  out <- run_conscape(
+    out_dir = file.path(tempdir(), "run-aliases"),
+    target_qualities = r,
+    source_qualities = r,
+    affinities = r,
+    distance_scale = 30,
+    cost_function = "minuslog",
+    connectivity_function = "expected",
+    metrics = c("btwn", "fcon"),
+    landmark = 3L,
+    theta = 0.2,
+    jl_home = "C:/Julia/bin"
+  )
+
+  expect_s4_class(out, "SpatRaster")
+  expect_equal(names(out), c("btwn", "fcon"))
+  expect_equal(calls[[1]][[1]], c("betweenness_kweighted", "connected_habitat"))
+  expect_equal(calls[[1]][[2]], "expected_cost")
+  expect_equal(calls[[1]][[3]], "minuslog")
+})
+
+test_that("run_conscape guards sensitivity against coarse graining by default", {
+  mock_julia()
+  r <- make_test_raster(n = 6, vals = 1)
+
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-sensitivity-guard"),
+      target_qualities = r,
+      source_qualities = r,
+      affinities = r,
+      landmark = 3L,
+      sensitivity = conscape_sensitivity(wrt = "Q"),
+      jl_home = "C:/Julia/bin"
+    ),
+    "landmark = 1L"
+  )
 })

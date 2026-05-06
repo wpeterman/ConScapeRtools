@@ -12,15 +12,18 @@
 #'   supply `hab_target`, `hab_src`, and `mov_prob` directly.
 #' @param out_dir Directory where final ConScape outputs will be written.
 #'   Subdirectories `"btwn"` and `"fcon"` are created inside `out_dir`.
-#' @param hab_target Either (i) a path to a directory containing target
-#'   habitat tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
-#'   target layer when running ConScape on a non-tiled landscape.
-#' @param hab_src Either (i) a path to a directory containing source
-#'   habitat tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
-#'   source layer when running ConScape on a non-tiled landscape.
-#' @param mov_prob Either (i) a path to a directory containing movement
-#'   probability tiles (`*.asc`) or (ii) a single `SpatRaster` used as
-#'   the movement layer when running ConScape on a non-tiled landscape.
+#' @param hab_target,target_qualities Either (i) a path to a directory
+#'   containing target-quality tiles (`*.asc`) or (ii) a single `SpatRaster`
+#'   used as the ConScape `target_qualities` layer. `hab_target` is retained
+#'   as a backwards-compatible alias.
+#' @param hab_src,source_qualities Either (i) a path to a directory containing
+#'   source-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
+#'   ConScape `source_qualities` layer. `hab_src` is retained as a
+#'   backwards-compatible alias.
+#' @param mov_prob,affinities Either (i) a path to a directory containing
+#'   affinity/permeability tiles (`*.asc`) or (ii) a single `SpatRaster` used
+#'   to build ConScape `affinities` with `graph_matrix_from_raster()`.
+#'   `mov_prob` is retained as a backwards-compatible alias.
 #' @param clear_dir Logical. If `TRUE` (default), any existing contents
 #'   of `out_dir` are removed before writing new results. If `FALSE` and
 #'   `out_dir` is not empty, the function stops with an error.
@@ -34,8 +37,10 @@
 #' @param exp_d Numerator of the exponential decay function used when
 #'   transforming distance in the movement grid (i.e. `exp(-dist / exp_d)`).
 #'   Default is `150`. This is typically set from [tile_design()].
-#' @param NA_val Value assigned to `NA` cells so that ConScape can run
-#'   (default `1e-50`). This should be very small but positive.
+#' @param distance_scale Clearer alias for `exp_d`. Use one or the other.
+#' @param NA_val Backwards-compatible argument retained for older workflows.
+#'   The current Julia runner treats `NA` affinities as absent graph cells and
+#'   `NA` source/target qualities as zero quality.
 #' @param mosaic Logical (default `TRUE`). When running on tiles
 #'   (via `conscape_prep` or directory inputs), tile-level outputs are
 #'   mosaicked into continuous rasters using [mosaic_conscape()]. When
@@ -65,6 +70,24 @@
 #'   sides before ConScape is run; the output is subsequently cropped
 #'   back to the original extent so that tiled and untiled runs are
 #'   comparable.
+#' @param cost_function Cost transformation used by `ConScape.Grid(costs = ...)`.
+#'   Supported named values are `"minuslog"` (default), `"inverse"`,
+#'   `"odds_against"`, `"odds_for"`, and `"expminus"`. A Julia lambda string
+#'   such as `"x -> -log(x)"` can also be supplied, in which case a cost matrix
+#'   is created with `ConScape.mapnz()`.
+#' @param connectivity_function ConScape distance/proximity function used by
+#'   metrics that require a landscape matrix. Supported values are
+#'   `"expected_cost"` (default), `"least_cost_distance"`,
+#'   `"free_energy_distance"`, `"survival_probability"`, and
+#'   `"power_mean_proximity"`.
+#' @param metrics Character vector of raster-valued ConScape metrics to write.
+#'   Supported values are `"connected_habitat"`, `"betweenness_kweighted"`,
+#'   `"betweenness_qweighted"`, and `"criticality"`. The aliases `"fcon"` and
+#'   `"btwn"` are accepted.
+#' @param sensitivity Optional sensitivity specification created by
+#'   [conscape_sensitivity()]. `TRUE` uses the default quality and linked
+#'   affinity-cost elasticities; a character vector is interpreted as `wrt`
+#'   values passed to [conscape_sensitivity()].
 #'
 #' @details
 #' In typical workflows, data are prepared using [conscape_prep()] and
@@ -85,21 +108,46 @@
 #' `parallel_R = FALSE`) is used. The choice between Julia threading and
 #' Julia distributed workers is controlled by `distributed`.
 #'
+#' The default run writes `connected_habitat` and `betweenness_kweighted`,
+#' which correspond to the historical `fcon` and `btwn` outputs. Additional
+#' metrics are requested with `metrics`. All metric names are passed to the
+#' bundled Julia runner, which computes each requested surface on the same
+#' `GridRSP` object.
+#'
+#' Sensitivity outputs are requested with [conscape_sensitivity()]. These
+#' surfaces are computed after the `GridRSP` object is built and are written to
+#' directories named for the output, for example `"elasticity_quality"` or
+#' `"elasticity_affinity_cost_linked"`. Analytical sensitivity requires a
+#' ConScape installation that provides `ConScape.sensitivity`; the current CRAN
+#' release of ConScape may not yet include that function. When the function is
+#' unavailable, the Julia runner stops with an explicit message rather than
+#' silently returning an approximate substitute.
+#'
+#' Tiled sensitivity uses the same tiling and mosaicking machinery as the
+#' default betweenness and connected-habitat outputs. It should be treated as a
+#' tile-local approximation to the full-landscape sensitivity, so choose a
+#' `tile_trim` large enough that paths crossing tile edges have negligible
+#' influence on the interior cells retained by [mosaic_conscape()]. For
+#' sensitivity runs, use `landmark = 1L` unless you have a specific reason to
+#' test coarse-grained target qualities, because the ConScape sensitivity API
+#' currently assumes target quality equals source quality.
+#'
 #' @return
 #' If `mosaic = TRUE` and tiles are used (`!single_rast` internally),
 #' returns an object of class `"ConScapeResults"` containing:
 #'
-#' * `btwn` – `SpatRaster` of betweenness-like connectivity,
-#' * `fcon` – `SpatRaster` of functional connectivity,
-#' * `outdir_btwn` – path to the directory with tile-level betweenness
-#'   outputs,
-#' * `outdir_fcon` – path to the directory with tile-level functional
-#'   connectivity outputs.
+#' * `btwn` – `SpatRaster` of k-weighted betweenness when requested,
+#' * `fcon` – `SpatRaster` of connected habitat when requested,
+#' * additional metric or sensitivity rasters named by output layer,
+#' * `outdirs` – named list of tile-level output directories,
+#' * `outdir_btwn` and `outdir_fcon` – backwards-compatible paths for the
+#'   default betweenness and connected-habitat outputs when requested.
 #'
 #' When run on a single `SpatRaster` (no tiling), the function returns a
 #' two-layer `SpatRaster` with layers named `"btwn"` and `"fcon"`.
 #'
-#' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()]
+#' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()],
+#'   [conscape_sensitivity()], [conscape_api_slots()]
 #' @export
 #' @examples
 #' \dontrun{
@@ -217,7 +265,64 @@ run_conscape <- function(conscape_prep = NULL,
                          distributed = FALSE,
                          progress = TRUE,
                          parallel_R = FALSE,
-                         tile_trim = 0){
+                         tile_trim = 0,
+                         target_qualities = NULL,
+                         source_qualities = NULL,
+                         affinities = NULL,
+                         distance_scale = NULL,
+                         cost_function = "minuslog",
+                         connectivity_function = "expected_cost",
+                         metrics = c("betweenness_kweighted", "connected_habitat"),
+                         sensitivity = NULL){
+  if (!is.null(target_qualities)) {
+    if (!is.null(hab_target)) {
+      stop("Use either hab_target or target_qualities, not both.", call. = FALSE)
+    }
+    hab_target <- target_qualities
+  }
+  if (!is.null(source_qualities)) {
+    if (!is.null(hab_src)) {
+      stop("Use either hab_src or source_qualities, not both.", call. = FALSE)
+    }
+    hab_src <- source_qualities
+  }
+  if (!is.null(affinities)) {
+    if (!is.null(mov_prob)) {
+      stop("Use either mov_prob or affinities, not both.", call. = FALSE)
+    }
+    mov_prob <- affinities
+  }
+  if (!is.null(distance_scale)) {
+    if (!missing(exp_d)) {
+      stop("Use either exp_d or distance_scale, not both.", call. = FALSE)
+    }
+    exp_d <- distance_scale
+  }
+  if (!is.numeric(exp_d) || length(exp_d) != 1L || is.na(exp_d) || exp_d <= 0) {
+    stop("distance_scale/exp_d must be a single positive numeric value.", call. = FALSE)
+  }
+  if (!is.numeric(theta) || length(theta) != 1L || is.na(theta) || theta <= 0) {
+    stop("theta must be a single positive numeric value.", call. = FALSE)
+  }
+  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) || landmark < 1) {
+    stop("landmark must be a positive integer.", call. = FALSE)
+  }
+
+  landmark <- as.integer(landmark)
+  cost_function <- normalize_conscape_cost_function(cost_function)
+  connectivity_function <- normalize_conscape_connectivity_function(connectivity_function)
+  metrics <- normalize_conscape_metrics(metrics)
+  sensitivity <- normalize_conscape_sensitivity(sensitivity)
+  output_specs <- conscape_output_specs(metrics, sensitivity)
+  sensitivity_wrt <- if (is.null(sensitivity)) "" else sensitivity$wrt
+  sensitivity_method <- if (is.null(sensitivity)) "analytical" else sensitivity$method
+  sensitivity_landscape_measure <- if (is.null(sensitivity)) "sum" else sensitivity$landscape_measure
+  sensitivity_unitless <- if (is.null(sensitivity)) TRUE else sensitivity$unitless
+  sensitivity_one_out_of <- if (is.null(sensitivity)) 1L else sensitivity$one_out_of
+  sensitivity_diagvalue <- if (is.null(sensitivity)) NULL else sensitivity$diagvalue
+  sensitivity_target_equal_source <- if (is.null(sensitivity)) TRUE else sensitivity$target_equal_source
+  sensitivity_require_landmark_one <- if (is.null(sensitivity)) TRUE else sensitivity$require_landmark_one
+
   stopJulia()
   if(parallel & isFALSE(parallel_R)){
     Sys.setenv(JULIA_NUM_THREADS = workers)
@@ -256,6 +361,18 @@ run_conscape <- function(conscape_prep = NULL,
     landmark <- conscape_prep$landmark
     target_mask <- terra::rast(file.path(conscape_prep$asc_dir, 'mask', "mask.asc"))
     tile_trim <- conscape_prep$tile_trim
+  }
+
+  landmark <- as.integer(landmark)
+  if (!is.null(sensitivity) &&
+      isTRUE(sensitivity_require_landmark_one) &&
+      !identical(landmark, 1L)) {
+    stop(
+      "ConScape sensitivity currently assumes source and target qualities are identical. ",
+      "Use landmark = 1L so coarse_graining() leaves target qualities unchanged, ",
+      "or set require_landmark_one = FALSE in conscape_sensitivity() for an experimental run.",
+      call. = FALSE
+    )
   }
 
   if (inherits(hab_target, 'SpatRaster') |
@@ -380,7 +497,18 @@ run_conscape <- function(conscape_prep = NULL,
                       .landmark = landmark,
                       .theta = theta,
                       .exp_d = exp_d,
-                      .NA_val = NA_val)
+                      .NA_val = NA_val,
+                      .metrics = metrics,
+                      .connectivity_function = connectivity_function,
+                      .cost_function = cost_function,
+                      .sensitivity_wrt = sensitivity_wrt,
+                      .sensitivity_method = sensitivity_method,
+                      .sensitivity_landscape_measure = sensitivity_landscape_measure,
+                      .sensitivity_unitless = sensitivity_unitless,
+                      .sensitivity_one_out_of = sensitivity_one_out_of,
+                      .sensitivity_diagvalue = sensitivity_diagvalue,
+                      .sensitivity_target_equal_source = sensitivity_target_equal_source,
+                      .sensitivity_require_landmark_one = sensitivity_require_landmark_one)
         })
       })
       cs_out <- do.call(c, cs_out)
@@ -410,10 +538,16 @@ run_conscape <- function(conscape_prep = NULL,
 
         max_retries <- 5L
         invisible(cs_out <- juliaCall("conscape_batch",
-                                      src_dir, mov_dir, target_dir, out_dir,
-                                      hab_target, hab_src, mov_prob,
-                                      landmark, theta, exp_d, NA_val,
-                                      max_retries, progress))
+                                       src_dir, mov_dir, target_dir, out_dir,
+                                       hab_target, hab_src, mov_prob,
+                                       landmark, theta, exp_d, NA_val,
+                                       max_retries, progress,
+                                       metrics, connectivity_function, cost_function,
+                                       sensitivity_wrt, sensitivity_method,
+                                       sensitivity_landscape_measure, sensitivity_unitless,
+                                       sensitivity_one_out_of, sensitivity_diagvalue,
+                                       sensitivity_target_equal_source,
+                                       sensitivity_require_landmark_one))
 
       } else {
 
@@ -432,10 +566,16 @@ run_conscape <- function(conscape_prep = NULL,
 
         max_retries <- 5L
         invisible(cs_out <- juliaCall("conscape_batch_distributed",
-                                      src_dir, mov_dir, target_dir, out_dir,
-                                      hab_target, hab_src, mov_prob,
-                                      landmark, theta, exp_d, NA_val,
-                                      max_retries, progress))
+                                       src_dir, mov_dir, target_dir, out_dir,
+                                       hab_target, hab_src, mov_prob,
+                                       landmark, theta, exp_d, NA_val,
+                                       max_retries, progress,
+                                       metrics, connectivity_function, cost_function,
+                                       sensitivity_wrt, sensitivity_method,
+                                       sensitivity_landscape_measure, sensitivity_unitless,
+                                       sensitivity_one_out_of, sensitivity_diagvalue,
+                                       sensitivity_target_equal_source,
+                                       sensitivity_require_landmark_one))
       }
     }
 
@@ -482,10 +622,16 @@ run_conscape <- function(conscape_prep = NULL,
                                             normalizePath(hab_src_dir, winslash = "\\"),
                                             normalizePath(mov_prob_dir, winslash = "\\") ,
                                             normalizePath(hab_target_dir, winslash = "\\"),
-                                            out_dir,
-                                            "hab_target.asc", "hab_src.asc", "mov_prob.asc",
-                                            # hab_target_file, hab_src_file, mov_prob_file,
-                                            landmark, theta, exp_d, NA_val, iter)})
+                                             out_dir,
+                                             "hab_target.asc", "hab_src.asc", "mov_prob.asc",
+                                             # hab_target_file, hab_src_file, mov_prob_file,
+                                             landmark, theta, exp_d, NA_val, iter,
+                                             metrics, connectivity_function, cost_function,
+                                             sensitivity_wrt, sensitivity_method,
+                                             sensitivity_landscape_measure, sensitivity_unitless,
+                                             sensitivity_one_out_of, sensitivity_diagvalue,
+                                             sensitivity_target_equal_source,
+                                             sensitivity_require_landmark_one)})
     } else {
 
 
@@ -504,9 +650,15 @@ run_conscape <- function(conscape_prep = NULL,
         r_res <- mov_prob[i]
 
         suppressMessages({cs_out <- juliaCall('conscape',
-                                              src_dir, mov_dir, target_dir, out_dir,
-                                              r_target, r_source, r_res,
-                                              landmark, theta, exp_d, NA_val, iter)})
+                                               src_dir, mov_dir, target_dir, out_dir,
+                                               r_target, r_source, r_res,
+                                               landmark, theta, exp_d, NA_val, iter,
+                                               metrics, connectivity_function, cost_function,
+                                               sensitivity_wrt, sensitivity_method,
+                                               sensitivity_landscape_measure, sensitivity_unitless,
+                                               sensitivity_one_out_of, sensitivity_diagvalue,
+                                               sensitivity_target_equal_source,
+                                               sensitivity_require_landmark_one)})
 
         if(isTRUE(progress)){
           setTxtProgressBar(pb,i)
@@ -516,52 +668,63 @@ run_conscape <- function(conscape_prep = NULL,
     if(exists("pb")) close(pb)
   } ## End parallel ifelse
 
-  out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-              outdir_fcon = normalizePath(file.path(out_dir, "fcon")))
+  output_dirs <- lapply(output_specs, function(spec) {
+    normalizePath(file.path(out_dir, spec$dir), mustWork = FALSE)
+  })
+  names(output_dirs) <- vapply(output_specs, `[[`, character(1), "layer")
 
-  # browser()
+  make_result_shell <- function() {
+    shell <- list(outdirs = output_dirs)
+    if ("btwn" %in% names(output_dirs)) {
+      shell$outdir_btwn <- output_dirs$btwn
+    }
+    if ("fcon" %in% names(output_dirs)) {
+      shell$outdir_fcon <- output_dirs$fcon
+    }
+    class(shell) <- "ConScapeResults"
+    shell
+  }
+
+  read_surface_dir <- function(spec) {
+    files <- list.files(
+      normalizePath(file.path(out_dir, spec$dir), mustWork = FALSE),
+      pattern = "\\.asc$|\\.tif$",
+      full.names = TRUE
+    )
+    if (length(files) == 0L) {
+      stop("No raster output found for ", spec$layer, call. = FALSE)
+    }
+    terra::rast(files)
+  }
 
   if(isTRUE(mosaic) & isFALSE(single_rast)){
-    btwn <- mosaic_conscape(out_dir = out$outdir_btwn,
-                            tile_trim = tile_trim,
-                            method = 'merge',
-                            mask = target_mask,
-                            crs = terra::crs(target_mask))
-    fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
-                            tile_trim = tile_trim,
-                            mask = target_mask,
-                            method = 'merge',
-                            crs = terra::crs(target_mask))
+    rasters <- lapply(output_specs, function(spec) {
+      mosaic_conscape(out_dir = file.path(out_dir, spec$dir),
+                      tile_trim = tile_trim,
+                      method = 'merge',
+                      mask = target_mask,
+                      crs = terra::crs(target_mask))
+    })
+    names(rasters) <- vapply(output_specs, `[[`, character(1), "layer")
 
     if(!is.null(conscape_prep) & inherits(conscape_prep, 'ConScapeRtools_prep')){
-      # crs(btwn) <- crs(fcon) <- crs(target_mask)
-      # target_mask <- crop(target_mask, fcon)
       target_mask[target_mask == 0] <- NA
-      btwn[is.na(target_mask)] <- NA
-      fcon[is.na(target_mask)] <- NA
+      rasters <- lapply(rasters, function(x) {
+        x[is.na(target_mask)] <- NA
+        x
+      })
     }
 
-    out <- list(btwn = btwn,
-                fcon = fcon,
-                outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                outdir_fcon = normalizePath(file.path(out_dir, "fcon"))#,
-                # cs_log = cs_out
-    )
+    out <- c(rasters, list(outdirs = output_dirs))
+    if ("btwn" %in% names(output_dirs)) out$outdir_btwn <- output_dirs$btwn
+    if ("fcon" %in% names(output_dirs)) out$outdir_fcon <- output_dirs$fcon
     class(out) <- "ConScapeResults"
   } else {
-    out <- list(outdir_btwn = normalizePath(file.path(out_dir, "btwn")),
-                outdir_fcon = normalizePath(file.path(out_dir, "fcon"))#,
-                # cs_log = cs_out
-    )
-    class(out) <- "ConScapeResults"
+    out <- make_result_shell()
 
     if (isTRUE(single_rast)) {
-      btwn <- terra::rast(list.files(normalizePath(file.path(out_dir, "btwn")),
-                                     pattern = "\\.asc$|\\.tif$",
-                                     full.names = TRUE))
-      fcon <- terra::rast(list.files(normalizePath(file.path(out_dir, "fcon")),
-                                     pattern = "\\.asc$|\\.tif$",
-                                     full.names = TRUE))
+      rasters <- lapply(output_specs, read_surface_dir)
+      names(rasters) <- vapply(output_specs, `[[`, character(1), "layer")
 
       ## determine original (pre-extension) extent
       orig_ext <- NULL
@@ -574,29 +737,19 @@ run_conscape <- function(conscape_prep = NULL,
       }
 
       if (!is.null(orig_ext)) {
-        btwn <- terra::crop(btwn, orig_ext)
-        fcon <- terra::crop(fcon, orig_ext)
+        rasters <- lapply(rasters, terra::crop, y = orig_ext)
       }
 
       if (inherits(mov_prob, "SpatRaster")) {
-        terra::crs(btwn) <- terra::crs(mov_prob)
-        terra::crs(fcon) <- terra::crs(mov_prob)
+        rasters <- lapply(rasters, function(x) {
+          terra::crs(x) <- terra::crs(mov_prob)
+          x
+        })
       }
 
-      out <- terra::rast(list(btwn = btwn,
-                              fcon = fcon))
+      out <- terra::rast(rasters)
+      names(out) <- names(rasters)
     }
-
-    # if(isTRUE(single_rast)){
-    #   btwn <- rast(list.files(normalizePath(file.path(out_dir, "btwn")),
-    #                          full.names = T))
-    #   fcon <- rast(list.files(normalizePath(file.path(out_dir, "fcon")),
-    #                          full.names = T))
-    #   crs(btwn) <- crs(fcon) <- crs(mov_prob)
-    #
-    #   out <- rast(list(btwn = btwn,
-    #                    fcon = fcon))
-    # }
   }
 
   # juliaEval("GC.gc()")
@@ -622,11 +775,29 @@ cs_par.func <- function(i,
                         .landmark,
                         .theta,
                         .exp_d,
-                        .NA_val){
+                        .NA_val,
+                        .metrics,
+                        .connectivity_function,
+                        .cost_function,
+                        .sensitivity_wrt,
+                        .sensitivity_method,
+                        .sensitivity_landscape_measure,
+                        .sensitivity_unitless,
+                        .sensitivity_one_out_of,
+                        .sensitivity_diagvalue,
+                        .sensitivity_target_equal_source,
+                        .sensitivity_require_landmark_one){
   iter <- paste0('-iter_', i)
   invisible({cs_out <- juliaCall('conscape',
                                  .src_dir, .mov_dir, .target_dir, .out_dir,
                                  .hab_target[i], .hab_src[i], .mov_prob[i],
-                                 .landmark, .theta, .exp_d, .NA_val, iter)})
+                                 .landmark, .theta, .exp_d, .NA_val, iter,
+                                 .metrics, .connectivity_function, .cost_function,
+                                 .sensitivity_wrt, .sensitivity_method,
+                                 .sensitivity_landscape_measure,
+                                 .sensitivity_unitless, .sensitivity_one_out_of,
+                                 .sensitivity_diagvalue,
+                                 .sensitivity_target_equal_source,
+                                 .sensitivity_require_landmark_one)})
   # juliaEval("GC.gc()")
 }

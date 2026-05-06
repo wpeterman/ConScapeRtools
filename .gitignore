@@ -6,3 +6,10 @@
 .httr-oauth
 .DS_Store
 .quarto
+.positai
+tiles_test/
+*.Rcheck/
+ConScapeRtools_*.tar.gz
+.claude
+doc/
+Meta/

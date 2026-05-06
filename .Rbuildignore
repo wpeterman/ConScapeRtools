@@ -10,3 +10,5 @@
 ^ConScapeRtools_.*\.tar\.gz$
 ^\.positai$
 ^\.claude$
+^doc$
+^Meta$

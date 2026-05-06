@@ -94,12 +94,16 @@ Grid <- function(affinities, sources, targets, costs) {
 
   # create Grid
   if (inherits(costs, "character")){
+    cost_expr <- conscape_cost_function_julia(
+      costs,
+      "ConScape.graph_matrix_from_raster(affinities)"
+    )
     g <- juliaLet(
       paste0("ConScape.Grid(size(affinities)...,
               affinities=ConScape.graph_matrix_from_raster(affinities),
               source_qualities=sources,
               target_qualities=SparseArrays.sparse(targets),
-              costs=ConScape.mapnz(", costs, ", ConScape.graph_matrix_from_raster(affinities)))"),
+              costs=", cost_expr, ")"),
       affinities=affinities, sources=sources, targets=targets)
   } else {
     g <- juliaLet("ConScape.Grid(size(affinities)...,
@@ -234,6 +238,43 @@ connected_habitat <- function(h, alpha) {
 expected_cost <- function(h) {
   dists = juliaLet("ConScape.expected_cost(h)", h=h)
   return(dists)
+}
+
+sensitivity <- function(h,
+                        wrt = "Q",
+                        alpha = 1,
+                        landscape_measure = "sum",
+                        unitless = TRUE,
+                        method = "analytical",
+                        diagvalue = NULL,
+                        target_equal_source = TRUE,
+                        one_out_of = 1L) {
+  fun <- if (identical(method, "simulation")) {
+    "sensitivity_simulation"
+  } else {
+    "sensitivity"
+  }
+  extra <- if (identical(method, "simulation")) {
+    ", one_out_of=one_out_of"
+  } else {
+    ""
+  }
+  juliaLet(
+    paste0(
+      "ConScape.", fun,
+      "(h, distance_transformation=ConScape.ExpMinus(), \u03b1=alpha, ",
+      "wrt=wrt, landscape_measure=landscape_measure, unitless=unitless, ",
+      "diagvalue=diagvalue, target_equal_source=target_equal_source", extra, ")"
+    ),
+    h = h,
+    wrt = wrt,
+    alpha = alpha,
+    landscape_measure = landscape_measure,
+    unitless = unitless,
+    diagvalue = diagvalue,
+    target_equal_source = target_equal_source,
+    one_out_of = as.integer(one_out_of)
+  )
 }
 
 

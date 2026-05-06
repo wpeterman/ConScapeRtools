@@ -1,0 +1,363 @@
+---
+title: "ConScapeRtools User Guide"
+author: "Bill Peterman"
+output:
+  rmarkdown::html_vignette:
+    fig_width: 5.75
+    fig_height: 4.25
+    number_sections: true
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{ConScapeRtools User Guide}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.align = "center"
+)
+library(ConScapeRtools)
+```
+
+# Background
+
+Landscape connectivity is usually shaped by two related pieces of information:
+where habitat is available, and how easily movement can occur between habitat
+locations. `ConScapeRtools` is an R interface to the Julia package
+`ConScape`, with an emphasis on large raster landscapes that are too large to
+solve comfortably as a single graph.
+
+The main workflow is:
+
+1. Choose or calibrate movement and decay parameters with `tile_design()`.
+2. Tile source quality, target quality, and movement affinity rasters with
+   `conscape_prep()`.
+3. Run ConScape on each tile with `run_conscape()`.
+4. Reassemble tile-level outputs with `mosaic_conscape()`.
+
+The package keeps older argument names for compatibility, but the underlying
+ConScape model is easiest to understand using ConScape's own vocabulary.
+
+```{r api-slots}
+conscape_api_slots()
+```
+
+In brief:
+
+- `target_qualities` identify cells that can receive connectivity.
+- `source_qualities` identify cells that generate connectivity.
+- `affinities` describe movement permeability or movement likelihood.
+- `cost_function` describes how graph movement costs are derived from
+  affinities.
+- `theta` controls the randomized shortest path model.
+- `distance_scale` controls the exponential transformation from distance to
+  proximity.
+
+# Data
+
+This guide uses the small example rasters installed with the package. In a real
+analysis, use projected rasters with map units that match the movement distance
+you want to interpret.
+
+```{r read-data, eval=FALSE}
+library(terra)
+library(ConScapeRtools)
+
+hab_file <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
+aff_file <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
+
+habitat <- terra::rast(hab_file)
+affinity <- terra::rast(aff_file)
+
+plot(c(habitat, affinity))
+```
+
+The movement raster should be an affinity or permeability surface, where larger
+values mean easier movement. If your starting layer is resistance, transform it
+before using it as `r_mov` or `affinities`.
+
+# Tile Design
+
+Before tiling a large landscape, it is useful to estimate a distance decay
+parameter and a conservative tile overlap. `tile_design()` builds a small
+synthetic ConScape problem, computes expected costs, and chooses an exponential
+distance scale so that proximity has decayed to a small threshold at the
+specified maximum distance.
+
+```{r tile-design, eval=FALSE}
+jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.11.4/bin"
+
+td <- tile_design(
+  r_mov = affinity,
+  r_target = habitat,
+  max_d = 8500,
+  theta = 0.1,
+  jl_home = jl_home
+)
+
+td$distance_scale <- td$exp_d
+td
+```
+
+The returned `tile_d` and `tile_trim` are map-unit distances. They are designed
+to be passed directly to `conscape_prep()`.
+
+# Preparing Tiles
+
+`conscape_prep()` writes matching ASCII tiles for target qualities, source
+qualities, and movement affinities. All rasters must have the same extent and
+resolution.
+
+```{r prep, eval=FALSE}
+prep <- conscape_prep(
+  tile_d = td$tile_d,
+  tile_trim = td$tile_trim,
+  asc_dir = "conscape_tiles",
+  r_target = habitat,
+  r_src = habitat,
+  r_mov = affinity,
+  target_threshold = 0,
+  landmark = 5L,
+  clear_dir = TRUE
+)
+
+prep$input_slots
+```
+
+The `landmark` argument is ConScape's coarse-graining window size. Larger
+values can make large runs faster because target qualities are aggregated to
+fewer target cells. Tile dimensions and overlaps are aligned to this value so
+the coarse-grained target cells fall in consistent locations across tiles.
+
+# Running Connectivity Metrics
+
+The default `run_conscape()` call computes the two historical outputs:
+
+- `btwn`: ConScape `betweenness_kweighted()`
+- `fcon`: ConScape `connected_habitat()`
+
+```{r run-default, eval=FALSE}
+cs <- run_conscape(
+  conscape_prep = prep,
+  out_dir = "conscape_results",
+  theta = td$theta,
+  distance_scale = td$exp_d,
+  jl_home = jl_home,
+  parallel = TRUE,
+  workers = 4
+)
+
+plot(cs)
+```
+
+The same call can be written with explicit ConScape-aligned argument names when
+running a single, untiled landscape.
+
+```{r run-single, eval=FALSE}
+single <- run_conscape(
+  out_dir = "single_results",
+  target_qualities = habitat,
+  source_qualities = habitat,
+  affinities = affinity,
+  theta = 0.1,
+  distance_scale = 150,
+  landmark = 5L,
+  jl_home = jl_home
+)
+```
+
+Additional metrics can be requested with `metrics`.
+
+```{r metrics, eval=FALSE}
+cs_more <- run_conscape(
+  conscape_prep = prep,
+  out_dir = "conscape_more_metrics",
+  theta = td$theta,
+  distance_scale = td$exp_d,
+  metrics = c("connected_habitat", "betweenness_kweighted",
+              "betweenness_qweighted", "criticality"),
+  jl_home = jl_home
+)
+```
+
+# Sensitivity Analysis
+
+Sensitivity analysis asks how much a landscape-level connectivity summary would
+change if a local landscape component changed. The current ConScape sensitivity
+framework supports perturbations with respect to:
+
+- `"Q"`: habitat quality.
+- `"A"`: affinity or permeability.
+- `"C"`: movement cost.
+- `"A&C=f(A)"`: linked affinity and cost when cost is a function of affinity.
+- `"C&A=f(C)"`: linked cost and affinity when affinity is treated as a function
+  of cost.
+
+Use `conscape_sensitivity()` to describe the requested sensitivity outputs.
+
+```{r sensitivity-spec}
+sens <- conscape_sensitivity(
+  wrt = c("Q", "A&C=f(A)"),
+  landscape_measure = "sum",
+  unitless = TRUE
+)
+
+sens
+```
+
+With `unitless = TRUE`, outputs are elasticities. These are often easier to
+compare across surfaces because they describe response to proportional change.
+Use `unitless = FALSE` for raw unit-change sensitivities.
+
+```{r sensitivity-run, eval=FALSE}
+cs_sens <- run_conscape(
+  conscape_prep = prep,
+  out_dir = "conscape_sensitivity",
+  theta = td$theta,
+  distance_scale = td$exp_d,
+  landmark = 1L,
+  metrics = c("connected_habitat", "betweenness_kweighted"),
+  sensitivity = sens,
+  jl_home = jl_home
+)
+
+names(cs_sens)
+plot(cs_sens, layers = c("elasticity_quality",
+                         "elasticity_affinity_cost_linked"))
+```
+
+There are two important practical constraints.
+
+First, the current ConScape sensitivity implementation assumes source and target
+qualities are equal. Because `landmark > 1L` coarse-grains target qualities,
+`run_conscape()` requires `landmark = 1L` by default when sensitivity is
+requested. This keeps the target-quality surface aligned with the source-quality
+surface.
+
+Second, tiled sensitivity is a tile-local approximation. It uses the same tile
+overlap and mosaicking strategy as `btwn` and `fcon`, but sensitivity to
+movement affinities and costs can be more boundary-sensitive because connector
+cells and edges near tile borders may influence interior paths. Use conservative
+tile overlap, inspect edge artifacts, and prefer `landscape_measure = "sum"` for
+tiled sensitivity workflows.
+
+# Tiled Sensitivity Recommendations
+
+A conservative tiled sensitivity workflow is:
+
+```{r tiled-sensitivity-template, eval=FALSE}
+td <- tile_design(
+  r_mov = affinity,
+  r_target = habitat,
+  max_d = 8500,
+  theta = 0.1,
+  jl_home = jl_home
+)
+
+prep_sens <- conscape_prep(
+  tile_d = td$tile_d,
+  tile_trim = td$tile_trim,
+  asc_dir = "conscape_sensitivity_tiles",
+  r_target = habitat,
+  r_src = habitat,
+  r_mov = affinity,
+  target_threshold = 0,
+  landmark = 1L,
+  clear_dir = TRUE
+)
+
+cs_sens <- run_conscape(
+  conscape_prep = prep_sens,
+  out_dir = "conscape_sensitivity_results",
+  theta = td$theta,
+  distance_scale = td$exp_d,
+  landmark = 1L,
+  cost_function = "minuslog",
+  connectivity_function = "expected_cost",
+  sensitivity = conscape_sensitivity(
+    wrt = c("Q", "A&C=f(A)"),
+    landscape_measure = "sum",
+    unitless = TRUE
+  ),
+  jl_home = jl_home,
+  parallel = TRUE,
+  workers = 4
+)
+```
+
+For full-landscape sensitivity without tiling, pass the rasters directly to
+`run_conscape()`. This avoids tile-boundary approximation, but can be much more
+computationally demanding.
+
+```{r full-sensitivity, eval=FALSE}
+full_sens <- run_conscape(
+  out_dir = "full_sensitivity_results",
+  target_qualities = habitat,
+  source_qualities = habitat,
+  affinities = affinity,
+  theta = 0.1,
+  distance_scale = 150,
+  landmark = 1L,
+  metrics = "connected_habitat",
+  sensitivity = conscape_sensitivity(wrt = c("Q", "A&C=f(A)")),
+  jl_home = jl_home
+)
+```
+
+# Output Interpretation
+
+The default metric outputs answer different ecological questions.
+
+- `fcon` / `connected_habitat`: how much quality-weighted target habitat is
+  effectively connected to each source cell after distance has been transformed
+  to proximity.
+- `btwn` / `betweenness_kweighted`: how strongly each cell contributes to
+  quality-weighted movement among connected source-target pairs.
+- `elasticity_quality`: expected proportional change in the landscape summary
+  following proportional change in habitat quality at a cell.
+- `elasticity_affinity_cost_linked`: expected proportional change in the
+  landscape summary following proportional change in affinity when cost changes
+  consistently with the selected `cost_function`.
+
+High sensitivity does not automatically mean a cell has high current
+connectivity. It means the chosen landscape summary is responsive to change at
+that location. Sensitivity maps are therefore useful for comparing restoration,
+degradation, or management scenarios.
+
+# Other Functions
+
+`mosaic_conscape()` can be used directly when tile outputs already exist.
+
+```{r direct-mosaic, eval=FALSE}
+btwn <- mosaic_conscape(
+  out_dir = file.path("conscape_results", "btwn"),
+  mask = terra::rast(file.path(prep$asc_dir, "mask", "mask.asc")),
+  tile_trim = prep$tile_trim,
+  method = "merge"
+)
+```
+
+The plotting method understands all raster outputs stored in a
+`ConScapeResults` object.
+
+```{r plot-layers, eval=FALSE}
+plot(cs_sens)
+plot(cs_sens, layers = c("fcon", "elasticity_quality"))
+```
+
+# Practical Checklist
+
+Before running a large analysis:
+
+1. Confirm `r_mov` / `affinities` is permeability, not resistance.
+2. Choose `theta` based on the movement model you want to represent.
+3. Use `tile_design()` to choose a defensible `distance_scale` and tile overlap.
+4. Use `landmark > 1L` for faster default metrics when coarse-grained targets
+   are acceptable.
+5. Use `landmark = 1L` for sensitivity workflows.
+6. Start with `metrics = c("connected_habitat", "betweenness_kweighted")`.
+7. Add sensitivity outputs after the base workflow is stable.
+8. Compare tiled and untiled runs on a small crop before scaling up.

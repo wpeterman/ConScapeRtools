@@ -4,24 +4,30 @@
 \alias{plot.ConScapeResults}
 \title{Plot Method for ConScapeResults Objects}
 \usage{
-\method{plot}{ConScapeResults}(x, ...)
+\method{plot}{ConScapeResults}(x, layers = NULL, ...)
 }
 \arguments{
-\item{x}{A ConScapeResults object containing \verb{$btwn} and \verb{$fcon} SpatRaster objects}
+\item{x}{A \code{"ConScapeResults"} object returned by \code{\link[=run_conscape]{run_conscape()}} when
+tiled outputs are mosaicked.}
+
+\item{layers}{Optional character vector naming raster outputs to plot. If
+\code{NULL} (default), all \code{SpatRaster} elements in \code{x} are plotted. Common
+layer names include \code{"btwn"}, \code{"fcon"}, \code{"btwn_qweighted"},
+\code{"criticality"}, and sensitivity names such as \code{"elasticity_quality"}.}
 
 \item{...}{Additional arguments passed to \code{terra::plot}}
 }
 \value{
-A two-panel plot (side-by-side) of the spatial rasters
+Invisibly returns \code{x} after plotting the selected rasters.
 }
 \description{
-Creates a two-panel plot showing betweenness and functional connectivity rasters.
+Plot raster outputs stored in a \code{"ConScapeResults"} object.
 }
 \examples{
 \dontrun{
 # Assuming 'cs_results' is a ConScapeResults object
 plot(cs_results)
-plot(cs_results, main = "My Connectivity Results", col = terrain.colors(50))
+plot(cs_results, layers = c("fcon", "elasticity_quality"))
 }
 
 }

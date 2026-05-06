@@ -14,9 +14,9 @@ tile_design(
 )
 }
 \arguments{
-\item{r_mov}{\code{SpatRaster} representing movement probabilities. Values
-should be in a projected coordinate reference system (map units in
-meters) and represent per–cell movement affinity or probability.}
+\item{r_mov}{\code{SpatRaster} representing movement affinities/permeability.
+Values should be in a projected coordinate reference system (map units in
+meters) and should be higher where movement is easier.}
 
 \item{r_source}{Optional \code{SpatRaster} representing source quality
 (default \code{NULL}). If only \code{r_target} is provided, it is used for both

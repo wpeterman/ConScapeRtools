@@ -32,14 +32,17 @@ cells is a multiple of \code{landmark}. This overlap is removed again in
 written. If \code{NULL} (default), a new directory is created under the current
 R session's temporary directory.}
 
-\item{r_target}{\code{SpatRaster} representing target qualities. May be the same
-object as \code{r_src}. Values below \code{target_threshold} are treated as
-unsuitable and are masked out.}
+\item{r_target}{\code{SpatRaster} representing ConScape \code{target_qualities}. May
+be the same object as \code{r_src}. Values below \code{target_threshold} are treated
+as unsuitable and are masked out.}
 
-\item{r_mov}{\code{SpatRaster} representing movement probabilities.}
+\item{r_mov}{\code{SpatRaster} representing ConScape cell affinities /
+permeability. These values are converted to graph \code{affinities} with
+\code{ConScape.graph_matrix_from_raster()}; they should not be resistance
+values unless they have first been transformed to affinities.}
 
-\item{r_src}{\code{SpatRaster} representing source qualities. May be the same
-object as \code{r_target}.}
+\item{r_src}{\code{SpatRaster} representing ConScape \code{source_qualities}. May be
+the same object as \code{r_target}.}
 
 \item{target_threshold}{Numeric threshold applied to \code{r_target} to define
 suitable habitat (default \code{0}). Cells with values \verb{< target_threshold} are
@@ -69,6 +72,8 @@ and movement tiles (as \code{.asc} files).
 \item \code{tile_trim} – effective overlap width in map units (may be larger than
 the user–supplied \code{tile_trim} if increased for landmark alignment).
 \item \code{landmark} – the coarse–graining window size passed in via \code{landmark}.
+\item \code{input_slots} – named paths showing how prepared rasters map to ConScape's
+\code{target_qualities}, \code{source_qualities}, and \code{affinities} slots.
 }
 
 This object is intended to be passed directly to \code{\link[=run_conscape]{run_conscape()}}.
@@ -84,6 +89,13 @@ applies the same tiling to the target, source, and movement rasters via
 All three rasters (\code{r_target}, \code{r_mov}, \code{r_src}) must have identical extent
 and resolution; this is checked at the start of the function. The CRS is not
 modified but should be the same for all layers.
+
+The argument names mirror the original ConScapeRtools workflow, while the
+returned \code{input_slots} element records the equivalent ConScape slots:
+\code{r_target} becomes \code{target_qualities}, \code{r_src} becomes \code{source_qualities},
+and \code{r_mov} becomes the affinity/permeability layer used to construct graph
+\code{affinities}. If your input layer is a resistance or cost surface, transform
+it to an affinity surface before calling \code{conscape_prep()}.
 
 A binary mask (\code{mask.asc}) is written to \code{file.path(asc_dir, "mask")} and
 contains 1 for cells with \code{r_target >= target_threshold} and 0 otherwise.

@@ -22,7 +22,15 @@ run_conscape(
   distributed = FALSE,
   progress = TRUE,
   parallel_R = FALSE,
-  tile_trim = 0
+  tile_trim = 0,
+  target_qualities = NULL,
+  source_qualities = NULL,
+  affinities = NULL,
+  distance_scale = NULL,
+  cost_function = "minuslog",
+  connectivity_function = "expected_cost",
+  metrics = c("betweenness_kweighted", "connected_habitat"),
+  sensitivity = NULL
 )
 }
 \arguments{
@@ -35,17 +43,20 @@ supply \code{hab_target}, \code{hab_src}, and \code{mov_prob} directly.}
 \item{out_dir}{Directory where final ConScape outputs will be written.
 Subdirectories \code{"btwn"} and \code{"fcon"} are created inside \code{out_dir}.}
 
-\item{hab_target}{Either (i) a path to a directory containing target
-habitat tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as the
-target layer when running ConScape on a non-tiled landscape.}
+\item{hab_target, target_qualities}{Either (i) a path to a directory
+containing target-quality tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster}
+used as the ConScape \code{target_qualities} layer. \code{hab_target} is retained
+as a backwards-compatible alias.}
 
-\item{hab_src}{Either (i) a path to a directory containing source
-habitat tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as the
-source layer when running ConScape on a non-tiled landscape.}
+\item{hab_src, source_qualities}{Either (i) a path to a directory containing
+source-quality tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as the
+ConScape \code{source_qualities} layer. \code{hab_src} is retained as a
+backwards-compatible alias.}
 
-\item{mov_prob}{Either (i) a path to a directory containing movement
-probability tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as
-the movement layer when running ConScape on a non-tiled landscape.}
+\item{mov_prob, affinities}{Either (i) a path to a directory containing
+affinity/permeability tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used
+to build ConScape \code{affinities} with \code{graph_matrix_from_raster()}.
+\code{mov_prob} is retained as a backwards-compatible alias.}
 
 \item{clear_dir}{Logical. If \code{TRUE} (default), any existing contents
 of \code{out_dir} are removed before writing new results. If \code{FALSE} and
@@ -64,8 +75,9 @@ Default is \code{0.01}.}
 transforming distance in the movement grid (i.e. \code{exp(-dist / exp_d)}).
 Default is \code{150}. This is typically set from \code{\link[=tile_design]{tile_design()}}.}
 
-\item{NA_val}{Value assigned to \code{NA} cells so that ConScape can run
-(default \code{1e-50}). This should be very small but positive.}
+\item{NA_val}{Backwards-compatible argument retained for older workflows.
+The current Julia runner treats \code{NA} affinities as absent graph cells and
+\code{NA} source/target qualities as zero quality.}
 
 \item{mosaic}{Logical (default \code{TRUE}). When running on tiles
 (via \code{conscape_prep} or directory inputs), tile-level outputs are
@@ -103,17 +115,41 @@ controls how far the input rasters are extended (buffered) on all
 sides before ConScape is run; the output is subsequently cropped
 back to the original extent so that tiled and untiled runs are
 comparable.}
+
+\item{distance_scale}{Clearer alias for \code{exp_d}. Use one or the other.}
+
+\item{cost_function}{Cost transformation used by \code{ConScape.Grid(costs = ...)}.
+Supported named values are \code{"minuslog"} (default), \code{"inverse"},
+\code{"odds_against"}, \code{"odds_for"}, and \code{"expminus"}. A Julia lambda string
+such as \code{"x -> -log(x)"} can also be supplied, in which case a cost matrix
+is created with \code{ConScape.mapnz()}.}
+
+\item{connectivity_function}{ConScape distance/proximity function used by
+metrics that require a landscape matrix. Supported values are
+\code{"expected_cost"} (default), \code{"least_cost_distance"},
+\code{"free_energy_distance"}, \code{"survival_probability"}, and
+\code{"power_mean_proximity"}.}
+
+\item{metrics}{Character vector of raster-valued ConScape metrics to write.
+Supported values are \code{"connected_habitat"}, \code{"betweenness_kweighted"},
+\code{"betweenness_qweighted"}, and \code{"criticality"}. The aliases \code{"fcon"} and
+\code{"btwn"} are accepted.}
+
+\item{sensitivity}{Optional sensitivity specification created by
+\code{\link[=conscape_sensitivity]{conscape_sensitivity()}}. \code{TRUE} uses the default quality and linked
+affinity-cost elasticities; a character vector is interpreted as \code{wrt}
+values passed to \code{\link[=conscape_sensitivity]{conscape_sensitivity()}}.}
 }
 \value{
 If \code{mosaic = TRUE} and tiles are used (\code{!single_rast} internally),
 returns an object of class \code{"ConScapeResults"} containing:
 \itemize{
-\item \code{btwn} – \code{SpatRaster} of betweenness-like connectivity,
-\item \code{fcon} – \code{SpatRaster} of functional connectivity,
-\item \code{outdir_btwn} – path to the directory with tile-level betweenness
-outputs,
-\item \code{outdir_fcon} – path to the directory with tile-level functional
-connectivity outputs.
+\item \code{btwn} – \code{SpatRaster} of k-weighted betweenness when requested,
+\item \code{fcon} – \code{SpatRaster} of connected habitat when requested,
+\item additional metric or sensitivity rasters named by output layer,
+\item \code{outdirs} – named list of tile-level output directories,
+\item \code{outdir_btwn} and \code{outdir_fcon} – backwards-compatible paths for the
+default betweenness and connected-habitat outputs when requested.
 }
 
 When run on a single \code{SpatRaster} (no tiling), the function returns a
@@ -144,6 +180,30 @@ When \code{parallel = TRUE}, either R-level parallelization (with
 \code{parallel_R = TRUE}) or Julia-level parallelization (with
 \code{parallel_R = FALSE}) is used. The choice between Julia threading and
 Julia distributed workers is controlled by \code{distributed}.
+
+The default run writes \code{connected_habitat} and \code{betweenness_kweighted},
+which correspond to the historical \code{fcon} and \code{btwn} outputs. Additional
+metrics are requested with \code{metrics}. All metric names are passed to the
+bundled Julia runner, which computes each requested surface on the same
+\code{GridRSP} object.
+
+Sensitivity outputs are requested with \code{\link[=conscape_sensitivity]{conscape_sensitivity()}}. These
+surfaces are computed after the \code{GridRSP} object is built and are written to
+directories named for the output, for example \code{"elasticity_quality"} or
+\code{"elasticity_affinity_cost_linked"}. Analytical sensitivity requires a
+ConScape installation that provides \code{ConScape.sensitivity}; the current CRAN
+release of ConScape may not yet include that function. When the function is
+unavailable, the Julia runner stops with an explicit message rather than
+silently returning an approximate substitute.
+
+Tiled sensitivity uses the same tiling and mosaicking machinery as the
+default betweenness and connected-habitat outputs. It should be treated as a
+tile-local approximation to the full-landscape sensitivity, so choose a
+\code{tile_trim} large enough that paths crossing tile edges have negligible
+influence on the interior cells retained by \code{\link[=mosaic_conscape]{mosaic_conscape()}}. For
+sensitivity runs, use \code{landmark = 1L} unless you have a specific reason to
+test coarse-grained target qualities, because the ConScape sensitivity API
+currently assumes target quality equals source quality.
 }
 \examples{
 \dontrun{
@@ -244,7 +304,8 @@ layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
 }
 }
 \seealso{
-\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}},
+\code{\link[=conscape_sensitivity]{conscape_sensitivity()}}, \code{\link[=conscape_api_slots]{conscape_api_slots()}}
 }
 \author{
 Bill Peterman

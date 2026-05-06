@@ -18,12 +18,15 @@
 #' @param asc_dir Directory where `.asc` tiles and ancillary files will be
 #'   written. If `NULL` (default), a new directory is created under the current
 #'   R session's temporary directory.
-#' @param r_target `SpatRaster` representing target qualities. May be the same
-#'   object as `r_src`. Values below `target_threshold` are treated as
-#'   unsuitable and are masked out.
-#' @param r_mov `SpatRaster` representing movement probabilities.
-#' @param r_src `SpatRaster` representing source qualities. May be the same
-#'   object as `r_target`.
+#' @param r_target `SpatRaster` representing ConScape `target_qualities`. May
+#'   be the same object as `r_src`. Values below `target_threshold` are treated
+#'   as unsuitable and are masked out.
+#' @param r_mov `SpatRaster` representing ConScape cell affinities /
+#'   permeability. These values are converted to graph `affinities` with
+#'   `ConScape.graph_matrix_from_raster()`; they should not be resistance
+#'   values unless they have first been transformed to affinities.
+#' @param r_src `SpatRaster` representing ConScape `source_qualities`. May be
+#'   the same object as `r_target`.
 #' @param target_threshold Numeric threshold applied to `r_target` to define
 #'   suitable habitat (default `0`). Cells with values `< target_threshold` are
 #'   coded as 0 in the mask and set to `NA` in the tiled target raster.
@@ -41,6 +44,13 @@
 #' All three rasters (`r_target`, `r_mov`, `r_src`) must have identical extent
 #' and resolution; this is checked at the start of the function. The CRS is not
 #' modified but should be the same for all layers.
+#'
+#' The argument names mirror the original ConScapeRtools workflow, while the
+#' returned `input_slots` element records the equivalent ConScape slots:
+#' `r_target` becomes `target_qualities`, `r_src` becomes `source_qualities`,
+#' and `r_mov` becomes the affinity/permeability layer used to construct graph
+#' `affinities`. If your input layer is a resistance or cost surface, transform
+#' it to an affinity surface before calling `conscape_prep()`.
 #'
 #' A binary mask (`mask.asc`) is written to `file.path(asc_dir, "mask")` and
 #' contains 1 for cells with `r_target >= target_threshold` and 0 otherwise.
@@ -66,6 +76,8 @@
 #' * `tile_trim` – effective overlap width in map units (may be larger than
 #'   the user–supplied `tile_trim` if increased for landmark alignment).
 #' * `landmark` – the coarse–graining window size passed in via `landmark`.
+#' * `input_slots` – named paths showing how prepared rasters map to ConScape's
+#'   `target_qualities`, `source_qualities`, and `affinities` slots.
 #'
 #' This object is intended to be passed directly to [run_conscape()].
 #'
@@ -266,7 +278,13 @@ conscape_prep <- function(tile_d,
     target    = target_tiles$asc_dir,
     mov       = mov_tiles$asc_dir,
     tile_trim = tile_design$tile_trim,   # map units, for mosaic_conscape
-    landmark  = tile_design$landmark
+    landmark  = tile_design$landmark,
+    target_threshold = target_threshold,
+    input_slots = list(
+      target_qualities = target_tiles$asc_dir,
+      source_qualities = src_tiles$asc_dir,
+      affinities = mov_tiles$asc_dir
+    )
   )
   class(out) <- "ConScapeRtools_prep"
   out

@@ -9,9 +9,9 @@
 #' randomized shortest–path model, and calibrates the decay so that
 #' proximity at `max_d` matches a user–defined threshold.
 #'
-#' @param r_mov `SpatRaster` representing movement probabilities. Values
-#'   should be in a projected coordinate reference system (map units in
-#'   meters) and represent per–cell movement affinity or probability.
+#' @param r_mov `SpatRaster` representing movement affinities/permeability.
+#'   Values should be in a projected coordinate reference system (map units in
+#'   meters) and should be higher where movement is easier.
 #' @param r_source Optional `SpatRaster` representing source quality
 #'   (default `NULL`). If only `r_target` is provided, it is used for both
 #'   source and target.
@@ -155,7 +155,7 @@ tile_design <- function(r_mov,
   g <- Grid(affinities = mov,
             sources = src,
             targets = target,
-            costs = "x -> -log(x)")
+            costs = "minuslog")
 
   # Create a ConScape GridRSP by providing the randomness parameter theta
   h <- GridRSP(g, theta = theta)

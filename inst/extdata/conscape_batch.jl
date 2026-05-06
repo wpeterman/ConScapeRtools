@@ -7,7 +7,18 @@ using Statistics
 function conscape_batch(src_dir, mov_dir, target_dir, out_dir,
                         r_targets::Vector{String}, r_sources::Vector{String},
                         r_res::Vector{String}, land_mark, theta, exp_d, NA_val,
-                        max_retries::Int, progress::Bool)
+                        max_retries::Int, progress::Bool,
+                        metrics = ["betweenness_kweighted", "connected_habitat"],
+                        connectivity_function_name = "expected_cost",
+                        cost_function_name = "minuslog",
+                        sensitivity_wrt = String[],
+                        sensitivity_method = "analytical",
+                        sensitivity_landscape_measure = "sum",
+                        sensitivity_unitless = true,
+                        sensitivity_one_out_of = 1,
+                        sensitivity_diagvalue = nothing,
+                        sensitivity_target_equal_source = true,
+                        sensitivity_require_landmark_one = true)
 
     # Align filenames across target/source/movement by basename.
     # This prevents accidental mixing of tiles when some files have been deleted.
@@ -32,7 +43,16 @@ function conscape_batch(src_dir, mov_dir, target_dir, out_dir,
             try
                 result = conscape(src_dir, mov_dir, target_dir, out_dir,
                                   r_targets[i], r_sources[i], r_res[i],
-                                  land_mark, theta, exp_d, NA_val, iter)
+                                  land_mark, theta, exp_d, NA_val, iter,
+                                  metrics, connectivity_function_name,
+                                  cost_function_name, sensitivity_wrt,
+                                  sensitivity_method,
+                                  sensitivity_landscape_measure,
+                                  sensitivity_unitless,
+                                  sensitivity_one_out_of,
+                                  sensitivity_diagvalue,
+                                  sensitivity_target_equal_source,
+                                  sensitivity_require_landmark_one)
 
                 if result == "done"
                     success = true

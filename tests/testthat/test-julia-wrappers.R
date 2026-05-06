@@ -26,7 +26,7 @@ test_that("Grid prepares raster inputs and dispatches to Julia", {
   out <- Grid(affinities = r, sources = r, targets = r, costs = "x -> -log(x)")
 
   expect_s3_class(out, "julia_grid")
-  expect_match(calls[[1]]$code, "mapnz")
+  expect_match(calls[[1]]$code, "MinusLog")
   expect_true(is.matrix(calls[[1]]$args$affinities))
   expect_true(is.nan(calls[[1]]$args$sources[1, 2]))
 })
@@ -61,7 +61,8 @@ test_that("Julia wrapper functions pass expected code to juliaLet", {
     betweenness_kweighted = list(fun = getFromNamespace("betweenness_kweighted", "ConScapeRtools"), args = list(h = "h", alpha = 2), pattern = "betweenness_kweighted"),
     coarse_grid = list(fun = getFromNamespace("coarse_grid", "ConScapeRtools"), args = list(g = "g", land_mark = 5L), pattern = "coarse_graining"),
     connected_habitat = list(fun = getFromNamespace("connected_habitat", "ConScapeRtools"), args = list(h = "h", alpha = 2), pattern = "connected_habitat"),
-    expected_cost = list(fun = getFromNamespace("expected_cost", "ConScapeRtools"), args = list(h = "h"), pattern = "expected_cost")
+    expected_cost = list(fun = getFromNamespace("expected_cost", "ConScapeRtools"), args = list(h = "h"), pattern = "expected_cost"),
+    sensitivity = list(fun = getFromNamespace("sensitivity", "ConScapeRtools"), args = list(h = "h", wrt = "Q"), pattern = "sensitivity")
   )
 
   code_seen <- character()

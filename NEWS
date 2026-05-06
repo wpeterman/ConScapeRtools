@@ -1,3 +1,12 @@
+ConScapeRtools 0.4.10
+---------
+* Added ConScape-aligned API helpers for inspecting input slots and configuring sensitivity analyses
+* Generalized `run_conscape()` arguments for source qualities, target qualities, affinities, cost functions, connectivity functions, metrics, and sensitivity outputs
+* Added Julia runner support for additional ConScape metrics and sensitivity outputs when available in the installed Julia package
+* Expanded package documentation for tiled workflows, ConScape slot mapping, movement affinity inputs, and sensitivity interpretation
+* Added a detailed user guide vignette in the style of the `multiScaleR` guide
+* Extended tests for API normalization, sensitivity specifications, plotting, and Julia wrapper argument handling
+
 ConScapeRtools 0.4.9
 ---------
 * Increased unit test coverage above 75 percent
