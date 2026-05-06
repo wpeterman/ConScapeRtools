@@ -78,10 +78,10 @@ ConScape tile outputs.
 library(ConScapeRtools)
 
 ## Import data
-s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 source <- terra::rast(s)
 
-a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
 jl_home <- "/path/to/julia/bin"
@@ -120,14 +120,18 @@ cs_res <- run_conscape(conscape_prep = prep,
                        out_dir = "conscape_out",
                        jl_home = jl_home)
 
-cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
-                           method = 'mosaic',
-                           crs = crs(source))
-cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
+cs_btwn <- mosaic_conscape(out_dir = cs_res$outdir_btwn,
                            tile_trim = tile_trim,
-                           crs = crs(source))
+                           method = 'mosaic',
+                           crs = terra::crs(source))
+cs_fcon <- mosaic_conscape(out_dir = cs_res$outdir_fcon,
+                           tile_trim = tile_trim,
+                           crs = terra::crs(source))
 plot(c(cs_btwn, cs_fcon))
-}#' @seealso [conscape_prep()], [run_conscape()], [make_tiles()]
+}
+}
+\seealso{
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=run_conscape]{run_conscape()}}
 }
 \author{
 Bill Peterman

@@ -10,7 +10,7 @@ A ASC file. Original CRS: UTM zone 17N.
 Map representing the habitat quality in each pixel in an area.
 }
 \examples{
-(f <- system.file("data/suitability.asc", package = "ConScapeRtools"))
+(f <- system.file("extdata", "suitability.asc", package = "ConScapeRtools"))
 r <- terra::rast(f)
 plot(r)
 

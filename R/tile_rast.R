@@ -42,12 +42,12 @@ tile_rast <- function(r,
   cs_tiles      <- tiles$cs_tiles
   overlap_cells <- tiles$overlap_cells
 
-  resx <- res(r)[1]
-  resy <- res(r)[2]
+  resx <- terra::res(r)[1]
+  resy <- terra::res(r)[2]
 
   # extend raster by overlap_cells cells on all sides
-  r_ext <- extend(r, c(overlap_cells, overlap_cells,
-                       overlap_cells, overlap_cells))
+  r_ext <- terra::extend(r, c(overlap_cells, overlap_cells,
+                              overlap_cells, overlap_cells))
 
   # output directory
   if (is.null(out_dir)) {
@@ -69,11 +69,11 @@ tile_rast <- function(r,
   # build extended extents for each interior tile
   tiles_ext <- lapply(seq_len(n_tiles), function(i) {
     te <- cs_tiles[i]  # subset SpatVector
-    ext(
-      xmin(te) - overlap_cells * resx,
-      xmax(te) + overlap_cells * resx,
-      ymin(te) - overlap_cells * resy,
-      ymax(te) + overlap_cells * resy
+    terra::ext(
+      terra::xmin(te) - overlap_cells * resx,
+      terra::xmax(te) + overlap_cells * resx,
+      terra::ymin(te) - overlap_cells * resy,
+      terra::ymax(te) + overlap_cells * resy
     )
   })
 
@@ -88,8 +88,8 @@ tile_rast <- function(r,
                         title = paste0("Processing ", basename(write_dir), " rasters..."))
     }
 
-    r_tile <- crop(r_ext, tiles_ext[[idx]])
-    writeRaster(
+    r_tile <- terra::crop(r_ext, tiles_ext[[idx]])
+    terra::writeRaster(
       r_tile,
       filename = file.path(write_dir, paste0("r_", idx, ".asc")),
       NAflag   = -9999,

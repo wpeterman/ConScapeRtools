@@ -36,8 +36,8 @@ validate_conscape_tiles_idx <- function(target_dir,
   n_fin_m <- vapply(m_files, .finite_n, numeric(1))
 
   ok <- (n_fin_t > 0) & (n_fin_s > 0) & (n_fin_m > 0)
-  ok_idx  <- which(ok)
-  bad_idx <- which(!ok)
+  ok_idx  <- unname(which(ok))
+  bad_idx <- unname(which(!ok))
 
   bad_df <- data.frame(
     idx = bad_idx,

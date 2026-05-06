@@ -71,10 +71,10 @@
 #' library(ConScapeRtools)
 #'
 #' ## Import data
-#' s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+#' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 #' source <- terra::rast(s)
 #'
-#' a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+#' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 #' resist <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
@@ -105,6 +105,10 @@ tile_design <- function(r_mov,
                         max_d,
                         theta = 0.1,
                         jl_home) {
+  if (is.null(r_source) && is.null(r_target)) {
+    stop("At least one of r_source or r_target must be provided.")
+  }
+
   Sys.setenv(JULIA_BINDIR = jl_home)
   if(!juliaSetupOk())
     stop("Check that the path to the Julia binary directory is correct")
@@ -118,29 +122,29 @@ tile_design <- function(r_mov,
   }
 
   threshold <- 0.025
-  r_res <- res(r_mov)
+  r_res <- terra::res(r_mov)
   dim <- ceiling((4 * max_d) / r_res)
-  r_crs <- crs(r_mov)
+  r_crs <- terra::crs(r_mov)
   cntr_cell <- floor(median(1:dim[1]))
   cntr_coord <- c(cntr_cell * r_res[1],
                   cntr_cell * r_res[1])
 
   ## Max Values
-  mx_p <- global(r_mov, 'max', na.rm = T)
-  mx_src <- global(r_source, 'max', na.rm = T)
-  mx_target <- global(r_target, 'max', na.rm = T)
+  mx_p <- terra::global(r_mov, 'max', na.rm = TRUE)
+  mx_src <- terra::global(r_source, 'max', na.rm = TRUE)
+  mx_target <- terra::global(r_target, 'max', na.rm = TRUE)
 
   ## Create rast
   rmat <- matrix(NaN, dim[1], dim[1]) #mx_p
   diag(rmat) <- mx_p
-  src <- target <- mov <- rast(nrows = dim[1], ncols = dim[1],
-                               vals = unlist(rmat),
-                               resolution = r_res, crs = r_crs,
-                               xmin = 0, xmax = r_res[1] * dim[1],
-                               ymin = 0, ymax = r_res[1] * dim[1])
+  src <- target <- mov <- terra::rast(nrows = dim[1], ncols = dim[1],
+                                      vals = unlist(rmat),
+                                      resolution = r_res, crs = r_crs,
+                                      xmin = 0, xmax = r_res[1] * dim[1],
+                                      ymin = 0, ymax = r_res[1] * dim[1])
   target[target > 0] <- mx_target[[1]]
   src[src > 0] <- mx_src[[1]]
-  e_dist <- as.matrix(dist(crds(target)))[,1]
+  e_dist <- as.matrix(dist(terra::crds(target)))[,1]
 
   max_cell <- which.min(abs(e_dist - max_d))
 

@@ -244,7 +244,7 @@ layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
 }
 }
 \seealso{
-\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}\emph{]()}]()_]()
+\code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=tile_design]{tile_design()}}, \code{\link[=mosaic_conscape]{mosaic_conscape()}}
 }
 \author{
 Bill Peterman

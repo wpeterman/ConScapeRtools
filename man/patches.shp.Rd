@@ -10,7 +10,7 @@ A SHP file. Original CRS: UTM zone 17N.
 A shapefile delineating potential habitat patches.
 }
 \examples{
-(f <- system.file("data/patches.shp", package = "ConScapeRtools"))
+(f <- system.file("extdata", "patches.shp", package = "ConScapeRtools"))
 p <- terra::vect(f)
 plot(p)
 

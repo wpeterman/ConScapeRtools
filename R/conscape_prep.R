@@ -75,10 +75,10 @@
 #' library(ConScapeRtools)
 #'
 #' ## Import data
-#' s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+#' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 #' source <- terra::rast(s)
 #'
-#' a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+#' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 #' resist <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
@@ -135,17 +135,18 @@ conscape_prep <- function(tile_d,
                           landmark = 10L,
                           progress = TRUE) {
 
-  setGDALconfig("GDAL_PAM_ENABLED", "FALSE")
+  terra::setGDALconfig("GDAL_PAM_ENABLED", "FALSE")
+  on.exit(terra::setGDALconfig("GDAL_PAM_ENABLED", "TRUE"), add = TRUE)
 
   ## ----- basic checks: extents and resolutions -----
   rasters <- list(r_target = r_target, r_mov = r_mov, r_src = r_src)
 
   # extents
-  if (!all(sapply(rasters, function(x) all.equal(ext(x), ext(r_target))))) {
+  if (!all(vapply(rasters, function(x) isTRUE(all.equal(terra::ext(x), terra::ext(r_target))), logical(1)))) {
     stop("All rasters (r_target, r_mov, r_src) must have the same extent.")
   }
   # resolution
-  if (!all(sapply(rasters, function(x) all.equal(res(x), res(r_target))))) {
+  if (!all(vapply(rasters, function(x) isTRUE(all.equal(terra::res(x), terra::res(r_target))), logical(1)))) {
     stop("All rasters (r_target, r_mov, r_src) must have the same resolution.")
   }
 
@@ -168,15 +169,12 @@ conscape_prep <- function(tile_d,
   ## ----- create and write mask (this is what run_conscape expects) -----
 
   # binary mask based on target_threshold
-  t_mask <- r_target
-  t_mask[is.na(t_mask)] <- 0
-  t_mask[t_mask <  target_threshold] <- 0
-  t_mask[t_mask >= target_threshold] <- 1
+  t_mask <- terra::ifel(is.na(r_target) | r_target < target_threshold, 0, 1)
 
   mask_dir <- file.path(asc_dir, "mask")
   if (!dir.exists(mask_dir)) dir.create(mask_dir, recursive = TRUE)
 
-  writeRaster(
+  terra::writeRaster(
     t_mask,
     filename = file.path(mask_dir, "mask.asc"),
     overwrite = TRUE,
@@ -226,7 +224,7 @@ conscape_prep <- function(tile_d,
     progress   = progress
   )
 
-  cat("\nValidating tiles...\n")
+  if (progress) cat("\nValidating tiles...\n")
   # Ensure a stable sequential id exists (optional but helpful for tracking)
   if (!("tile_id" %in% names(tile_design$cs_tiles))) {
     tile_design$cs_tiles$tile_id <- seq_len(nrow(tile_design$cs_tiles))
@@ -237,11 +235,12 @@ conscape_prep <- function(tile_d,
     source_dir = src_tiles$asc_dir,
     move_dir   = mov_tiles$asc_dir,
     delete_bad = TRUE,
-    quiet      = FALSE
+    quiet      = !progress
   )
 
   # Subset polygons by row index, not filename-derived IDs
   tile_design$cs_tiles <- tile_design$cs_tiles[val$ok_idx, , drop = FALSE]
+  tile_design$tile_num <- tile_design$tile_num[val$ok_idx]
 
   # Save bookkeeping
   tile_design$tile_idx <- val$ok_idx
@@ -252,12 +251,12 @@ conscape_prep <- function(tile_d,
   )
 
   ## ----- write tile polygons for reference -----
-  writeVector(tile_design$cs_tiles,
-              file.path(asc_dir, "tiles.shp"),
-              overwrite = TRUE)
+  terra::writeVector(tile_design$cs_tiles,
+                     file.path(asc_dir, "tiles.shp"),
+                     overwrite = TRUE)
 
   ## ----- return prep object -----
-  setGDALconfig("GDAL_PAM_ENABLED", "TRUE")
+  terra::setGDALconfig("GDAL_PAM_ENABLED", "TRUE")
 
   out <- list(
     cs_tiles  = tile_design$cs_tiles,

@@ -11,7 +11,7 @@ Map representing the affinities (i.e. the likelihood of movement) across
 each pixel in an area.
 }
 \examples{
-(f <- system.file("data/affinity", package = "ConScapeRtools"))
+(f <- system.file("extdata", "affinity.asc", package = "ConScapeRtools"))
 r <- terra::rast(f)
 plot(r)
 

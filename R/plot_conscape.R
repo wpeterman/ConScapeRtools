@@ -15,6 +15,7 @@
 #'
 #' @importFrom terra plot
 #' @importFrom graphics par mtext title
+#' @method plot ConScapeResults
 #' @export
 plot.ConScapeResults <- function(x, ...) {
   # Input validation

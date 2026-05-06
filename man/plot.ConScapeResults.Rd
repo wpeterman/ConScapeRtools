@@ -4,7 +4,7 @@
 \alias{plot.ConScapeResults}
 \title{Plot Method for ConScapeResults Objects}
 \usage{
-plot.ConScapeResults(x, ...)
+\method{plot}{ConScapeResults}(x, ...)
 }
 \arguments{
 \item{x}{A ConScapeResults object containing \verb{$btwn} and \verb{$fcon} SpatRaster objects}

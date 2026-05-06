@@ -1,3 +1,10 @@
+ConScapeRtools 0.4.8
+---------
+* Cleaned package metadata and documentation for CRAN compatibility
+* Added unit tests for tiling, validation, masking, and mosaicking workflows
+* Fixed distributed Julia batch script lookup
+* Updated raster helper calls and S3 registration to satisfy package checks
+
 ConScapeRtools 0.4.7
 ---------
 * Updated tile validation to avoid reducing over empty grids

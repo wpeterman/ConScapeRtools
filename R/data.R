@@ -9,7 +9,7 @@
 #' @format A ASC file. Original CRS UTM zone 17N.
 #'
 #' @examples
-#' (f <- system.file("data/affinity", package = "ConScapeRtools"))
+#' (f <- system.file("extdata", "affinity.asc", package = "ConScapeRtools"))
 #' r <- terra::rast(f)
 #' plot(r)
 #'
@@ -26,7 +26,7 @@ NULL
 #' @format A ASC file. Original CRS: UTM zone 17N.
 #'
 #' @examples
-#' (f <- system.file("data/suitability.asc", package = "ConScapeRtools"))
+#' (f <- system.file("extdata", "suitability.asc", package = "ConScapeRtools"))
 #' r <- terra::rast(f)
 #' plot(r)
 #'
@@ -42,7 +42,7 @@ NULL
 #' @format A SHP file. Original CRS: UTM zone 17N.
 #'
 #' @examples
-#' (f <- system.file("data/patches.shp", package = "ConScapeRtools"))
+#' (f <- system.file("extdata", "patches.shp", package = "ConScapeRtools"))
 #' p <- terra::vect(f)
 #' plot(p)
 #'

@@ -89,8 +89,8 @@ make_tiles <- function(r,
                        tile_trim,
                        landmark = 10L) {
 
-  resx <- res(r)[1]
-  resy <- res(r)[2]
+  resx <- terra::res(r)[1]
+  resy <- terra::res(r)[2]
   if (!isTRUE(all.equal(resx, resy))) {
     warning("Non-square cells; using x-resolution.")
   }
@@ -106,8 +106,8 @@ make_tiles <- function(r,
   col_starts <- seq(1L, ncols, by = tile_cells)
   row_starts <- seq(1L, nrows, by = tile_cells)
 
-  xmin_r <- xmin(r); xmax_r <- xmax(r)
-  ymin_r <- ymin(r); ymax_r <- ymax(r)
+  xmin_r <- terra::xmin(r); xmax_r <- terra::xmax(r)
+  ymin_r <- terra::ymin(r); ymax_r <- terra::ymax(r)
 
   tiles_int <- vector("list", length(col_starts) * length(row_starts))
   idx <- 1L
@@ -124,15 +124,15 @@ make_tiles <- function(r,
       y_max <- ymax_r - (rs - 1L) * resy
       y_min <- ymax_r - re        * resy
 
-      tiles_int[[idx]] <- ext(x_min, x_max, y_min, y_max)
+      tiles_int[[idx]] <- terra::ext(x_min, x_max, y_min, y_max)
       idx <- idx + 1L
     }
   }
 
-  cs_tiles <- vect(do.call(c, lapply(tiles_int, as.polygons)))
+  cs_tiles <- terra::vect(do.call(c, lapply(tiles_int, terra::as.polygons)))
 
   # npix = landmark (number of pixels in coarse-grain window)
-  # tile_trim = user’s requested *minimum* overlap in map units
+  # tile_trim = user's requested *minimum* overlap in map units
 
   min_cells <- max(
     floor(npix / 2),          # need at least half-window on each side

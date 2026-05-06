@@ -1,3 +1,12 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^\.gitignore$
+^\.Rhistory$
+^examples$
+^tiles_test$
+^cran-comments\.md$
+^.*\.Rcheck$
+^ConScapeRtools_.*\.tar\.gz$
+^\.positai$
+^\.claude$

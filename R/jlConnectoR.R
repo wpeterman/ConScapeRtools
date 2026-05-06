@@ -159,7 +159,7 @@ vec2mat <- function(vec, g){
 #' @noRd
 #'
 GridRSP <- function(g, theta) {
-  h <- juliaLet("ConScape.GridRSP(g, θ=theta)", g=g, theta=theta)
+  h <- juliaLet("ConScape.GridRSP(g, \u03b8=theta)", g=g, theta=theta)
   return(h)
 }
 

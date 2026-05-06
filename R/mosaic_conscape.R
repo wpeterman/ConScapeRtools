@@ -62,10 +62,10 @@
 #' library(ConScapeRtools)
 #'
 #' ## Import data
-#' s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+#' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 #' source <- terra::rast(s)
 #'
-#' a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+#' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 #' resist <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
@@ -105,14 +105,16 @@
 #'                        jl_home = jl_home)
 #'
 ## Put output tiles together
-#' cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
-#'                            method = 'mosaic',
-#'                            crs = crs(source))
-#' cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
+#' cs_btwn <- mosaic_conscape(out_dir = cs_res$outdir_btwn,
 #'                            tile_trim = tile_trim,
-#'                            crs = crs(source))
+#'                            method = 'mosaic',
+#'                            crs = terra::crs(source))
+#' cs_fcon <- mosaic_conscape(out_dir = cs_res$outdir_fcon,
+#'                            tile_trim = tile_trim,
+#'                            crs = terra::crs(source))
 #' plot(c(cs_btwn, cs_fcon))
-#' }#' @seealso [conscape_prep()], [run_conscape()], [make_tiles()]
+#' }
+#' @seealso [conscape_prep()], [run_conscape()]
 #' @author Bill Peterman
 #' @importFrom terra merge
 
@@ -134,19 +136,19 @@ mosaic_conscape <- function(out_dir,
   if (length(tile_files) == 0) stop("No raster files found in out_dir")
 
   # Read all tiles
-  r_list <- lapply(tile_files, rast)
+  r_list <- lapply(tile_files, terra::rast)
 
   if (tile_trim > 0) {
-    resx <- res(r_list[[1]])[1]
-    resy <- res(r_list[[1]])[2]
+    resx <- terra::res(r_list[[1]])[1]
+    resy <- terra::res(r_list[[1]])[2]
 
     trim_cols <- round(tile_trim / resx)
     trim_rows <- round(tile_trim / resy)
 
     r_list <- lapply(r_list, function(x) {
-      e   <- ext(x)
-      rx  <- res(x)[1]
-      ry  <- res(x)[2]
+      e   <- terra::ext(x)
+      rx  <- terra::res(x)[1]
+      ry  <- terra::res(x)[2]
       nc  <- ncol(x)
       nr  <- nrow(x)
 
@@ -158,50 +160,59 @@ mosaic_conscape <- function(out_dir,
         return(x)  # nothing to trim safely
       }
 
-      ext_trim <- ext(
+      ext_trim <- terra::ext(
         e$xmin + tc * rx,
         e$xmax - tc * rx,
         e$ymin + tr * ry,
         e$ymax - tr * ry
       )
-      crop(x, ext_trim)
+      terra::crop(x, ext_trim)
     })
   }
 
   # Combine tiles
-  rc <- sprc(r_list)
+  rc <- terra::sprc(r_list)
   r_out <- if (method == "mosaic") {
-    mosaic(rc, fun = "mean")
+    terra::mosaic(rc, fun = "mean")
   } else {
-    merge(rc)  # no algo / method tweaks
+    terra::merge(rc)  # no algo / method tweaks
   }
 
   # Apply CRS if provided
-  if (!is.null(crs)) crs(r_out) <- crs
+  if (!is.null(crs)) terra::crs(r_out) <- crs
 
   # Apply mask if provided
   # if (!is.null(mask)) r_out <- r_out * mask
   if (!is.null(mask)) {
 
-    # Ensure same CRS
-    if (!is.null(crs(mask)) && !is.null(crs(r_out)) &&
-        crs(mask) != crs(r_out)) {
+    # Ensure same CRS when both rasters carry a non-empty CRS.
+    mask_crs <- terra::crs(mask)
+    out_crs <- terra::crs(r_out)
+    has_mask_crs <- !is.null(mask_crs) && length(mask_crs) == 1L && !is.na(mask_crs) && nzchar(mask_crs)
+    has_out_crs <- !is.null(out_crs) && length(out_crs) == 1L && !is.na(out_crs) && nzchar(out_crs)
+    if (has_mask_crs && has_out_crs && mask_crs != out_crs) {
       stop("CRS of mask and r_out differ")
+    }
+    if (has_mask_crs && !has_out_crs) terra::crs(r_out) <- mask_crs
+    if (!has_mask_crs && has_out_crs) terra::crs(mask) <- out_crs
+    if (!has_mask_crs && !has_out_crs) {
+      terra::crs(r_out) <- ""
+      terra::crs(mask) <- ""
     }
 
     # If extents/resolutions differ slightly, bring r_out onto the mask grid
-    same_geom <- isTRUE(all.equal(ext(r_out), ext(mask))) &&
-      isTRUE(all.equal(res(r_out), res(mask)))
+    same_geom <- isTRUE(all.equal(terra::ext(r_out), terra::ext(mask))) &&
+      isTRUE(all.equal(terra::res(r_out), terra::res(mask)))
 
     if (!same_geom) {
       # try to bring r_out onto mask grid
-      r_out <- crop(r_out, mask)
-      same_geom <- isTRUE(all.equal(ext(r_out), ext(mask))) &&
-        isTRUE(all.equal(res(r_out), res(mask)))
+      r_out <- terra::crop(r_out, mask)
+      same_geom <- isTRUE(all.equal(terra::ext(r_out), terra::ext(mask))) &&
+        isTRUE(all.equal(terra::res(r_out), terra::res(mask)))
 
       if (!same_geom) {
         # last resort: resample r_out to mask grid
-        r_out <- resample(r_out, mask, method = "near")
+        r_out <- terra::resample(r_out, mask, method = "near")
       }
     }
 

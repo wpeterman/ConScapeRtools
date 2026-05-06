@@ -1,10 +1,10 @@
 library(ConScapeRtools)
 
 ## Import data
-s <- system.file("data/suitability.asc", package = "ConScapeRtools")
+s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
 source <- terra::rast(s)
 
-a <- system.file("data/affinity.asc", package = "ConScapeRtools")
+a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
 resist <- terra::rast(a)
 
 jl_home <- "C:/Users/peterman.73/AppData/Local/Programs/Julia-1.10.5/bin/"
@@ -50,9 +50,10 @@ cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
 
 ## Put output tiles together
 cs_btwn <- mosaic_conscape(out_dir = cs_run$outdir_btwn,
+                           tile_trim = tile_trim,
                            method = 'mosaic',
-                           crs = crs(source))
+                           crs = terra::crs(source))
 cs_fcon <- mosaic_conscape(out_dir = cs_run$outdir_fcon,
                            tile_trim = tile_trim,
-                           crs = crs(source))
+                           crs = terra::crs(source))
 plot(c(cs_btwn, cs_fcon))

@@ -99,7 +99,7 @@
 #' When run on a single `SpatRaster` (no tiling), the function returns a
 #' two-layer `SpatRaster` with layers named `"btwn"` and `"fcon"`.
 #'
-#' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()]_]()_]()_]()
+#' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()]
 #' @export
 #' @examples
 #' \dontrun{
@@ -244,6 +244,7 @@ run_conscape <- function(conscape_prep = NULL,
   }
 
   single_rast <- FALSE
+  target_mask <- NULL
 
   if(!is.null(conscape_prep) & inherits(conscape_prep, 'ConScapeRtools_prep')){
     target_dir <- conscape_prep$target
@@ -253,7 +254,7 @@ run_conscape <- function(conscape_prep = NULL,
     hab_src <- list.files(src_dir, pattern = "\\.asc$")
     mov_prob <- list.files(mov_dir, pattern = "\\.asc$")
     landmark <- conscape_prep$landmark
-    target_mask <- rast(file.path(conscape_prep$asc_dir, 'mask', "mask.asc"))
+    target_mask <- terra::rast(file.path(conscape_prep$asc_dir, 'mask', "mask.asc"))
     tile_trim <- conscape_prep$tile_trim
   }
 
@@ -269,12 +270,12 @@ run_conscape <- function(conscape_prep = NULL,
         inherits(hab_src,    'SpatRaster') &&
         inherits(mov_prob,   'SpatRaster')) {
 
-      if (!isTRUE(all.equal(ext(hab_target), ext(hab_src))) ||
-          !isTRUE(all.equal(ext(hab_target), ext(mov_prob)))) {
+      if (!isTRUE(all.equal(terra::ext(hab_target), terra::ext(hab_src))) ||
+          !isTRUE(all.equal(terra::ext(hab_target), terra::ext(mov_prob)))) {
         stop("When passing SpatRasters directly, hab_target, hab_src, and mov_prob must share extent.")
       }
-      if (!isTRUE(all.equal(res(hab_target), res(hab_src))) ||
-          !isTRUE(all.equal(res(hab_target), res(mov_prob)))) {
+      if (!isTRUE(all.equal(terra::res(hab_target), terra::res(hab_src))) ||
+          !isTRUE(all.equal(terra::res(hab_target), terra::res(mov_prob)))) {
         stop("When passing SpatRasters directly, hab_target, hab_src, and mov_prob must share resolution.")
       }
     }
@@ -283,9 +284,9 @@ run_conscape <- function(conscape_prep = NULL,
     extend_if_needed <- function(r) {
       if (!inherits(r, "SpatRaster")) return(NULL)
       if (tile_trim <= 0) return(r)
-      e0    <- ext(r)
+      e0    <- terra::ext(r)
       e_ext <- e0 + tile_trim   # same pattern as original prep
-      extend(r, e_ext, fill = NA)
+      terra::extend(r, e_ext, fill = NA)
     }
 
     ## target
@@ -295,8 +296,8 @@ run_conscape <- function(conscape_prep = NULL,
 
       hab_target_write <- file.path(tempdir(), "hab_target.asc")
       suppressWarnings(
-        try(writeRaster(r_use, hab_target_write,
-                        overwrite = TRUE, NAflag = -9999),
+        try(terra::writeRaster(r_use, hab_target_write,
+                               overwrite = TRUE, NAflag = -9999),
             silent = TRUE)
       )
       hab_target_dir <- dirname(hab_target_write)
@@ -309,8 +310,8 @@ run_conscape <- function(conscape_prep = NULL,
 
       hab_src_write <- file.path(tempdir(), "hab_src.asc")
       suppressWarnings(
-        try(writeRaster(r_use, hab_src_write,
-                        overwrite = TRUE, NAflag = -9999),
+        try(terra::writeRaster(r_use, hab_src_write,
+                               overwrite = TRUE, NAflag = -9999),
             silent = TRUE)
       )
       hab_src_dir <- dirname(hab_src_write)
@@ -323,8 +324,8 @@ run_conscape <- function(conscape_prep = NULL,
 
       mov_prob_write <- file.path(tempdir(), "mov_prob.asc")
       suppressWarnings(
-        try(writeRaster(r_use, mov_prob_write,
-                        overwrite = TRUE, NAflag = -9999),
+        try(terra::writeRaster(r_use, mov_prob_write,
+                               overwrite = TRUE, NAflag = -9999),
             silent = TRUE)
       )
       mov_prob_dir <- dirname(mov_prob_write)
@@ -420,7 +421,7 @@ run_conscape <- function(conscape_prep = NULL,
         invisible(juliaEval("using Distributed"))
         invisible(juliaEval(paste0("addprocs(",workers,")")))
 
-        conscape_batch_file <- normalizePath(system.file('extdata', 'conscape_batch_distributed2.jl', package = 'ConScapeRtools'), winslash = "/")
+        conscape_batch_file <- normalizePath(system.file('extdata', 'conscape_batch_distributed.jl', package = 'ConScapeRtools'), winslash = "/")
         conscape_batch_file <- paste0('include("', conscape_batch_file, '")')
 
         conscape_file <- normalizePath(system.file('extdata', 'conscape.jl', package = 'ConScapeRtools'), winslash = "/")
@@ -525,12 +526,12 @@ run_conscape <- function(conscape_prep = NULL,
                             tile_trim = tile_trim,
                             method = 'merge',
                             mask = target_mask,
-                            crs = crs(target_mask))
+                            crs = terra::crs(target_mask))
     fcon <- mosaic_conscape(out_dir = out$outdir_fcon,
                             tile_trim = tile_trim,
                             mask = target_mask,
                             method = 'merge',
-                            crs = crs(target_mask))
+                            crs = terra::crs(target_mask))
 
     if(!is.null(conscape_prep) & inherits(conscape_prep, 'ConScapeRtools_prep')){
       # crs(btwn) <- crs(fcon) <- crs(target_mask)
@@ -555,32 +556,33 @@ run_conscape <- function(conscape_prep = NULL,
     class(out) <- "ConScapeResults"
 
     if (isTRUE(single_rast)) {
-      btwn <- rast(list.files(normalizePath(file.path(out_dir, "btwn")),
-                              full.names = TRUE))
-      fcon <- rast(list.files(normalizePath(file.path(out_dir, "fcon")),
-                              full.names = TRUE))
+      btwn <- terra::rast(list.files(normalizePath(file.path(out_dir, "btwn")),
+                                     full.names = TRUE))
+      fcon <- terra::rast(list.files(normalizePath(file.path(out_dir, "fcon")),
+                                     full.names = TRUE))
 
       ## determine original (pre-extension) extent
       orig_ext <- NULL
       if (inherits(hab_target, "SpatRaster")) {
-        orig_ext <- ext(hab_target)
+        orig_ext <- terra::ext(hab_target)
       } else if (inherits(hab_src, "SpatRaster")) {
-        orig_ext <- ext(hab_src)
+        orig_ext <- terra::ext(hab_src)
       } else if (inherits(mov_prob, "SpatRaster")) {
-        orig_ext <- ext(mov_prob)
+        orig_ext <- terra::ext(mov_prob)
       }
 
       if (!is.null(orig_ext)) {
-        btwn <- crop(btwn, orig_ext)
-        fcon <- crop(fcon, orig_ext)
+        btwn <- terra::crop(btwn, orig_ext)
+        fcon <- terra::crop(fcon, orig_ext)
       }
 
       if (inherits(mov_prob, "SpatRaster")) {
-        crs(btwn) <- crs(fcon) <- crs(mov_prob)
+        terra::crs(btwn) <- terra::crs(mov_prob)
+        terra::crs(fcon) <- terra::crs(mov_prob)
       }
 
-      out <- rast(list(btwn = btwn,
-                       fcon = fcon))
+      out <- terra::rast(list(btwn = btwn,
+                              fcon = fcon))
     }
 
     # if(isTRUE(single_rast)){
