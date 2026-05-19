@@ -42,24 +42,29 @@ the ConScape / ConScapeR environment.}
 \value{
 A named list of class \code{"ConScapeRtools_design"} with elements:
 \itemize{
-\item \code{exp_d} – calibrated exponential decay parameter for distance
-transformation in ConScape.
-\item \code{tile_d} – suggested minimum tile width (map units).
-\item \code{tile_trim} – suggested minimum tile overlap / trim width (map units).
-\item \code{theta} – the \code{theta} value used when calibrating \code{exp_d}.
+\item \code{distance_scale} – calibrated exponential decay parameter (numerator of
+\code{exp(-dist / distance_scale)}) to pass to \code{\link[=run_conscape]{run_conscape()}}. Also
+accessible as \code{exp_d} for backwards compatibility.
+\item \code{exp_d} – same as \code{distance_scale}; retained for backwards compatibility.
+\item \code{tile_d} – suggested minimum interior tile width (map units) for
+\code{\link[=conscape_prep]{conscape_prep()}}.
+\item \code{tile_trim} – suggested minimum tile overlap / trim width (map units) for
+\code{\link[=conscape_prep]{conscape_prep()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
+\item \code{theta} – the \code{theta} value used for calibration, to pass to
+\code{\link[=run_conscape]{run_conscape()}}.
 }
 
 The function also prints a short, colorized summary of these design
 parameters to the console.
 }
 \description{
-Uses the resolution and values of a movement–probability raster to
-derive a suitable exponential decay parameter (\code{exp_d}) and suggested
-tile width (\code{tile_d}) and overlap (\code{tile_trim}) for ConScape analyses,
-given a presumed maximum dispersal distance in ideal habitat.
-Internally, this builds a small synthetic landscape, runs ConScape's
-randomized shortest–path model, and calibrates the decay so that
-proximity at \code{max_d} matches a user–defined threshold.
+Uses the resolution and values of a movement affinity raster to derive a
+calibrated exponential decay parameter (\code{distance_scale}) and suggested tile
+width (\code{tile_d}) and overlap (\code{tile_trim}) for ConScape analyses, given a
+presumed maximum dispersal distance in ideal habitat. Internally, this builds
+a small synthetic landscape, runs ConScape's randomized shortest-path model,
+and calibrates the decay so that proximity at \code{max_d} drops to a specified
+threshold.
 }
 \details{
 The input \code{r_mov} must be in a projected CRS so that cell resolution and
@@ -71,20 +76,19 @@ of the movement grid to the maximum movement probability, and assigns
 constant maximum source and target quality.
 
 A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
-costs are computed from the center cell to all others. The decay
-parameter \code{exp_d} is chosen by 1D optimization so that the exponential
-proximity at the cell closest to \code{max_d} drops to a specified
-threshold. This \code{exp_d} is then used to derive:
+costs are computed from the center cell to all others. The decay parameter
+\code{distance_scale} is chosen by 1D optimization so that the exponential
+proximity at the cell closest to \code{max_d} drops to a specified threshold.
+This value is then used to derive:
 \itemize{
 \item \code{tile_d} – a suggested minimum interior tile width for ConScape runs,
-\item \code{tile_trim} – a suggested minimum overlap between tiles, chosen so
-that contributions beyond the trimmed edge are negligible under the
+\item \code{tile_trim} – a suggested minimum tile overlap, chosen so that
+contributions from beyond the trimmed edge are negligible under the
 calibrated decay.
 }
 
-These outputs are intended to be passed to \code{\link[=conscape_prep]{conscape_prep()}} (for
-\code{tile_d} and \code{tile_trim}) and to \code{\link[=run_conscape]{run_conscape()}} (for \code{exp_d} and
-\code{theta}).
+Pass \code{tile_d} and \code{tile_trim} to \code{\link[=conscape_prep]{conscape_prep()}}, and \code{distance_scale}
+and \code{theta} to \code{\link[=run_conscape]{run_conscape()}}.
 
 \code{r_mov} must be in a projected coordinate reference system.
 The function relies on helper routines adapted from the \code{ConScapeR}
@@ -95,20 +99,24 @@ package (https://github.com/ConScape/ConScapeR) and uses Julia via
 \dontrun{
 library(ConScapeRtools)
 
-## Import data
+## Import example data
 s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
-source <- terra::rast(s)
+habitat <- terra::rast(s)
 
 a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
-resist <- terra::rast(a)
+affinity <- terra::rast(a)
 
 jl_home <- "/path/to/julia/bin"
 
-td <- tile_design(r_mov = resist,
-                  r_target = source,
-                  max_d = 7000,
-                  theta = 0.1,
-                  jl_home = jl_home)
+td <- tile_design(r_mov    = affinity,
+                  r_target = habitat,
+                  max_d    = 7000,
+                  theta    = 0.1,
+                  jl_home  = jl_home)
+
+## Pass results directly to conscape_prep() and run_conscape()
+# td$tile_d, td$tile_trim  --> conscape_prep()
+# td$distance_scale, td$theta --> run_conscape()
 }
 }
 \seealso{

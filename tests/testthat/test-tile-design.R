@@ -41,7 +41,8 @@ test_that("tile_design uses target as source when source is omitted", {
   )
 
   expect_s3_class(out, "ConScapeRtools_design")
-  expect_named(out, c("exp_d", "tile_d", "tile_trim", "theta"))
+  expect_named(out, c("distance_scale", "exp_d", "tile_d", "tile_trim", "theta"))
+  expect_equal(out$distance_scale, out$exp_d)
   expect_equal(out$theta, 0.2)
   expect_gt(out$tile_d, 0)
   expect_gt(out$tile_trim, 0)

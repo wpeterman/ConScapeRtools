@@ -9,43 +9,48 @@
 #'   created by [conscape_prep()]. When supplied, this provides the tile
 #'   layout, directories for source/target/movement tiles, the mask, and
 #'   `landmark` / `tile_trim` values. If `NULL` (default), the user must
-#'   supply `hab_target`, `hab_src`, and `mov_prob` directly.
-#' @param out_dir Directory where final ConScape outputs will be written.
-#'   Subdirectories `"btwn"` and `"fcon"` are created inside `out_dir`.
-#' @param hab_target,target_qualities Either (i) a path to a directory
-#'   containing target-quality tiles (`*.asc`) or (ii) a single `SpatRaster`
-#'   used as the ConScape `target_qualities` layer. `hab_target` is retained
-#'   as a backwards-compatible alias.
-#' @param hab_src,source_qualities Either (i) a path to a directory containing
-#'   source-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as the
-#'   ConScape `source_qualities` layer. `hab_src` is retained as a
+#'   supply `target_qualities`, `source_qualities`, and `affinities` directly.
+#' @param out_dir Directory where ConScape outputs will be written. Metric
+#'   subdirectories (e.g., `"btwn"`, `"fcon"`) are created inside `out_dir`.
+#' @param target_qualities Either (i) a path to a directory containing
+#'   target-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as
+#'   ConScape's `target_qualities` layer — cells that can *receive*
+#'   connectivity. The legacy name `hab_target` is accepted as a
 #'   backwards-compatible alias.
-#' @param mov_prob,affinities Either (i) a path to a directory containing
+#' @param source_qualities Either (i) a path to a directory containing
+#'   source-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as
+#'   ConScape's `source_qualities` layer — cells that *generate* connectivity.
+#'   The legacy name `hab_src` is accepted as a backwards-compatible alias.
+#' @param affinities Either (i) a path to a directory containing
 #'   affinity/permeability tiles (`*.asc`) or (ii) a single `SpatRaster` used
-#'   to build ConScape `affinities` with `graph_matrix_from_raster()`.
-#'   `mov_prob` is retained as a backwards-compatible alias.
+#'   to build ConScape's `affinities` adjacency matrix via
+#'   `graph_matrix_from_raster()`. Values should be higher where movement is
+#'   easier (i.e., permeability, not resistance). The legacy name `mov_prob`
+#'   is accepted as a backwards-compatible alias.
 #' @param clear_dir Logical. If `TRUE` (default), any existing contents
 #'   of `out_dir` are removed before writing new results. If `FALSE` and
 #'   `out_dir` is not empty, the function stops with an error.
-#' @param landmark Landmark value used for ConScape's `coarse_graining`
-#'   (default `10L`). When `conscape_prep` is provided, this is taken
-#'   from that object and does not need to be set manually.
+#' @param landmark Integer coarse-graining window size passed to ConScape's
+#'   `coarse_graining()` (default `10L`). Larger values aggregate target
+#'   qualities to fewer cells, reducing computation. When `conscape_prep` is
+#'   provided, `landmark` is taken from that object. Set `landmark = 1L` for
+#'   sensitivity runs so that target qualities are not altered by coarse graining.
 #' @param theta Parameter controlling the amount of randomness in paths.
 #'   As `theta` approaches 0, movement is increasingly random; as `theta`
-#'   becomes large, paths approach deterministic least-cost paths.
-#'   Default is `0.01`.
-#' @param exp_d Numerator of the exponential decay function used when
-#'   transforming distance in the movement grid (i.e. `exp(-dist / exp_d)`).
-#'   Default is `150`. This is typically set from [tile_design()].
-#' @param distance_scale Clearer alias for `exp_d`. Use one or the other.
+#'   increases, paths approach deterministic least-cost paths. Default is `0.01`.
+#'   Obtain a landscape-specific value from [tile_design()].
+#' @param distance_scale Numerator of the exponential distance-to-proximity
+#'   transformation used by ConScape (i.e., `exp(-dist / distance_scale)`).
+#'   Default is `150`. Use the value returned by [tile_design()] for a
+#'   landscape-calibrated decay. The legacy name `exp_d` is accepted as a
+#'   backwards-compatible alias.
 #' @param NA_val Backwards-compatible argument retained for older workflows.
 #'   The current Julia runner treats `NA` affinities as absent graph cells and
 #'   `NA` source/target qualities as zero quality.
 #' @param mosaic Logical (default `TRUE`). When running on tiles
 #'   (via `conscape_prep` or directory inputs), tile-level outputs are
 #'   mosaicked into continuous rasters using [mosaic_conscape()]. When
-#'   running on a single raster (`SpatRaster` inputs), `mosaic` is
-#'   ignored.
+#'   running on a single raster (`SpatRaster` inputs), `mosaic` is ignored.
 #' @param jl_home Path to the `bin` directory where the Julia executable
 #'   is installed. Used by `JuliaConnectoR` to initialize ConScape.
 #' @param parallel Logical. If `FALSE` (default), tiles are processed
@@ -55,96 +60,106 @@
 #'   `parallel = TRUE`. Default is `1`.
 #' @param distributed Logical. When `parallel = TRUE` and
 #'   `parallel_R = FALSE`, controls whether Julia uses distributed
-#'   workers (`TRUE`) or multithreading (`FALSE`).
-#' @param progress Logical. If `TRUE`, progress information is printed
-#'   for serial and R-parallel runs. Progress reporting from Julia
-#'   parallel runs may be less consistent.
+#'   workers (`TRUE`) or multithreading (`FALSE`, default).
+#' @param progress Logical. If `TRUE` (default), progress information is
+#'   printed for serial and R-parallel runs. Progress reporting from Julia
+#'   parallel runs may be less detailed.
 #' @param parallel_R Logical. If `TRUE`, tiles are processed in parallel
-#'   using R (`future/future.apply`). If `FALSE` (default), parallelism
+#'   using R (`future`/`future.apply`). If `FALSE` (default), parallelism
 #'   is handled entirely within Julia.
-#' @param tile_trim Width of the overlapping border (in map units) that
-#'   will be trimmed from each tile when mosaicking. When `conscape_prep`
-#'   is supplied, this parameter is taken from that object and passed to
+#' @param tile_trim Width of the overlapping border (in map units) to
+#'   trim from each tile when mosaicking. When `conscape_prep` is supplied,
+#'   this value is taken from that object and passed automatically to
 #'   [mosaic_conscape()]. When running on a single `SpatRaster`, `tile_trim`
-#'   controls how far the input rasters are extended (buffered) on all
-#'   sides before ConScape is run; the output is subsequently cropped
-#'   back to the original extent so that tiled and untiled runs are
-#'   comparable.
-#' @param cost_function Cost transformation used by `ConScape.Grid(costs = ...)`.
-#'   Supported named values are `"minuslog"` (default), `"inverse"`,
-#'   `"odds_against"`, `"odds_for"`, and `"expminus"`. A Julia lambda string
-#'   such as `"x -> -log(x)"` can also be supplied, in which case a cost matrix
-#'   is created with `ConScape.mapnz()`.
-#' @param connectivity_function ConScape distance/proximity function used by
-#'   metrics that require a landscape matrix. Supported values are
+#'   controls how far the rasters are buffered on all sides before ConScape
+#'   runs; the output is then cropped to the original extent so that tiled
+#'   and untiled results are comparable.
+#' @param cost_function Cost transformation applied to `affinities` when
+#'   building the ConScape graph (`ConScape.Grid(costs = ...)`). Named
+#'   options are `"minuslog"` (default), `"inverse"`, `"odds_against"`,
+#'   `"odds_for"`, and `"expminus"`. A Julia lambda string such as
+#'   `"x -> -log(x)"` may also be supplied, in which case costs are
+#'   constructed with `ConScape.mapnz()`.
+#' @param connectivity_function ConScape distance or proximity function
+#'   used to build the landscape matrix for metrics. Supported values are
 #'   `"expected_cost"` (default), `"least_cost_distance"`,
 #'   `"free_energy_distance"`, `"survival_probability"`, and
 #'   `"power_mean_proximity"`.
-#' @param metrics Character vector of raster-valued ConScape metrics to write.
-#'   Supported values are `"connected_habitat"`, `"betweenness_kweighted"`,
-#'   `"betweenness_qweighted"`, and `"criticality"`. The aliases `"fcon"` and
-#'   `"btwn"` are accepted.
+#' @param metrics Character vector of raster-valued ConScape metrics to
+#'   compute. Supported values are `"connected_habitat"`,
+#'   `"betweenness_kweighted"`, `"betweenness_qweighted"`, and
+#'   `"criticality"`. The short aliases `"fcon"` and `"btwn"` are also
+#'   accepted. Defaults to `c("betweenness_kweighted", "connected_habitat")`.
 #' @param sensitivity Optional sensitivity specification created by
-#'   [conscape_sensitivity()]. `TRUE` uses the default quality and linked
-#'   affinity-cost elasticities; a character vector is interpreted as `wrt`
-#'   values passed to [conscape_sensitivity()].
+#'   [conscape_sensitivity()]. Pass `TRUE` for the default quality and linked
+#'   affinity-cost elasticities; pass a character vector to specify `wrt`
+#'   values directly. See [conscape_sensitivity()] for full options.
+#' @param hab_target Deprecated. Use `target_qualities` instead.
+#' @param hab_src Deprecated. Use `source_qualities` instead.
+#' @param mov_prob Deprecated. Use `affinities` instead.
+#' @param exp_d Deprecated. Use `distance_scale` instead.
 #'
 #' @details
-#' In typical workflows, data are prepared using [conscape_prep()] and
-#' the resulting object is supplied via `conscape_prep`. This ensures
-#' that source, target, and movement tiles share the same tiling scheme,
-#' that coarse-graining landmarks are aligned, and that a mask and
-#' `tile_trim` value are available for mosaicking.
+#' In typical workflows, rasters are prepared with [conscape_prep()] and
+#' the resulting object is supplied via `conscape_prep`. This ensures that
+#' `target_qualities`, `source_qualities`, and `affinities` tiles share the
+#' same tiling scheme, that coarse-graining landmarks are aligned across tiles,
+#' and that a habitat mask and `tile_trim` value are available for mosaicking.
 #'
-#' If `conscape_prep` is not provided, the function can operate on:
-#' * directories of `*.asc` tiles (`hab_target`, `hab_src`, `mov_prob`),
-#'   or
-#' * three `SpatRaster` objects of identical extent and resolution
-#'   (`hab_target`, `hab_src`, `mov_prob`), in which case ConScape is
-#'   run on the full (untiled) landscape.
+#' When `conscape_prep` is `NULL`, the function can operate on:
+#' * Directories of `*.asc` tiles passed to `target_qualities`,
+#'   `source_qualities`, and `affinities`, or
+#' * Three `SpatRaster` objects of identical extent and resolution passed to
+#'   `target_qualities`, `source_qualities`, and `affinities`, in which case
+#'   ConScape is run on the full (untiled) landscape.
 #'
-#' When `parallel = TRUE`, either R-level parallelization (with
-#' `parallel_R = TRUE`) or Julia-level parallelization (with
-#' `parallel_R = FALSE`) is used. The choice between Julia threading and
-#' Julia distributed workers is controlled by `distributed`.
+#' When `parallel = TRUE`, parallelization is handled either in R (with
+#' `parallel_R = TRUE`, using `future`/`future.apply`) or in Julia (with
+#' `parallel_R = FALSE`). For Julia-level parallelism, the `distributed`
+#' argument selects between multithreading (`FALSE`, default) and distributed
+#' workers (`TRUE`).
 #'
-#' The default run writes `connected_habitat` and `betweenness_kweighted`,
-#' which correspond to the historical `fcon` and `btwn` outputs. Additional
-#' metrics are requested with `metrics`. All metric names are passed to the
-#' bundled Julia runner, which computes each requested surface on the same
-#' `GridRSP` object.
+#' The default run computes `connected_habitat` and `betweenness_kweighted`,
+#' corresponding to the historical `fcon` and `btwn` output layers. Additional
+#' metrics are requested with `metrics`. All metrics are passed to the bundled
+#' Julia runner, which builds a single `GridRSP` object and then evaluates
+#' each requested surface on it.
 #'
-#' Sensitivity outputs are requested with [conscape_sensitivity()]. These
-#' surfaces are computed after the `GridRSP` object is built and are written to
-#' directories named for the output, for example `"elasticity_quality"` or
-#' `"elasticity_affinity_cost_linked"`. Analytical sensitivity requires a
-#' ConScape installation that provides `ConScape.sensitivity`; the current CRAN
-#' release of ConScape may not yet include that function. When the function is
-#' unavailable, the Julia runner stops with an explicit message rather than
-#' silently returning an approximate substitute.
+#' Sensitivity outputs are requested by passing a [conscape_sensitivity()]
+#' specification to `sensitivity`. These surfaces are computed after the
+#' `GridRSP` object is built and written to directories named for the output,
+#' for example `"elasticity_quality"` or `"elasticity_affinity_cost_linked"`.
+#' Analytical sensitivity requires a ConScape installation that provides
+#' `ConScape.sensitivity`; when that function is unavailable the Julia runner
+#' stops with an explicit message.
 #'
 #' Tiled sensitivity uses the same tiling and mosaicking machinery as the
-#' default betweenness and connected-habitat outputs. It should be treated as a
-#' tile-local approximation to the full-landscape sensitivity, so choose a
-#' `tile_trim` large enough that paths crossing tile edges have negligible
-#' influence on the interior cells retained by [mosaic_conscape()]. For
-#' sensitivity runs, use `landmark = 1L` unless you have a specific reason to
-#' test coarse-grained target qualities, because the ConScape sensitivity API
-#' currently assumes target quality equals source quality.
+#' default metric outputs. It is a tile-local approximation to full-landscape
+#' sensitivity, so choose a `tile_trim` large enough that paths crossing tile
+#' edges have negligible influence on interior retained cells. For sensitivity
+#' runs, use `landmark = 1L` so that coarse-graining does not alter target
+#' qualities (the ConScape sensitivity API currently requires target quality
+#' to equal source quality).
 #'
 #' @return
-#' If `mosaic = TRUE` and tiles are used (`!single_rast` internally),
-#' returns an object of class `"ConScapeResults"` containing:
+#' When tiles are used and `mosaic = TRUE`, returns an object of class
+#' `"ConScapeResults"` — a named list containing:
 #'
-#' * `btwn` – `SpatRaster` of k-weighted betweenness when requested,
-#' * `fcon` – `SpatRaster` of connected habitat when requested,
-#' * additional metric or sensitivity rasters named by output layer,
-#' * `outdirs` – named list of tile-level output directories,
-#' * `outdir_btwn` and `outdir_fcon` – backwards-compatible paths for the
-#'   default betweenness and connected-habitat outputs when requested.
+#' * `btwn` – `SpatRaster` of k-weighted betweenness (`betweenness_kweighted`),
+#'   when requested.
+#' * `fcon` – `SpatRaster` of connected habitat (`connected_habitat`), when
+#'   requested.
+#' * Additional metric or sensitivity `SpatRaster` layers named by their output
+#'   identifier (e.g., `"btwn_qweighted"`, `"elasticity_quality"`).
+#' * `outdirs` – named list mapping each output layer to its tile-level
+#'   directory.
+#' * `outdir_btwn` and `outdir_fcon` – backwards-compatible named paths for
+#'   the default betweenness and connected-habitat tile directories.
 #'
-#' When run on a single `SpatRaster` (no tiling), the function returns a
-#' two-layer `SpatRaster` with layers named `"btwn"` and `"fcon"`.
+#' When run on a single untiled `SpatRaster`, returns a multi-layer
+#' `SpatRaster` with one layer per requested metric and/or sensitivity output,
+#' named by their output identifiers (e.g., `"btwn"`, `"fcon"`,
+#' `"elasticity_quality"`).
 #'
 #' @seealso [conscape_prep()], [tile_design()], [mosaic_conscape()],
 #'   [conscape_sensitivity()], [conscape_api_slots()]
@@ -153,110 +168,93 @@
 #' \dontrun{
 #' library(ConScapeRtools)
 #'
-#' ## Import data
+#' ## Import example data
 #' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
-#' source <- terra::rast(s)
+#' habitat <- terra::rast(s)
 #'
 #' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
-#' resist <- terra::rast(a)
+#' affinity <- terra::rast(a)
 #'
-#' jl_home <- "/path/to/julia/bin" # Update
+#' jl_home <- "/path/to/julia/bin" # Update to your Julia installation
 #'
-#' td <- tile_design(r_mov = resist,
-#'                   r_target = source,
-#'                   max_d = 8500,
-#'                   theta = 0.15,
-#'                   jl_home = jl_home)
+#' ## Calibrate decay and tiling parameters
+#' td <- tile_design(r_mov    = affinity,
+#'                   r_target = habitat,
+#'                   max_d    = 8500,
+#'                   theta    = 0.15,
+#'                   jl_home  = jl_home)
 #'
-#' ## Tile dimension
-#' tile_d <- td$tile_d
+#' ## Prepare tiled rasters
+#' prep <- conscape_prep(tile_d         = td$tile_d,
+#'                       tile_trim      = td$tile_trim,
+#'                       r_target       = habitat,
+#'                       r_mov          = affinity,
+#'                       r_src          = habitat,
+#'                       clear_dir      = TRUE,
+#'                       landmark       = 5L)
 #'
-#' # How much to trim tiles
-#' tile_trim <- td$tile_trim
+#' ## Serial run (tiled)
+#' cs_serial <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#'                           conscape_prep  = prep,
+#'                           theta          = td$theta,
+#'                           distance_scale = td$distance_scale,
+#'                           jl_home        = jl_home)
 #'
-#' # Makes computation more efficient
-#' landmark <- 5L # Must be an integer, not numeric
+#' ## R-parallel run
+#' cs_r <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#'                      conscape_prep  = prep,
+#'                      theta          = td$theta,
+#'                      distance_scale = td$distance_scale,
+#'                      jl_home        = jl_home,
+#'                      parallel       = TRUE,
+#'                      workers        = 4,
+#'                      parallel_R     = TRUE)
 #'
-#' # Controls level of randomness of paths
-#' theta <- td$theta
+#' ## Julia threaded parallel
+#' cs_thread <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#'                           conscape_prep  = prep,
+#'                           theta          = td$theta,
+#'                           distance_scale = td$distance_scale,
+#'                           jl_home        = jl_home,
+#'                           parallel       = TRUE,
+#'                           workers        = 4)
 #'
-#' # Controls rate of decay with distance
-#' exp_d <- td$exp_d
+#' ## Julia distributed parallel
+#' cs_dist <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#'                         conscape_prep  = prep,
+#'                         theta          = td$theta,
+#'                         distance_scale = td$distance_scale,
+#'                         jl_home        = jl_home,
+#'                         parallel       = TRUE,
+#'                         workers        = 4,
+#'                         distributed    = TRUE)
+#' plot(cs_dist)
 #'
-#' ## Prepare data for analysis
-#' prep <- conscape_prep(tile_d = tile_d,
-#'                       tile_trim = tile_trim,
-#'                       r_target = source,
-#'                       r_mov = resist,
-#'                       r_src = source,
-#'                       clear_dir = T,
-#'                       landmark = landmark)
+#' ## Untiled run — only suitable for small to moderate rasters
+#' cs_single <- run_conscape(out_dir          = file.path(prep$asc_dir, "results"),
+#'                           target_qualities = habitat,
+#'                           source_qualities = habitat,
+#'                           affinities       = affinity,
+#'                           theta            = td$theta,
+#'                           distance_scale   = td$distance_scale,
+#'                           landmark         = 5L,
+#'                           jl_home          = jl_home)
 #'
-#' ## Run ConScape
-#' ## No parallelization
-#' cs_run.serial <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-#'                               conscape_prep = prep,
-#'                               theta = theta,
-#'                               exp_d = exp_d,
-#'                               jl_home = jl_home,
-#'                               parallel = F)
-#'
-#' ## Parallel within R
-#' cs_run.r <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-#'                          conscape_prep = prep,
-#'                          theta = theta,
-#'                          exp_d = exp_d,
-#'                          jl_home = jl_home,
-#'                          parallel = T,
-#'                          workers = 4,
-#'                          parallel_R = TRUE)
-#' ## Threaded parallel
-#' cs_run.thread <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-#'                               conscape_prep = prep,
-#'                               theta = theta,
-#'                               exp_d = exp_d,
-#'                               jl_home = jl_home,
-#'                               parallel = T,
-#'                               workers = 4)
-#'
-#' ## Distributed parallel
-#' cs_run.dist <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-#'                             conscape_prep = prep,
-#'                             theta = theta,
-#'                             exp_d = exp_d,
-#'                             jl_home = jl_home,
-#'                             parallel = T,
-#'                             workers = 4,
-#'                             distributed = TRUE)
-#' plot(cs_run.dist)
-#'
-#' ## No tiling --> Only attempt with small to moderate sized rasters!
-#' cs_run <- run_conscape(out_dir = file.path(prep$asc_dir,"results"),
-#'                        hab_target = source,
-#'                        hab_src = source,
-#'                        mov_prob = resist,
-#'                        theta = theta,
-#'                        exp_d = exp_d,
-#'                        landmark = landmark,
-#'                        jl_home = jl_home)
-#'
-#' plot(cs_run.serial$fcon - cs_run$fcon, main = "Tiled minus untiled")
-#' plot(cs_run.serial$fcon, main = "Tiled")
-#' plot(cs_run$fcon, main = "Untiled")
-#' layerCor(c(cs_run$fcon, cs_run.serial$fcon), fun = 'cor')
-#' layerCor(c(cs_run$btwn, cs_run.serial$btwn), fun = 'cor')
+#' plot(cs_serial$fcon - cs_single$fcon, main = "Tiled minus untiled")
+#' layerCor(c(cs_single$fcon, cs_serial$fcon), fun = "cor")
+#' layerCor(c(cs_single$btwn, cs_serial$btwn), fun = "cor")
 #' }
 #' @author Bill Peterman
 #' @importFrom JuliaConnectoR juliaImport juliaEval juliaSetupOk juliaGet juliaCall stopJulia
 run_conscape <- function(conscape_prep = NULL,
                          out_dir,
-                         hab_target = NULL,
-                         hab_src = NULL,
-                         mov_prob = NULL,
+                         target_qualities = NULL,
+                         source_qualities = NULL,
+                         affinities = NULL,
                          clear_dir = TRUE,
                          landmark = 10L,
                          theta = 0.01,
-                         exp_d = 150,
+                         distance_scale = 150,
                          NA_val = 1e-50,
                          mosaic = TRUE,
                          jl_home,
@@ -266,38 +264,44 @@ run_conscape <- function(conscape_prep = NULL,
                          progress = TRUE,
                          parallel_R = FALSE,
                          tile_trim = 0,
-                         target_qualities = NULL,
-                         source_qualities = NULL,
-                         affinities = NULL,
-                         distance_scale = NULL,
                          cost_function = "minuslog",
                          connectivity_function = "expected_cost",
                          metrics = c("betweenness_kweighted", "connected_habitat"),
-                         sensitivity = NULL){
-  if (!is.null(target_qualities)) {
-    if (!is.null(hab_target)) {
-      stop("Use either hab_target or target_qualities, not both.", call. = FALSE)
+                         sensitivity = NULL,
+                         hab_target = NULL,
+                         hab_src = NULL,
+                         mov_prob = NULL,
+                         exp_d = NULL){
+  ## --- resolve deprecated aliases ---
+  if (!is.null(hab_target)) {
+    if (!is.null(target_qualities)) {
+      stop("Use either target_qualities or hab_target, not both.", call. = FALSE)
     }
-    hab_target <- target_qualities
+    target_qualities <- hab_target
   }
-  if (!is.null(source_qualities)) {
-    if (!is.null(hab_src)) {
-      stop("Use either hab_src or source_qualities, not both.", call. = FALSE)
+  if (!is.null(hab_src)) {
+    if (!is.null(source_qualities)) {
+      stop("Use either source_qualities or hab_src, not both.", call. = FALSE)
     }
-    hab_src <- source_qualities
+    source_qualities <- hab_src
   }
-  if (!is.null(affinities)) {
-    if (!is.null(mov_prob)) {
-      stop("Use either mov_prob or affinities, not both.", call. = FALSE)
+  if (!is.null(mov_prob)) {
+    if (!is.null(affinities)) {
+      stop("Use either affinities or mov_prob, not both.", call. = FALSE)
     }
-    mov_prob <- affinities
+    affinities <- mov_prob
   }
-  if (!is.null(distance_scale)) {
-    if (!missing(exp_d)) {
-      stop("Use either exp_d or distance_scale, not both.", call. = FALSE)
+  if (!is.null(exp_d)) {
+    if (!missing(distance_scale)) {
+      stop("Use either distance_scale or exp_d, not both.", call. = FALSE)
     }
-    exp_d <- distance_scale
+    distance_scale <- exp_d   # legacy: override the default 150
   }
+  ## Map internal names used throughout body
+  hab_target <- target_qualities
+  hab_src    <- source_qualities
+  mov_prob   <- affinities
+  exp_d      <- distance_scale
   if (!is.numeric(exp_d) || length(exp_d) != 1L || is.na(exp_d) || exp_d <= 0) {
     stop("distance_scale/exp_d must be a single positive numeric value.", call. = FALSE)
   }

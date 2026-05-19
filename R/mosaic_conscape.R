@@ -56,62 +56,49 @@
 #'
 #' @export
 #' @examples
-#' # example code
-#'
 #' \dontrun{
 #' library(ConScapeRtools)
 #'
-#' ## Import data
+#' ## Import example data
 #' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
-#' source <- terra::rast(s)
+#' habitat <- terra::rast(s)
 #'
 #' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
-#' resist <- terra::rast(a)
+#' affinity <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
 #'
-#' td <- tile_design(r_mov = resist,
-#'                   r_source = source,
-#'                   max_d = 7000,
-#'                   theta = 0.1,
-#'                   jl_home = jl_home)
+#' td <- tile_design(r_mov    = affinity,
+#'                   r_target = habitat,
+#'                   max_d    = 7000,
+#'                   theta    = 0.1,
+#'                   jl_home  = jl_home)
 #'
-#' ## Tile dimension
-#' tile_d <- td$tile_d
+#' prep <- conscape_prep(tile_d    = td$tile_d,
+#'                       tile_trim = td$tile_trim,
+#'                       r_target  = habitat,
+#'                       r_mov     = affinity,
+#'                       r_src     = habitat,
+#'                       clear_dir = TRUE,
+#'                       landmark  = 5L)
 #'
-#' # How much to trim tiles
-#' tile_trim <- td$tile_trim
+#' cs_res <- run_conscape(conscape_prep  = prep,
+#'                        out_dir        = "conscape_out",
+#'                        theta          = td$theta,
+#'                        distance_scale = td$distance_scale,
+#'                        jl_home        = jl_home)
 #'
-#' # Makes computation more efficient
-#' landmark <- 5L # Must be an integer, not numeric
-#'
-#' # Controls level of randomness of paths
-#' theta <- td$theta
-#'
-#' # Controls rate of decay with distance
-#' exp_d <- td$exp_d
-#'
-#' ## Prepare data for analysis
-#' prep <- conscape_prep(tile_d = tile_d,
-#'                       tile_trim = tile_trim,
-#'                       r_target = source,
-#'                       r_mov = resist,
-#'                       r_src = source,
-#'                       clear_dir = T,
-#'                       landmark = landmark)
-#'
-#' cs_res <- run_conscape(conscape_prep = prep,
-#'                        out_dir = "conscape_out",
-#'                        jl_home = jl_home)
-#'
-## Put output tiles together
-#' cs_btwn <- mosaic_conscape(out_dir = cs_res$outdir_btwn,
-#'                            tile_trim = tile_trim,
-#'                            method = 'mosaic',
-#'                            crs = terra::crs(source))
-#' cs_fcon <- mosaic_conscape(out_dir = cs_res$outdir_fcon,
-#'                            tile_trim = tile_trim,
-#'                            crs = terra::crs(source))
+#' ## Manually reassemble tile outputs (done automatically when mosaic = TRUE)
+#' mask <- terra::rast(file.path(prep$asc_dir, "mask", "mask.asc"))
+#' cs_btwn <- mosaic_conscape(out_dir   = cs_res$outdir_btwn,
+#'                            mask      = mask,
+#'                            tile_trim = prep$tile_trim,
+#'                            method    = "mosaic",
+#'                            crs       = terra::crs(habitat))
+#' cs_fcon <- mosaic_conscape(out_dir   = cs_res$outdir_fcon,
+#'                            mask      = mask,
+#'                            tile_trim = prep$tile_trim,
+#'                            crs       = terra::crs(habitat))
 #' plot(c(cs_btwn, cs_fcon))
 #' }
 #' @seealso [conscape_prep()], [run_conscape()]

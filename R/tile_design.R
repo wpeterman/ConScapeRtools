@@ -1,13 +1,13 @@
 #' Design tiling and decay parameters for ConScape
 #'
 #' @description
-#' Uses the resolution and values of a movement–probability raster to
-#' derive a suitable exponential decay parameter (`exp_d`) and suggested
-#' tile width (`tile_d`) and overlap (`tile_trim`) for ConScape analyses,
-#' given a presumed maximum dispersal distance in ideal habitat.
-#' Internally, this builds a small synthetic landscape, runs ConScape's
-#' randomized shortest–path model, and calibrates the decay so that
-#' proximity at `max_d` matches a user–defined threshold.
+#' Uses the resolution and values of a movement affinity raster to derive a
+#' calibrated exponential decay parameter (`distance_scale`) and suggested tile
+#' width (`tile_d`) and overlap (`tile_trim`) for ConScape analyses, given a
+#' presumed maximum dispersal distance in ideal habitat. Internally, this builds
+#' a small synthetic landscape, runs ConScape's randomized shortest-path model,
+#' and calibrates the decay so that proximity at `max_d` drops to a specified
+#' threshold.
 #'
 #' @param r_mov `SpatRaster` representing movement affinities/permeability.
 #'   Values should be in a projected coordinate reference system (map units in
@@ -39,28 +39,32 @@
 #' constant maximum source and target quality.
 #'
 #' A ConScape `Grid` and `GridRSP` object are then created, and expected
-#' costs are computed from the center cell to all others. The decay
-#' parameter `exp_d` is chosen by 1D optimization so that the exponential
-#' proximity at the cell closest to `max_d` drops to a specified
-#' threshold. This `exp_d` is then used to derive:
+#' costs are computed from the center cell to all others. The decay parameter
+#' `distance_scale` is chosen by 1D optimization so that the exponential
+#' proximity at the cell closest to `max_d` drops to a specified threshold.
+#' This value is then used to derive:
 #'
 #' * `tile_d` – a suggested minimum interior tile width for ConScape runs,
-#' * `tile_trim` – a suggested minimum overlap between tiles, chosen so
-#'   that contributions beyond the trimmed edge are negligible under the
+#' * `tile_trim` – a suggested minimum tile overlap, chosen so that
+#'   contributions from beyond the trimmed edge are negligible under the
 #'   calibrated decay.
 #'
-#' These outputs are intended to be passed to [conscape_prep()] (for
-#' `tile_d` and `tile_trim`) and to [run_conscape()] (for `exp_d` and
-#' `theta`).
+#' Pass `tile_d` and `tile_trim` to [conscape_prep()], and `distance_scale`
+#' and `theta` to [run_conscape()].
 #'
 #' @return
 #' A named list of class `"ConScapeRtools_design"` with elements:
 #'
-#' * `exp_d` – calibrated exponential decay parameter for distance
-#'   transformation in ConScape.
-#' * `tile_d` – suggested minimum tile width (map units).
-#' * `tile_trim` – suggested minimum tile overlap / trim width (map units).
-#' * `theta` – the `theta` value used when calibrating `exp_d`.
+#' * `distance_scale` – calibrated exponential decay parameter (numerator of
+#'   `exp(-dist / distance_scale)`) to pass to [run_conscape()]. Also
+#'   accessible as `exp_d` for backwards compatibility.
+#' * `exp_d` – same as `distance_scale`; retained for backwards compatibility.
+#' * `tile_d` – suggested minimum interior tile width (map units) for
+#'   [conscape_prep()].
+#' * `tile_trim` – suggested minimum tile overlap / trim width (map units) for
+#'   [conscape_prep()] and [mosaic_conscape()].
+#' * `theta` – the `theta` value used for calibration, to pass to
+#'   [run_conscape()].
 #'
 #' The function also prints a short, colorized summary of these design
 #' parameters to the console.
@@ -70,20 +74,24 @@
 #' \dontrun{
 #' library(ConScapeRtools)
 #'
-#' ## Import data
+#' ## Import example data
 #' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
-#' source <- terra::rast(s)
+#' habitat <- terra::rast(s)
 #'
 #' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
-#' resist <- terra::rast(a)
+#' affinity <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
 #'
-#' td <- tile_design(r_mov = resist,
-#'                   r_target = source,
-#'                   max_d = 7000,
-#'                   theta = 0.1,
-#'                   jl_home = jl_home)
+#' td <- tile_design(r_mov    = affinity,
+#'                   r_target = habitat,
+#'                   max_d    = 7000,
+#'                   theta    = 0.1,
+#'                   jl_home  = jl_home)
+#'
+#' ## Pass results directly to conscape_prep() and run_conscape()
+#' # td$tile_d, td$tile_trim  --> conscape_prep()
+#' # td$distance_scale, td$theta --> run_conscape()
 #' }
 #' @seealso [conscape_prep()], [run_conscape()]
 #' @author Bill Peterman
@@ -182,14 +190,16 @@ tile_design <- function(r_mov,
   # }
   tile_trim <- ceiling((tile_max - trim_d) / r_res[1])[[1]] * r_res[1]
 
-  out <- list(exp_d = as.numeric(round(exp_d$maximum,1)),
+  exp_d_val <- as.numeric(round(exp_d$maximum, 1))
+  out <- list(distance_scale = exp_d_val,
+              exp_d = exp_d_val,
               tile_d = as.numeric(tile_max),
               tile_trim = as.numeric(tile_trim),
               theta = as.numeric(theta))
 
   cat(green("\n" %+% cyan("     *** Tile Design Parameters ***") %+%"\n",
             "Given a maximum dispersal of " %+% red$bold(max_d) %+%" meters,\n",
-            "The `exp_d` parameter should be set to: " %+% red$bold(out$exp_d) %+% "\n\n",
+            "`distance_scale` should be set to: " %+% red$bold(out$distance_scale) %+% "\n\n",
             "`tile_d` should be at least: " %+% red$bold(out$tile_d) %+%",\n\n",
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'

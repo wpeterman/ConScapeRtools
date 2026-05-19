@@ -91,19 +91,20 @@ specified maximum distance.
 jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.11.4/bin"
 
 td <- tile_design(
-  r_mov = affinity,
+  r_mov    = affinity,
   r_target = habitat,
-  max_d = 8500,
-  theta = 0.1,
-  jl_home = jl_home
+  max_d    = 8500,
+  theta    = 0.1,
+  jl_home  = jl_home
 )
 
-td$distance_scale <- td$exp_d
 td
 ```
 
-The returned `tile_d` and `tile_trim` are map-unit distances. They are designed
-to be passed directly to `conscape_prep()`.
+The returned list includes `distance_scale` (the calibrated decay parameter),
+`tile_d`, `tile_trim`, and `theta` — all in the map units of the input raster.
+Pass `tile_d` and `tile_trim` to `conscape_prep()`, and `distance_scale` and
+`theta` to `run_conscape()`.
 
 # Preparing Tiles
 
@@ -134,38 +135,40 @@ the coarse-grained target cells fall in consistent locations across tiles.
 
 # Running Connectivity Metrics
 
-The default `run_conscape()` call computes the two historical outputs:
+The default `run_conscape()` call computes two connectivity surfaces:
 
-- `btwn`: ConScape `betweenness_kweighted()`
-- `fcon`: ConScape `connected_habitat()`
+- `btwn`: ConScape `betweenness_kweighted()` — how strongly each cell
+  contributes to quality-weighted movement across the landscape.
+- `fcon`: ConScape `connected_habitat()` — how much quality-weighted target
+  habitat is effectively reachable from each source cell.
 
 ```{r run-default, eval=FALSE}
 cs <- run_conscape(
-  conscape_prep = prep,
-  out_dir = "conscape_results",
-  theta = td$theta,
-  distance_scale = td$exp_d,
-  jl_home = jl_home,
-  parallel = TRUE,
-  workers = 4
+  conscape_prep  = prep,
+  out_dir        = "conscape_results",
+  theta          = td$theta,
+  distance_scale = td$distance_scale,
+  jl_home        = jl_home,
+  parallel       = TRUE,
+  workers        = 4
 )
 
 plot(cs)
 ```
 
-The same call can be written with explicit ConScape-aligned argument names when
-running a single, untiled landscape.
+For small to moderate rasters that do not require tiling, pass `SpatRaster`
+objects directly using the ConScape-aligned argument names.
 
 ```{r run-single, eval=FALSE}
 single <- run_conscape(
-  out_dir = "single_results",
+  out_dir          = "single_results",
   target_qualities = habitat,
   source_qualities = habitat,
-  affinities = affinity,
-  theta = 0.1,
-  distance_scale = 150,
-  landmark = 5L,
-  jl_home = jl_home
+  affinities       = affinity,
+  theta            = td$theta,
+  distance_scale   = td$distance_scale,
+  landmark         = 5L,
+  jl_home          = jl_home
 )
 ```
 
@@ -176,7 +179,7 @@ cs_more <- run_conscape(
   conscape_prep = prep,
   out_dir = "conscape_more_metrics",
   theta = td$theta,
-  distance_scale = td$exp_d,
+  distance_scale = td$distance_scale,
   metrics = c("connected_habitat", "betweenness_kweighted",
               "betweenness_qweighted", "criticality"),
   jl_home = jl_home
@@ -214,14 +217,14 @@ Use `unitless = FALSE` for raw unit-change sensitivities.
 
 ```{r sensitivity-run, eval=FALSE}
 cs_sens <- run_conscape(
-  conscape_prep = prep,
-  out_dir = "conscape_sensitivity",
-  theta = td$theta,
-  distance_scale = td$exp_d,
-  landmark = 1L,
-  metrics = c("connected_habitat", "betweenness_kweighted"),
-  sensitivity = sens,
-  jl_home = jl_home
+  conscape_prep  = prep,
+  out_dir        = "conscape_sensitivity",
+  theta          = td$theta,
+  distance_scale = td$distance_scale,
+  landmark       = 1L,
+  metrics        = c("connected_habitat", "betweenness_kweighted"),
+  sensitivity    = sens,
+  jl_home        = jl_home
 )
 
 names(cs_sens)
@@ -250,41 +253,41 @@ A conservative tiled sensitivity workflow is:
 
 ```{r tiled-sensitivity-template, eval=FALSE}
 td <- tile_design(
-  r_mov = affinity,
+  r_mov    = affinity,
   r_target = habitat,
-  max_d = 8500,
-  theta = 0.1,
-  jl_home = jl_home
+  max_d    = 8500,
+  theta    = 0.1,
+  jl_home  = jl_home
 )
 
 prep_sens <- conscape_prep(
-  tile_d = td$tile_d,
-  tile_trim = td$tile_trim,
-  asc_dir = "conscape_sensitivity_tiles",
-  r_target = habitat,
-  r_src = habitat,
-  r_mov = affinity,
+  tile_d           = td$tile_d,
+  tile_trim        = td$tile_trim,
+  asc_dir          = "conscape_sensitivity_tiles",
+  r_target         = habitat,
+  r_src            = habitat,
+  r_mov            = affinity,
   target_threshold = 0,
-  landmark = 1L,
-  clear_dir = TRUE
+  landmark         = 1L,
+  clear_dir        = TRUE
 )
 
 cs_sens <- run_conscape(
-  conscape_prep = prep_sens,
-  out_dir = "conscape_sensitivity_results",
-  theta = td$theta,
-  distance_scale = td$exp_d,
-  landmark = 1L,
-  cost_function = "minuslog",
+  conscape_prep         = prep_sens,
+  out_dir               = "conscape_sensitivity_results",
+  theta                 = td$theta,
+  distance_scale        = td$distance_scale,
+  landmark              = 1L,
+  cost_function         = "minuslog",
   connectivity_function = "expected_cost",
-  sensitivity = conscape_sensitivity(
-    wrt = c("Q", "A&C=f(A)"),
+  sensitivity           = conscape_sensitivity(
+    wrt               = c("Q", "A&C=f(A)"),
     landscape_measure = "sum",
-    unitless = TRUE
+    unitless          = TRUE
   ),
-  jl_home = jl_home,
+  jl_home  = jl_home,
   parallel = TRUE,
-  workers = 4
+  workers  = 4
 )
 ```
 
@@ -294,16 +297,16 @@ computationally demanding.
 
 ```{r full-sensitivity, eval=FALSE}
 full_sens <- run_conscape(
-  out_dir = "full_sensitivity_results",
+  out_dir          = "full_sensitivity_results",
   target_qualities = habitat,
   source_qualities = habitat,
-  affinities = affinity,
-  theta = 0.1,
-  distance_scale = 150,
-  landmark = 1L,
-  metrics = "connected_habitat",
-  sensitivity = conscape_sensitivity(wrt = c("Q", "A&C=f(A)")),
-  jl_home = jl_home
+  affinities       = affinity,
+  theta            = td$theta,
+  distance_scale   = td$distance_scale,
+  landmark         = 1L,
+  metrics          = "connected_habitat",
+  sensitivity      = conscape_sensitivity(wrt = c("Q", "A&C=f(A)")),
+  jl_home          = jl_home
 )
 ```
 
@@ -352,12 +355,18 @@ plot(cs_sens, layers = c("fcon", "elasticity_quality"))
 
 Before running a large analysis:
 
-1. Confirm `r_mov` / `affinities` is permeability, not resistance.
-2. Choose `theta` based on the movement model you want to represent.
-3. Use `tile_design()` to choose a defensible `distance_scale` and tile overlap.
-4. Use `landmark > 1L` for faster default metrics when coarse-grained targets
-   are acceptable.
-5. Use `landmark = 1L` for sensitivity workflows.
-6. Start with `metrics = c("connected_habitat", "betweenness_kweighted")`.
-7. Add sensitivity outputs after the base workflow is stable.
-8. Compare tiled and untiled runs on a small crop before scaling up.
+1. Confirm `affinities` / `r_mov` is a permeability surface, not resistance.
+   Transform resistance to affinity before passing it to ConScapeRtools.
+2. Run `tile_design()` to obtain a landscape-calibrated `distance_scale`,
+   `theta`, `tile_d`, and `tile_trim`. Pass these directly from the returned
+   list to `conscape_prep()` and `run_conscape()`.
+3. Choose `theta` based on the movement model: small values (near 0) allow more
+   random movement; large values approach deterministic least-cost paths.
+4. Use `landmark > 1L` for faster default metric runs when coarse-grained target
+   qualities are acceptable.
+5. Use `landmark = 1L` for sensitivity workflows to keep target and source
+   qualities identical.
+6. Start with the default `metrics` (`connected_habitat` and
+   `betweenness_kweighted`) before adding additional metrics or sensitivity.
+7. Add sensitivity outputs only after the base workflow is verified and stable.
+8. Compare tiled and untiled runs on a small landscape crop before scaling up.

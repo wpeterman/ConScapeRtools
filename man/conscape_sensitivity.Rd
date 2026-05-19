@@ -81,3 +81,11 @@ Tile-wise \code{landscape_measure = "eigenanalysis"} is available through
 ConScape, but should be interpreted cautiously because eigenvalue summaries
 are intrinsically global.
 }
+\examples{
+sens <- conscape_sensitivity(wrt = c("Q", "A&C=f(A)"))
+sens$wrt
+sens$unitless
+
+raw_sens <- conscape_sensitivity(wrt = "A", unitless = FALSE)
+raw_sens$unitless
+}

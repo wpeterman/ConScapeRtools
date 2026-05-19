@@ -8,6 +8,7 @@
 .quarto
 .positai
 tiles_test/
+examples/
 *.Rcheck/
 ConScapeRtools_*.tar.gz
 .claude

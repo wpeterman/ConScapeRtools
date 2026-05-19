@@ -2,24 +2,39 @@
 % Please edit documentation in R/conscape_api.R
 \name{conscape_api_slots}
 \alias{conscape_api_slots}
-\title{Inspect ConScape slot names used by ConScapeRtools}
+\title{Inspect ConScape API slot names}
 \usage{
 conscape_api_slots()
 }
 \value{
-A data frame describing each API slot.
+A data frame with one row per ConScape slot, and columns \code{slot}
+(ConScape name), \code{run_conscape} (R argument in \code{\link[=run_conscape]{run_conscape()}}),
+\code{conscape_prep} (R argument in \code{\link[=conscape_prep]{conscape_prep()}}), and \code{julia} (Julia
+expression populated by the slot).
 }
 \description{
-Returns a compact crosswalk between the R-facing argument names in this
-package and the Julia-side ConScape slots/functions they populate.
+Returns a crosswalk between the R-facing argument names used in this package
+and the Julia-side ConScape slots and functions they populate. Useful for
+understanding how ConScapeRtools parameters map to the underlying ConScape
+model.
 }
 \details{
-ConScapeRtools keeps the original argument names (\code{hab_target}, \code{hab_src},
-\code{mov_prob}, and \code{exp_d}) for backwards compatibility, but new workflows
-should prefer the clearer ConScape-aligned names shown in the \code{run_conscape}
-column. In ConScape terminology, cell habitat rasters are source and target
-qualities, while the movement raster is an affinity/permeability surface
-that is converted into a graph adjacency matrix. Costs are then either
-derived from affinities with a named transformation such as \code{"minuslog"} or
-supplied by a custom Julia transformation.
+ConScapeRtools uses ConScape-aligned argument names as the primary interface:
+\code{target_qualities}, \code{source_qualities}, \code{affinities}, and \code{distance_scale}
+in \code{\link[=run_conscape]{run_conscape()}}, and \code{r_target}, \code{r_src}, \code{r_mov} in \code{\link[=conscape_prep]{conscape_prep()}}.
+The legacy names (\code{hab_target}, \code{hab_src}, \code{mov_prob}, and \code{exp_d}) are
+retained as deprecated aliases for backwards compatibility.
+
+In ConScape terminology, habitat rasters supply source and target qualities,
+while the movement raster is an affinity/permeability surface that is
+converted into a sparse graph adjacency matrix. Movement costs are derived
+from affinities via a named transformation (e.g., \code{"minuslog"}) or a custom
+Julia lambda string.
+}
+\examples{
+slots <- conscape_api_slots()
+slots[, c("slot", "run_conscape")]
+}
+\seealso{
+\code{\link[=run_conscape]{run_conscape()}}, \code{\link[=conscape_prep]{conscape_prep()}}, \code{\link[=conscape_sensitivity]{conscape_sensitivity()}}
 }

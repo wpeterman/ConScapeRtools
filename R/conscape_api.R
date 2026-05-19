@@ -1,20 +1,32 @@
-#' Inspect ConScape slot names used by ConScapeRtools
+#' Inspect ConScape API slot names
 #'
 #' @description
-#' Returns a compact crosswalk between the R-facing argument names in this
-#' package and the Julia-side ConScape slots/functions they populate.
+#' Returns a crosswalk between the R-facing argument names used in this package
+#' and the Julia-side ConScape slots and functions they populate. Useful for
+#' understanding how ConScapeRtools parameters map to the underlying ConScape
+#' model.
 #'
 #' @details
-#' ConScapeRtools keeps the original argument names (`hab_target`, `hab_src`,
-#' `mov_prob`, and `exp_d`) for backwards compatibility, but new workflows
-#' should prefer the clearer ConScape-aligned names shown in the `run_conscape`
-#' column. In ConScape terminology, cell habitat rasters are source and target
-#' qualities, while the movement raster is an affinity/permeability surface
-#' that is converted into a graph adjacency matrix. Costs are then either
-#' derived from affinities with a named transformation such as `"minuslog"` or
-#' supplied by a custom Julia transformation.
+#' ConScapeRtools uses ConScape-aligned argument names as the primary interface:
+#' `target_qualities`, `source_qualities`, `affinities`, and `distance_scale`
+#' in [run_conscape()], and `r_target`, `r_src`, `r_mov` in [conscape_prep()].
+#' The legacy names (`hab_target`, `hab_src`, `mov_prob`, and `exp_d`) are
+#' retained as deprecated aliases for backwards compatibility.
 #'
-#' @return A data frame describing each API slot.
+#' In ConScape terminology, habitat rasters supply source and target qualities,
+#' while the movement raster is an affinity/permeability surface that is
+#' converted into a sparse graph adjacency matrix. Movement costs are derived
+#' from affinities via a named transformation (e.g., `"minuslog"`) or a custom
+#' Julia lambda string.
+#'
+#' @return A data frame with one row per ConScape slot, and columns `slot`
+#'   (ConScape name), `run_conscape` (R argument in [run_conscape()]),
+#'   `conscape_prep` (R argument in [conscape_prep()]), and `julia` (Julia
+#'   expression populated by the slot).
+#' @seealso [run_conscape()], [conscape_prep()], [conscape_sensitivity()]
+#' @examples
+#' slots <- conscape_api_slots()
+#' slots[, c("slot", "run_conscape")]
 #' @export
 conscape_api_slots <- function() {
   data.frame(
@@ -31,12 +43,12 @@ conscape_api_slots <- function() {
       "sensitivity"
     ),
     run_conscape = c(
-      "target_qualities (alias: hab_target)",
-      "source_qualities (alias: hab_src)",
-      "affinities (alias: mov_prob)",
+      "target_qualities (legacy: hab_target)",
+      "source_qualities (legacy: hab_src)",
+      "affinities (legacy: mov_prob)",
       "cost_function",
       "theta",
-      "distance_scale (alias: exp_d)",
+      "distance_scale (legacy: exp_d)",
       "landmark",
       "connectivity_function",
       "metrics",
@@ -127,6 +139,13 @@ conscape_api_slots <- function() {
 #'   ConScape's target qualities are not changed by coarse graining.
 #'
 #' @return An object of class `"ConScapeSensitivitySpec"`.
+#' @examples
+#' sens <- conscape_sensitivity(wrt = c("Q", "A&C=f(A)"))
+#' sens$wrt
+#' sens$unitless
+#'
+#' raw_sens <- conscape_sensitivity(wrt = "A", unitless = FALSE)
+#' raw_sens$unitless
 #' @export
 conscape_sensitivity <- function(wrt = c("Q", "A&C=f(A)"),
                                  landscape_measure = c("sum", "eigenanalysis"),

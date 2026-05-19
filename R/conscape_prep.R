@@ -86,48 +86,37 @@
 #' \dontrun{
 #' library(ConScapeRtools)
 #'
-#' ## Import data
+#' ## Import example data
 #' s <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
-#' source <- terra::rast(s)
+#' habitat <- terra::rast(s)
 #'
 #' a <- system.file("extdata", "affinity.asc", package = "ConScapeRtools")
-#' resist <- terra::rast(a)
+#' affinity <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
 #'
-#' td <- tile_design(r_mov = resist,
-#'                   r_source = source,
-#'                   max_d = 7000,
-#'                   theta = 0.1,
-#'                   jl_home = jl_home)
+#' ## Calibrate tile and decay parameters
+#' td <- tile_design(r_mov    = affinity,
+#'                   r_target = habitat,
+#'                   max_d    = 7000,
+#'                   theta    = 0.1,
+#'                   jl_home  = jl_home)
 #'
-#' ## Tile dimension
-#' tile_d <- td$tile_d
+#' ## Prepare tiled rasters
+#' prep <- conscape_prep(tile_d    = td$tile_d,
+#'                       tile_trim = td$tile_trim,
+#'                       r_target  = habitat,
+#'                       r_mov     = affinity,
+#'                       r_src     = habitat,
+#'                       clear_dir = TRUE,
+#'                       landmark  = 5L)
 #'
-#' # How much to trim tiles
-#' tile_trim <- td$tile_trim
-#'
-#' # Makes computation more efficient
-#' landmark <- 5L # Must be an integer, not numeric
-#'
-#' # Controls level of randomness of paths
-#' theta <- td$theta
-#'
-#' # Controls rate of decay with distance
-#' exp_d <- td$exp_d
-#'
-#' ## Prepare data for analysis
-#' prep <- conscape_prep(tile_d = tile_d,
-#'                       tile_trim = tile_trim,
-#'                       r_target = source,
-#'                       r_mov = resist,
-#'                       r_src = source,
-#'                       clear_dir = T,
-#'                       landmark = landmark)
-#'
-#' cs_res <- run_conscape(conscape_prep = prep,
-#'                        out_dir = "conscape_out",
-#'                        jl_home = jl_home)
+#' ## Run ConScape on tiles
+#' cs_res <- run_conscape(conscape_prep  = prep,
+#'                        out_dir        = "conscape_out",
+#'                        theta          = td$theta,
+#'                        distance_scale = td$distance_scale,
+#'                        jl_home        = jl_home)
 #' }
 #'
 #' @seealso [run_conscape()], [mosaic_conscape()]
