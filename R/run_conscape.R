@@ -327,11 +327,12 @@ run_conscape <- function(conscape_prep = NULL,
   sensitivity_target_equal_source <- if (is.null(sensitivity)) TRUE else sensitivity$target_equal_source
   sensitivity_require_landmark_one <- if (is.null(sensitivity)) TRUE else sensitivity$require_landmark_one
 
-  stopJulia()
+  stop_conscape_julia()
   if(parallel & isFALSE(parallel_R)){
     Sys.setenv(JULIA_NUM_THREADS = workers)
   }
 
+  clear_juliaconnector_finalized_refs()
   if(!juliaSetupOk()){
     Sys.setenv(JULIA_BINDIR = jl_home)
   }
@@ -757,7 +758,7 @@ run_conscape <- function(conscape_prep = NULL,
   }
 
   # juliaEval("GC.gc()")
-  stopJulia()
+  stop_conscape_julia()
   gc()
   return(out)
 } ## End function

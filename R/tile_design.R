@@ -117,8 +117,9 @@ tile_design <- function(r_mov,
     stop("At least one of r_source or r_target must be provided.")
   }
 
+  clear_juliaconnector_finalized_refs()
   Sys.setenv(JULIA_BINDIR = jl_home)
-  if(!juliaSetupOk())
+  if(!suppressMessages(juliaSetupOk()))
     stop("Check that the path to the Julia binary directory is correct")
 
   if (!is.null(r_source) && is.null(r_target)) {
@@ -157,7 +158,7 @@ tile_design <- function(r_mov,
   max_cell <- which.min(abs(e_dist - max_d))
 
   ## Julia
-  invisible({ConScapeR_setup(jl_home)})
+  invisible(suppressMessages(ConScapeR_setup(jl_home)))
 
   # Create ConScape Grid
   g <- Grid(affinities = mov,
@@ -203,8 +204,8 @@ tile_design <- function(r_mov,
             "`tile_d` should be at least: " %+% red$bold(out$tile_d) %+%",\n\n",
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n"))
   class(out) <- 'ConScapeRtools_design'
-  invisible(juliaEval('1+1'))
-  stopJulia()
+  invisible(suppressMessages(juliaEval('1+1')))
+  stop_conscape_julia()
   return(out)
 }
 

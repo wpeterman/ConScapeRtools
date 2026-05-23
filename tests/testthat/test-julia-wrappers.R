@@ -53,6 +53,14 @@ test_that("Grid handles matrix costs separately from transformed affinities", {
   expect_true(is.nan(captured$args$sources[2, 1]))
 })
 
+test_that("Julia wrapper expressions suppress informational logging", {
+  wrap_expr <- getFromNamespace("julia_warn_or_error_expr", "ConScapeRtools")
+  out <- wrap_expr("ConScape.GridRSP(g, theta = theta)")
+
+  expect_match(out, "Logging.ConsoleLogger\\(stderr, Logging.Warn\\)")
+  expect_match(out, "ConScape.GridRSP")
+})
+
 test_that("Julia wrapper functions pass expected code to juliaLet", {
   wrappers <- list(
     vec2mat = list(fun = getFromNamespace("vec2mat", "ConScapeRtools"), args = list(vec = 1:3, g = "g"), pattern = "_vec_to_grid"),

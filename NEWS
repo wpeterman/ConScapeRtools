@@ -1,3 +1,9 @@
+ConScapeRtools 0.4.12
+---------
+* Suppressed non-actionable Julia informational logging during `tile_design()` while preserving Julia warnings and errors
+* Hardened JuliaConnectoR session cleanup around stale finalized references
+* Added regression tests for Julia lifecycle cleanup and logging behavior
+
 ConScapeRtools 0.4.11
 ---------
 * Integrated documentation and API refinements

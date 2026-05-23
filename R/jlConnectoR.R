@@ -1,4 +1,42 @@
 ## Functions from `ConScapeR` package
+
+clear_juliaconnector_finalized_refs <- function() {
+  ns <- tryCatch(asNamespace("JuliaConnectoR"), error = function(e) NULL)
+  if (is.null(ns) || !exists("pkgLocal", envir = ns, inherits = FALSE)) {
+    return(invisible(FALSE))
+  }
+
+  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
+  if (!is.environment(pkg_local)) {
+    return(invisible(FALSE))
+  }
+
+  pkg_local$finalizedRefs <- NULL
+  invisible(TRUE)
+}
+
+stop_conscape_julia <- function() {
+  invisible(gc())
+  try(stopJulia(), silent = TRUE)
+  clear_juliaconnector_finalized_refs()
+  invisible(NULL)
+}
+
+julia_warn_or_error_expr <- function(expr) {
+  paste0(
+    "begin\n",
+    "  using Logging\n",
+    "  Logging.with_logger(Logging.ConsoleLogger(stderr, Logging.Warn)) do\n",
+    expr,
+    "\n  end\n",
+    "end"
+  )
+}
+
+juliaLet_warn_or_error <- function(expr, ...) {
+  juliaLet(julia_warn_or_error_expr(expr), ...)
+}
+
 #' Launch the Julia installation from R and load the `ConScape` library in Julia
 #'
 #' This function starts a Julia session from R and imports the `ConScape` library
@@ -20,6 +58,7 @@
 #'
 ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
 
+  clear_juliaconnector_finalized_refs()
   Sys.setenv(JULIA_BINDIR = julia_path)
 
   # List of required packages
@@ -36,6 +75,7 @@ ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
   }
   SA <- juliaImport("SparseArrays")
   CS <- juliaImport("ConScape")
+  invisible(juliaEval("using Logging"))
 }
 
 #' Wrapper for the Grid function of `ConScape`
@@ -98,7 +138,7 @@ Grid <- function(affinities, sources, targets, costs) {
       costs,
       "ConScape.graph_matrix_from_raster(affinities)"
     )
-    g <- juliaLet(
+    g <- juliaLet_warn_or_error(
       paste0("ConScape.Grid(size(affinities)...,
               affinities=ConScape.graph_matrix_from_raster(affinities),
               source_qualities=sources,
@@ -106,7 +146,7 @@ Grid <- function(affinities, sources, targets, costs) {
               costs=", cost_expr, ")"),
       affinities=affinities, sources=sources, targets=targets)
   } else {
-    g <- juliaLet("ConScape.Grid(size(affinities)...,
+    g <- juliaLet_warn_or_error("ConScape.Grid(size(affinities)...,
                   affinities=ConScape.graph_matrix_from_raster(affinities),
                   source_qualities=sources,
                   target_qualities=SparseArrays.sparse(targets),
@@ -143,7 +183,7 @@ mat2rast <- function(mat, rast){
 #' @noRd
 #'
 vec2mat <- function(vec, g){
-  mat <- juliaLet("ConScape._vec_to_grid(g, vec)", g=g, vec=vec)
+  mat <- juliaLet_warn_or_error("ConScape._vec_to_grid(g, vec)", g=g, vec=vec)
   return(mat)
 }
 
@@ -163,7 +203,7 @@ vec2mat <- function(vec, g){
 #' @noRd
 #'
 GridRSP <- function(g, theta) {
-  h <- juliaLet("ConScape.GridRSP(g, \u03b8=theta)", g=g, theta=theta)
+  h <- juliaLet_warn_or_error("ConScape.GridRSP(g, \u03b8=theta)", g=g, theta=theta)
   return(h)
 }
 
@@ -179,7 +219,7 @@ GridRSP <- function(g, theta) {
 #' @noRd
 #'
 betweenness_qweighted <- function(h) {
-  betw <- juliaLet("ConScape.betweenness_qweighted(h)", h=h)
+  betw <- juliaLet_warn_or_error("ConScape.betweenness_qweighted(h)", h=h)
   return(betw)
 }
 
@@ -197,12 +237,12 @@ betweenness_qweighted <- function(h) {
 #' @noRd
 #'
 betweenness_kweighted <- function(h, alpha) {
-  betw <- juliaLet("ConScape.betweenness_kweighted(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
+  betw <- juliaLet_warn_or_error("ConScape.betweenness_kweighted(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
   return(betw)
 }
 
 coarse_grid <- function(g, land_mark){
-  coarse <- juliaLet("ConScape.coarse_graining(g, land_mark)",
+  coarse <- juliaLet_warn_or_error("ConScape.coarse_graining(g, land_mark)",
                       g=g, land_mark = land_mark)
   return(coarse)
 }
@@ -221,7 +261,7 @@ coarse_grid <- function(g, land_mark){
 #' @noRd
 #'
 connected_habitat <- function(h, alpha) {
-  func <- juliaLet("ConScape.connected_habitat(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
+  func <- juliaLet_warn_or_error("ConScape.connected_habitat(h, distance_transformation=x -> exp(-x*alpha))", h=h, alpha=alpha)
   return(func)
 }
 
@@ -236,7 +276,7 @@ connected_habitat <- function(h, alpha) {
 #' @noRd
 #'
 expected_cost <- function(h) {
-  dists = juliaLet("ConScape.expected_cost(h)", h=h)
+  dists = juliaLet_warn_or_error("ConScape.expected_cost(h)", h=h)
   return(dists)
 }
 
@@ -259,7 +299,7 @@ sensitivity <- function(h,
   } else {
     ""
   }
-  juliaLet(
+  juliaLet_warn_or_error(
     paste0(
       "ConScape.", fun,
       "(h, distance_transformation=ConScape.ExpMinus(), \u03b1=alpha, ",
