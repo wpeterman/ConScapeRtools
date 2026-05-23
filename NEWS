@@ -1,3 +1,9 @@
+ConScapeRtools 0.4.13
+---------
+* Added print, summary, and plot methods for core ConScapeRtools workflow objects
+* Added compact summaries for ConScape result and sensitivity specification objects
+* Added regression tests for the new S3 method behavior
+
 ConScapeRtools 0.4.12
 ---------
 * Suppressed non-actionable Julia informational logging during `tile_design()` while preserving Julia warnings and errors
