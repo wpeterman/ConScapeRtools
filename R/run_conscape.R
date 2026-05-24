@@ -472,7 +472,7 @@ run_conscape <- function(conscape_prep = NULL,
 
   } else {
     ## directory-based path
-    if (isFALSE(file.exists(hab_target))) {
+    if (is.null(conscape_prep) && isFALSE(file.exists(hab_target))) {
       stop("Specify either a SpatRaster object or path to directory containing *.asc files")
     }
 
@@ -723,7 +723,7 @@ run_conscape <- function(conscape_prep = NULL,
     rasters <- lapply(output_specs, function(spec) {
       mosaic_conscape(out_dir = file.path(out_dir, spec$dir),
                       tile_trim = tile_trim,
-                      method = 'merge',
+                      method = 'mosaic',
                       mask = target_mask,
                       crs = terra::crs(target_mask))
     })

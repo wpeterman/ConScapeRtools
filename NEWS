@@ -1,6 +1,8 @@
-ConScapeRtools 0.4.14
+ConScapeRtools 0.4.15
 ---------
 * Refactored `tile_design()` to use fully connected ideal-habitat calibration, center-cell referencing, explicit trim thresholds, and separate tile-width controls
+* Made `tile_design()` calibration efficient by using one center source cell instead of an all-sources cost matrix
+* Derived `tile_trim` from calibrated map-distance proximities so tiled outputs retain enough overlap to match untiled surfaces more closely
 * Added tile-design diagnostics for requested and effective trim, expected tile counts, overlap area factors, and proximity at trim
 * Added Julia session lifecycle helpers and `stop_julia` controls for reusing Julia across repeated ConScape workflows
 

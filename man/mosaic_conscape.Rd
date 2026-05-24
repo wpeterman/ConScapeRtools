@@ -8,7 +8,7 @@ mosaic_conscape(
   out_dir,
   mask = NULL,
   tile_trim,
-  method = c("merge", "mosaic"),
+  method = c("mosaic", "merge"),
   crs = NULL
 )
 }
@@ -31,8 +31,8 @@ returned by \code{\link[=conscape_prep]{conscape_prep()}}, or an equivalent valu
 creating tiles manually.}
 
 \item{method}{Character string indicating how to combine overlapping
-tiles. \code{"merge"} (default) fills gaps using the first non-\code{NA} tile
-encountered, while \code{"mosaic"} averages values where tiles overlap.}
+tiles. \code{"mosaic"} (default) averages values where tiles overlap, while
+\code{"merge"} fills gaps using the first non-\code{NA} tile encountered.}
 
 \item{crs}{Optional coordinate reference system to assign to the
 merged raster. Can be a proj4string, EPSG code (e.g. \code{"EPSG:4326"}),
@@ -60,8 +60,8 @@ width/height in cells. If \code{tile_trim} is too large relative to tile
 dimensions, no trimming is applied to that tile.
 
 After trimming, tiles are combined into a single \code{SpatRaster} using
-either \code{\link[terra:merge]{terra::merge()}} (\code{method = "merge"}) or \code{\link[terra:mosaic]{terra::mosaic()}}
-(\verb{method = "mosaic", fun = "mean"}). If a \code{mask} is supplied, the
+either \code{\link[terra:mosaic]{terra::mosaic()}} (\verb{method = "mosaic", fun = "mean"}) or
+\code{\link[terra:merge]{terra::merge()}} (\code{method = "merge"}). If a \code{mask} is supplied, the
 function checks for compatible CRS, then crops and/or resamples the
 mosaicked raster to match the mask's extent and resolution (using
 nearest-neighbour resampling if needed) before applying the mask via

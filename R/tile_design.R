@@ -55,17 +55,22 @@
 #' `max_d` are expressed in compatible distance units. Only the cell
 #' resolution and maximum values of `r_mov`, `r_source`, and `r_target`
 #' are used: the function constructs a fully connected synthetic landscape
-#' whose size is chosen to span roughly four times `max_d`, fills the movement
-#' grid with the maximum movement probability, and assigns constant maximum
-#' source and target quality.
+#' whose size is chosen so that the center cell can reach at least `max_d`,
+#' fills the movement and target grids with their maximum values, and assigns
+#' source quality only to the center cell. This keeps the calibration landscape
+#' fully connected while avoiding an expensive all-sources cost matrix.
 #'
 #' A ConScape `Grid` and `GridRSP` object are then created, and expected
 #' costs are computed from the center cell to all others. The decay parameter
 #' `distance_scale` is chosen by 1D optimization so that the exponential
 #' proximity at the cell closest to `max_d` drops to a specified threshold.
+#' The synthetic calibration raster extends beyond `max_d` when needed so that
+#' the requested trim threshold can be evaluated directly on sampled cells.
+#' `distance_scale` remains in ConScape expected-cost units, while `tile_trim`
+#' is looked up as a map distance from the calibrated cost-to-proximity curve.
 #' This value is then used to derive:
 #'
-#' * `tile_trim` from `trim_threshold`, so tile-edge influence is explicit,
+#' * `tile_trim` from `trim_threshold` in map units, so tile-edge influence is explicit,
 #' * `tile_d` from `tile_width`, `max_tile_cells`, or `overlap_area_factor`,
 #' * diagnostics showing requested and effective trim, expected tile count,
 #'   overlap area factor, and proximity at the final trim distance.
@@ -209,8 +214,10 @@ tile_design <- function(r_mov,
   r_res <- terra::res(r_mov)
   resx <- r_res[1]
   resy <- r_res[2]
-  cal_ncol <- max(3L, ceiling((4 * max_d) / resx))
-  cal_nrow <- max(3L, ceiling((4 * max_d) / resy))
+  trim_extent_factor <- max(1, log(trim_threshold) / log(calibration_threshold))
+  calibration_radius <- max_d * trim_extent_factor
+  cal_ncol <- max(3L, 2L * ceiling(calibration_radius / resx) + 1L)
+  cal_nrow <- max(3L, 2L * ceiling(calibration_radius / resy) + 1L)
   r_crs <- terra::crs(r_mov)
 
   ## Max Values
@@ -228,7 +235,7 @@ tile_design <- function(r_mov,
                      xmin = 0, xmax = resx * cal_ncol,
                      ymin = 0, ymax = resy * cal_nrow)
   src <- terra::rast(nrows = cal_nrow, ncols = cal_ncol,
-                     vals = mx_src,
+                     vals = 0,
                      resolution = r_res, crs = r_crs,
                      xmin = 0, xmax = resx * cal_ncol,
                      ymin = 0, ymax = resy * cal_nrow)
@@ -243,6 +250,7 @@ tile_design <- function(r_mov,
     row = ceiling(terra::nrow(mov) / 2),
     col = ceiling(terra::ncol(mov) / 2)
   )
+  src[center_cell] <- mx_src
   cell_xy <- terra::crds(target)
   center_coord <- cell_xy[center_cell, ]
   e_dist <- sqrt((cell_xy[, 1] - center_coord[1])^2 +
@@ -260,10 +268,10 @@ tile_design <- function(r_mov,
   h <- GridRSP(g, theta = theta)
 
   dists <- expected_cost(h)
-  source_col <- if (is.matrix(dists) && ncol(dists) >= center_cell) center_cell else 1L
+  dist_from_source <- expected_cost_from_source(dists, source_cell = center_cell)
 
   exp_d <- optimize(exp_opt,
-                    dists = matrix(dists[, source_col], ncol = 1),
+                    dists = dist_from_source,
                     cell = max_cell,
                     threshold = calibration_threshold,
                     interval = c(1,2500),
@@ -271,7 +279,12 @@ tile_design <- function(r_mov,
                     maximum = T)
 
   ## Trim and tile size
-  requested_trim <- exp_distance(p = 1 - trim_threshold, lambda = 1/exp_d$maximum)
+  source_proximity <- exp(-dist_from_source[, 1] / exp_d$maximum)
+  requested_trim <- trim_distance_from_proximity(
+    map_distance = e_dist,
+    proximity = source_proximity,
+    threshold = trim_threshold
+  )
   cell_aligned_trim <- ceiling(requested_trim / resx) * resx
 
   if (!is.null(tile_width)) {
@@ -297,7 +310,16 @@ tile_design <- function(r_mov,
   effective_tile_trim <- as.numeric(tile_layout$tile_trim)
   realized_overlap_area_factor <- ((effective_tile_width + 2 * effective_tile_trim) /
                                      effective_tile_width)^2
-  proximity_at_effective_trim <- exp(-effective_tile_trim / exp_d$maximum)
+  proximity_at_requested_trim <- proximity_at_map_distance(
+    map_distance = e_dist,
+    proximity = source_proximity,
+    distance = requested_trim
+  )
+  proximity_at_effective_trim <- proximity_at_map_distance(
+    map_distance = e_dist,
+    proximity = source_proximity,
+    distance = effective_tile_trim
+  )
   diagnostics <- list(
     calibration_threshold = calibration_threshold,
     trim_threshold = trim_threshold,
@@ -313,11 +335,15 @@ tile_design <- function(r_mov,
     tile_cells = tile_layout$tile_cells,
     overlap_cells = tile_layout$overlap_cells,
     overlap_area_factor = as.numeric(realized_overlap_area_factor),
-    proximity_at_requested_trim = exp(-requested_trim / exp_d$maximum),
+    proximity_at_requested_trim = proximity_at_requested_trim,
     proximity_at_effective_trim = proximity_at_effective_trim,
     calibration_nrow = cal_nrow,
     calibration_ncol = cal_ncol,
+    calibration_cells = cal_nrow * cal_ncol,
+    calibration_radius = calibration_radius,
+    trim_extent_factor = trim_extent_factor,
     source_cell = center_cell,
+    source_cell_count = 1L,
     max_d_cell = max_cell,
     max_d_cell_distance = as.numeric(e_dist[max_cell])
   )
@@ -353,6 +379,55 @@ exp_opt <- function(x, dists, cell, threshold){
     y <- -9999
   }
   return(y)
+}
+
+expected_cost_from_source <- function(dists, source_cell) {
+  if (is.null(dists)) {
+    stop("ConScape returned no expected-cost values.", call. = FALSE)
+  }
+  if (is.null(dim(dists))) {
+    return(matrix(as.numeric(dists), ncol = 1))
+  }
+  if (!is.matrix(dists)) {
+    dists <- as.matrix(dists)
+  }
+  if (ncol(dists) == 1L) {
+    return(matrix(dists[, 1], ncol = 1))
+  }
+  if (nrow(dists) == 1L) {
+    return(matrix(dists[1, ], ncol = 1))
+  }
+  if (ncol(dists) >= source_cell) {
+    return(matrix(dists[, source_cell], ncol = 1))
+  }
+  matrix(dists[, 1], ncol = 1)
+}
+
+trim_distance_from_proximity <- function(map_distance, proximity, threshold) {
+  ok <- is.finite(map_distance) & is.finite(proximity)
+  if (!any(ok)) {
+    stop("Could not derive tile_trim because no finite calibration distances were available.",
+         call. = FALSE)
+  }
+
+  above <- ok & proximity > threshold
+  if (!any(above)) {
+    positive_distance <- map_distance[ok & map_distance > 0]
+    if (!length(positive_distance)) return(0)
+    return(min(positive_distance))
+  }
+
+  max(map_distance[above])
+}
+
+proximity_at_map_distance <- function(map_distance, proximity, distance) {
+  ok <- is.finite(map_distance) & is.finite(proximity)
+  beyond <- ok & map_distance >= distance
+  if (any(beyond)) {
+    return(max(proximity[beyond]))
+  }
+  farthest <- ok & map_distance == max(map_distance[ok])
+  max(proximity[farthest])
 }
 
 #' Calculate the distance for a given cumulative density in a negative exponential distribution

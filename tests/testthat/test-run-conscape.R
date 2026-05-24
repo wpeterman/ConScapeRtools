@@ -214,6 +214,42 @@ test_that("run_conscape can run mocked tiled serial workflow and mosaic results"
   expect_true(dir.exists(out$outdir_fcon))
 })
 
+test_that("run_conscape handles a prepared single-tile workflow", {
+  mock_julia()
+  r <- make_test_raster(n = 10, vals = 1)
+  prep <- conscape_prep(
+    tile_d = 10,
+    tile_trim = 2,
+    asc_dir = file.path(tempdir(), "run-single-tile-prep"),
+    r_target = r,
+    r_mov = r,
+    r_src = r,
+    clear_dir = TRUE,
+    landmark = 5L,
+    progress = FALSE
+  )
+
+  testthat::local_mocked_bindings(
+    juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir,
+                         r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
+      write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  out <- run_conscape(
+    conscape_prep = prep,
+    out_dir = file.path(tempdir(), "run-single-tile"),
+    theta = 0.1,
+    exp_d = 50,
+    jl_home = "C:/Julia/bin",
+    progress = FALSE
+  )
+
+  expect_s3_class(out, "ConScapeResults")
+  expect_equal(dim(out$btwn), dim(r))
+})
+
 test_that("run_conscape warns when mocked threaded execution misses outputs", {
   mock_julia()
   r <- make_test_raster(n = 10, vals = 1)

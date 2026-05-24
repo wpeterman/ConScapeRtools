@@ -22,8 +22,8 @@
 #'   returned by [conscape_prep()], or an equivalent value used when
 #'   creating tiles manually.
 #' @param method Character string indicating how to combine overlapping
-#'   tiles. `"merge"` (default) fills gaps using the first non-`NA` tile
-#'   encountered, while `"mosaic"` averages values where tiles overlap.
+#'   tiles. `"mosaic"` (default) averages values where tiles overlap, while
+#'   `"merge"` fills gaps using the first non-`NA` tile encountered.
 #' @param crs Optional coordinate reference system to assign to the
 #'   merged raster. Can be a proj4string, EPSG code (e.g. `"EPSG:4326"`),
 #'   or a CRS taken from a `SpatRaster`. If `NULL` (default), the CRS of
@@ -37,8 +37,8 @@
 #' dimensions, no trimming is applied to that tile.
 #'
 #' After trimming, tiles are combined into a single `SpatRaster` using
-#' either [terra::merge()] (`method = "merge"`) or [terra::mosaic()]
-#' (`method = "mosaic", fun = "mean"`). If a `mask` is supplied, the
+#' either [terra::mosaic()] (`method = "mosaic", fun = "mean"`) or
+#' [terra::merge()] (`method = "merge"`). If a `mask` is supplied, the
 #' function checks for compatible CRS, then crops and/or resamples the
 #' mosaicked raster to match the mask's extent and resolution (using
 #' nearest-neighbour resampling if needed) before applying the mask via
@@ -110,7 +110,7 @@
 mosaic_conscape <- function(out_dir,
                             mask = NULL,
                             tile_trim,
-                            method = c("merge", "mosaic"),
+                            method = c("mosaic", "merge"),
                             crs = NULL) {
   method <- match.arg(method)
 

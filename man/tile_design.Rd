@@ -112,17 +112,22 @@ The input \code{r_mov} must be in a projected CRS so that cell resolution and
 \code{max_d} are expressed in compatible distance units. Only the cell
 resolution and maximum values of \code{r_mov}, \code{r_source}, and \code{r_target}
 are used: the function constructs a fully connected synthetic landscape
-whose size is chosen to span roughly four times \code{max_d}, fills the movement
-grid with the maximum movement probability, and assigns constant maximum
-source and target quality.
+whose size is chosen so that the center cell can reach at least \code{max_d},
+fills the movement and target grids with their maximum values, and assigns
+source quality only to the center cell. This keeps the calibration landscape
+fully connected while avoiding an expensive all-sources cost matrix.
 
 A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
 costs are computed from the center cell to all others. The decay parameter
 \code{distance_scale} is chosen by 1D optimization so that the exponential
 proximity at the cell closest to \code{max_d} drops to a specified threshold.
+The synthetic calibration raster extends beyond \code{max_d} when needed so that
+the requested trim threshold can be evaluated directly on sampled cells.
+\code{distance_scale} remains in ConScape expected-cost units, while \code{tile_trim}
+is looked up as a map distance from the calibrated cost-to-proximity curve.
 This value is then used to derive:
 \itemize{
-\item \code{tile_trim} from \code{trim_threshold}, so tile-edge influence is explicit,
+\item \code{tile_trim} from \code{trim_threshold} in map units, so tile-edge influence is explicit,
 \item \code{tile_d} from \code{tile_width}, \code{max_tile_cells}, or \code{overlap_area_factor},
 \item diagnostics showing requested and effective trim, expected tile count,
 overlap area factor, and proximity at the final trim distance.

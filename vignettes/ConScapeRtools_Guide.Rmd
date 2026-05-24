@@ -86,6 +86,9 @@ parameter and an explicit tile overlap. `tile_design()` builds a fully connected
 synthetic ideal-habitat ConScape problem, computes expected costs from the
 center cell, and chooses an exponential distance scale so that proximity has
 decayed to a small threshold at the specified maximum distance.
+The calibration uses a single center source cell with fully connected movement
+and target surfaces, so it avoids the expensive all-sources cost matrix while
+still measuring center-referenced costs in ideal habitat.
 
 The overlap is controlled by `trim_threshold`: the returned `tile_trim` is the
 landmark-rounded distance at which the calibrated proximity is no greater than
@@ -93,6 +96,9 @@ that threshold. The interior tile width is chosen separately. You can provide a
 specific `tile_width`, an approximate `max_tile_cells` limit, or let the default
 `overlap_area_factor` choose a width that balances retained tile area against
 overlap overhead.
+`distance_scale` is a ConScape expected-cost scale, not a map distance. The
+trim distance is therefore read from the calibrated cost-to-proximity curve in
+map units before it is rounded to the raster and landmark grid.
 
 ```{r tile-design, eval=FALSE}
 jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.11.4/bin"
