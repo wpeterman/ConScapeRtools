@@ -74,6 +74,9 @@
 #' \item{overlap_cells}{Integer giving the number of cells to use as
 #'   overlap on each side of a tile (in both x and y directions). This
 #'   is a multiple of `landmark`.}
+#' \item{tile_cells}{Integer giving the interior tile width in cells.}
+#' \item{tile_width}{Interior tile width in map units
+#'   (`tile_cells * resx`).}
 #' \item{tile_trim}{Effective overlap width in map units
 #'   (`overlap_cells * resx`). This is the value that should be passed to
 #'   [mosaic_conscape()] and stored in `"ConScapeRtools_prep"`.}
@@ -148,6 +151,8 @@ make_tiles <- function(r,
     cs_tiles      = cs_tiles,
     tile_num      = seq_along(cs_tiles),
     overlap_cells = overlap_cells,
+    tile_cells    = tile_cells,
+    tile_width    = tile_cells * resx,
     tile_trim     = overlap_dist,
     landmark      = npix
   )

@@ -1,16 +1,33 @@
 test_that("tile design print, summary, and plot methods are informative", {
   design <- structure(
-    list(distance_scale = 12.5, exp_d = 12.5, tile_d = 100, tile_trim = 25, theta = 0.2),
+    list(
+      distance_scale = 12.5,
+      exp_d = 12.5,
+      tile_d = 100,
+      tile_trim = 25,
+      theta = 0.2,
+      landmark = 10L,
+      trim_threshold = 0.01,
+      overlap_area_factor = 2.25,
+      diagnostics = list(
+        expected_tile_count = 4L,
+        proximity_at_effective_trim = 0.01
+      )
+    ),
     class = "ConScapeRtools_design"
   )
 
   printed <- capture.output(print(design))
   expect_match(printed[1], "ConScape tile design")
   expect_true(any(grepl("distance_scale", printed)))
+  expect_true(any(grepl("expected tiles", printed)))
 
   s <- summary(design)
   expect_s3_class(s, "summary_ConScapeRtools_design")
-  expect_equal(s$parameter, c("distance_scale", "theta", "tile_d", "tile_trim"))
+  expect_true(all(c(
+    "distance_scale", "theta", "tile_d", "tile_trim",
+    "expected_tile_count", "overlap_area_factor", "proximity_at_trim"
+  ) %in% s$parameter))
 
   png_file <- tempfile(fileext = ".png")
   grDevices::png(png_file)

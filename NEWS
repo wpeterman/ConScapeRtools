@@ -1,3 +1,9 @@
+ConScapeRtools 0.4.14
+---------
+* Refactored `tile_design()` to use fully connected ideal-habitat calibration, center-cell referencing, explicit trim thresholds, and separate tile-width controls
+* Added tile-design diagnostics for requested and effective trim, expected tile counts, overlap area factors, and proximity at trim
+* Added Julia session lifecycle helpers and `stop_julia` controls for reusing Julia across repeated ConScape workflows
+
 ConScapeRtools 0.4.13
 ---------
 * Added print, summary, and plot methods for core ConScapeRtools workflow objects

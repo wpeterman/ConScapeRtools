@@ -27,6 +27,7 @@ run_conscape(
   connectivity_function = "expected_cost",
   metrics = c("betweenness_kweighted", "connected_habitat"),
   sensitivity = NULL,
+  stop_julia = TRUE,
   hab_target = NULL,
   hab_src = NULL,
   mov_prob = NULL,
@@ -145,6 +146,11 @@ accepted. Defaults to \code{c("betweenness_kweighted", "connected_habitat")}.}
 affinity-cost elasticities; pass a character vector to specify \code{wrt}
 values directly. See \code{\link[=conscape_sensitivity]{conscape_sensitivity()}} for full options.}
 
+\item{stop_julia}{Logical. If \code{TRUE} (default), close the Julia session when
+\code{run_conscape()} exits. Set to \code{FALSE} to keep Julia open for faster
+repeated ConScape calls with the same Julia path and process settings. Use
+\code{\link[=conscape_julia_stop]{conscape_julia_stop()}} when finished.}
+
 \item{hab_target}{Deprecated. Use \code{target_qualities} instead.}
 
 \item{hab_src}{Deprecated. Use \code{source_qualities} instead.}
@@ -241,7 +247,8 @@ td <- tile_design(r_mov    = affinity,
                   r_target = habitat,
                   max_d    = 8500,
                   theta    = 0.15,
-                  jl_home  = jl_home)
+                  jl_home  = jl_home,
+                  landmark = 5L)
 
 ## Prepare tiled rasters
 prep <- conscape_prep(tile_d         = td$tile_d,
@@ -250,7 +257,7 @@ prep <- conscape_prep(tile_d         = td$tile_d,
                       r_mov          = affinity,
                       r_src          = habitat,
                       clear_dir      = TRUE,
-                      landmark       = 5L)
+                      landmark       = td$landmark)
 
 ## Serial run (tiled)
 cs_serial <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),

@@ -22,6 +22,106 @@ stop_conscape_julia <- function() {
   invisible(NULL)
 }
 
+#' Manage the Julia session used by ConScapeRtools
+#'
+#' @description
+#' Start, reuse, inspect, or stop the Julia session used by ConScapeRtools.
+#' These helpers are useful when running several Julia-backed operations in the
+#' same R session and avoiding repeated Julia startup time.
+#'
+#' @param jl_home Path to the `bin` directory where the Julia executable
+#'   is installed.
+#' @param install_libraries Logical. If `TRUE`, install or update the required
+#'   Julia libraries before importing them. Default is `FALSE`.
+#' @param restart Logical. If `TRUE`, stop any existing Julia session before
+#'   starting a new one. Use this after changing Julia paths, thread counts, or
+#'   distributed-worker settings. Default is `FALSE`.
+#' @param quiet Logical. If `TRUE`, suppress routine setup messages. Default is
+#'   `FALSE`.
+#'
+#' @return
+#' `conscape_julia_start()` and `conscape_julia_stop()` return `invisible(NULL)`.
+#' `conscape_julia_status()` returns a single logical value indicating whether
+#' JuliaConnectoR currently reports an active Julia session.
+#'
+#' @details
+#' Reusing a Julia session is usually faster for repeated calls, but Julia
+#' process settings such as `JULIA_NUM_THREADS` are fixed when Julia starts.
+#' Restart Julia after changing those settings or after an error that may have
+#' left Julia state uncertain.
+#'
+#' @name conscape-julia
+#' @aliases conscape_julia_start conscape_julia_stop conscape_julia_status
+NULL
+
+#' @rdname conscape-julia
+#' @export
+conscape_julia_start <- function(jl_home,
+                                 install_libraries = FALSE,
+                                 restart = FALSE,
+                                 quiet = FALSE) {
+  if (!is.character(jl_home) || length(jl_home) != 1L || is.na(jl_home) ||
+      !nzchar(jl_home)) {
+    stop("jl_home must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.logical(install_libraries) || length(install_libraries) != 1L ||
+      is.na(install_libraries)) {
+    stop("install_libraries must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(restart) || length(restart) != 1L || is.na(restart)) {
+    stop("restart must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(quiet) || length(quiet) != 1L || is.na(quiet)) {
+    stop("quiet must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  if (isTRUE(restart)) {
+    stop_conscape_julia()
+  }
+
+  clear_juliaconnector_finalized_refs()
+  Sys.setenv(JULIA_BINDIR = jl_home)
+  if (!suppressMessages(juliaSetupOk())) {
+    stop("Check that the path to the Julia binary directory is correct", call. = FALSE)
+  }
+
+  setup_call <- function() ConScapeR_setup(jl_home, install_libraries = install_libraries)
+  if (isTRUE(quiet)) {
+    invisible(suppressMessages(setup_call()))
+  } else {
+    invisible(setup_call())
+  }
+}
+
+#' @rdname conscape-julia
+#' @export
+conscape_julia_stop <- function() {
+  stop_conscape_julia()
+}
+
+#' @rdname conscape-julia
+#' @export
+conscape_julia_status <- function() {
+  clear_juliaconnector_finalized_refs()
+  ns <- tryCatch(asNamespace("JuliaConnectoR"), error = function(e) NULL)
+  if (is.null(ns) || !exists("pkgLocal", envir = ns, inherits = FALSE)) {
+    return(FALSE)
+  }
+
+  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
+  if (!is.environment(pkg_local) ||
+      !exists("con", envir = pkg_local, inherits = FALSE) ||
+      !exists("communicator", envir = pkg_local, inherits = FALSE)) {
+    return(FALSE)
+  }
+
+  con <- get("con", envir = pkg_local, inherits = FALSE)
+  communicator <- get("communicator", envir = pkg_local, inherits = FALSE)
+  isTRUE(!is.null(communicator) &&
+           inherits(con, "connection") &&
+           isOpen(con))
+}
+
 julia_warn_or_error_expr <- function(expr) {
   paste0(
     "begin\n",

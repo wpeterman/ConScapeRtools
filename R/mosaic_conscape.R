@@ -72,7 +72,8 @@
 #'                   r_target = habitat,
 #'                   max_d    = 7000,
 #'                   theta    = 0.1,
-#'                   jl_home  = jl_home)
+#'                   jl_home  = jl_home,
+#'                   landmark = 5L)
 #'
 #' prep <- conscape_prep(tile_d    = td$tile_d,
 #'                       tile_trim = td$tile_trim,
@@ -80,7 +81,7 @@
 #'                       r_mov     = affinity,
 #'                       r_src     = habitat,
 #'                       clear_dir = TRUE,
-#'                       landmark  = 5L)
+#'                       landmark  = td$landmark)
 #'
 #' cs_res <- run_conscape(conscape_prep  = prep,
 #'                        out_dir        = "conscape_out",

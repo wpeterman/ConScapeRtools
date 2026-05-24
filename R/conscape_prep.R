@@ -100,7 +100,8 @@
 #'                   r_target = habitat,
 #'                   max_d    = 7000,
 #'                   theta    = 0.1,
-#'                   jl_home  = jl_home)
+#'                   jl_home  = jl_home,
+#'                   landmark = 5L)
 #'
 #' ## Prepare tiled rasters
 #' prep <- conscape_prep(tile_d    = td$tile_d,
@@ -109,7 +110,7 @@
 #'                       r_mov     = affinity,
 #'                       r_src     = habitat,
 #'                       clear_dir = TRUE,
-#'                       landmark  = 5L)
+#'                       landmark  = td$landmark)
 #'
 #' ## Run ConScape on tiles
 #' cs_res <- run_conscape(conscape_prep  = prep,

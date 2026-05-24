@@ -82,10 +82,17 @@ before using it as `r_mov` or `affinities`.
 # Tile Design
 
 Before tiling a large landscape, it is useful to estimate a distance decay
-parameter and a conservative tile overlap. `tile_design()` builds a small
-synthetic ConScape problem, computes expected costs, and chooses an exponential
-distance scale so that proximity has decayed to a small threshold at the
-specified maximum distance.
+parameter and an explicit tile overlap. `tile_design()` builds a fully connected
+synthetic ideal-habitat ConScape problem, computes expected costs from the
+center cell, and chooses an exponential distance scale so that proximity has
+decayed to a small threshold at the specified maximum distance.
+
+The overlap is controlled by `trim_threshold`: the returned `tile_trim` is the
+landmark-rounded distance at which the calibrated proximity is no greater than
+that threshold. The interior tile width is chosen separately. You can provide a
+specific `tile_width`, an approximate `max_tile_cells` limit, or let the default
+`overlap_area_factor` choose a width that balances retained tile area against
+overlap overhead.
 
 ```{r tile-design, eval=FALSE}
 jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.11.4/bin"
@@ -95,16 +102,22 @@ td <- tile_design(
   r_target = habitat,
   max_d    = 8500,
   theta    = 0.1,
-  jl_home  = jl_home
+  jl_home  = jl_home,
+  trim_threshold = 0.01,
+  overlap_area_factor = 2,
+  landmark = 5L
 )
 
 td
+td$diagnostics
 ```
 
 The returned list includes `distance_scale` (the calibrated decay parameter),
-`tile_d`, `tile_trim`, and `theta` — all in the map units of the input raster.
-Pass `tile_d` and `tile_trim` to `conscape_prep()`, and `distance_scale` and
-`theta` to `run_conscape()`.
+`tile_d`, `tile_trim`, and `theta` - all in the map units of the input raster.
+Pass `tile_d`, `tile_trim`, and the same `landmark` to `conscape_prep()`, and
+`distance_scale` and `theta` to `run_conscape()`. The `diagnostics` element
+records the requested trim, effective trim after landmark rounding, expected
+tile count, overlap area factor, and proximity at the final trim distance.
 
 # Preparing Tiles
 
@@ -121,7 +134,7 @@ prep <- conscape_prep(
   r_src = habitat,
   r_mov = affinity,
   target_threshold = 0,
-  landmark = 5L,
+  landmark = td$landmark,
   clear_dir = TRUE
 )
 
@@ -358,8 +371,9 @@ Before running a large analysis:
 1. Confirm `affinities` / `r_mov` is a permeability surface, not resistance.
    Transform resistance to affinity before passing it to ConScapeRtools.
 2. Run `tile_design()` to obtain a landscape-calibrated `distance_scale`,
-   `theta`, `tile_d`, and `tile_trim`. Pass these directly from the returned
-   list to `conscape_prep()` and `run_conscape()`.
+   `theta`, `tile_d`, `tile_trim`, `landmark`, and diagnostics. Check
+   `td$diagnostics$overlap_area_factor` and
+   `td$diagnostics$proximity_at_effective_trim` before launching a large run.
 3. Choose `theta` based on the movement model: small values (near 0) allow more
    random movement; large values approach deterministic least-cost paths.
 4. Use `landmark > 1L` for faster default metric runs when coarse-grained target

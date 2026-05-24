@@ -35,3 +35,55 @@ test_that("stop_conscape_julia clears stale finalized refs after stopping", {
   expect_true(called)
   expect_null(pkg_local$finalizedRefs)
 })
+
+test_that("exported Julia helpers start and stop", {
+  started <- FALSE
+  stopped <- FALSE
+
+  testthat::local_mocked_bindings(
+    juliaSetupOk = function() TRUE,
+    ConScapeR_setup = function(julia_path, install_libraries = FALSE) {
+      started <<- TRUE
+      expect_equal(julia_path, "C:/Julia/bin")
+      expect_false(install_libraries)
+      invisible(TRUE)
+    },
+    stopJulia = function() {
+      stopped <<- TRUE
+      invisible(TRUE)
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_invisible(conscape_julia_start("C:/Julia/bin", quiet = TRUE))
+  expect_true(started)
+
+  expect_invisible(conscape_julia_stop())
+  expect_true(stopped)
+})
+
+test_that("conscape_julia_status does not start Julia", {
+  setup_checked <- FALSE
+  testthat::local_mocked_bindings(
+    juliaSetupOk = function() {
+      setup_checked <<- TRUE
+      TRUE
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_false(conscape_julia_status())
+  expect_false(setup_checked)
+})
+
+test_that("conscape_julia_start reports invalid setup", {
+  testthat::local_mocked_bindings(
+    juliaSetupOk = function() FALSE,
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_error(
+    conscape_julia_start("C:/Julia/bin", quiet = TRUE),
+    "path to the Julia"
+  )
+})

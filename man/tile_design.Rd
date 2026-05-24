@@ -10,7 +10,14 @@ tile_design(
   r_target = NULL,
   max_d,
   theta = 0.1,
-  jl_home
+  jl_home,
+  calibration_threshold = 0.025,
+  trim_threshold = 0.01,
+  tile_width = NULL,
+  max_tile_cells = NULL,
+  overlap_area_factor = 2,
+  landmark = 10L,
+  stop_julia = TRUE
 )
 }
 \arguments{
@@ -38,6 +45,34 @@ least–cost paths. Default is \code{0.1}.}
 \item{jl_home}{Path to the \code{bin} directory where the Julia executable
 resides. This is passed to \code{JuliaConnectoR} and used to initialize
 the ConScape / ConScapeR environment.}
+
+\item{calibration_threshold}{Proximity target used to calibrate
+\code{distance_scale} at \code{max_d}. Default is \code{0.025}.}
+
+\item{trim_threshold}{Maximum proximity expected at the retained tile
+boundary after trimming. Smaller values create larger tile overlaps.
+Default is \code{0.01}.}
+
+\item{tile_width}{Optional target interior tile width in map units. Use this
+when memory or runtime constraints require a specific tile size. If \code{NULL},
+\code{max_tile_cells} or \code{overlap_area_factor} determines the tile width.}
+
+\item{max_tile_cells}{Optional approximate maximum number of interior cells
+per tile. Used only when \code{tile_width} is \code{NULL}.}
+
+\item{overlap_area_factor}{Desired ratio of extended tile area to retained
+interior tile area when \code{tile_width} and \code{max_tile_cells} are both \code{NULL}.
+The default \code{2} chooses the smallest interior tile width that keeps the
+per-tile computational area near twice the retained area before landmark
+rounding.}
+
+\item{landmark}{Integer coarse-graining window size used to round tile width
+and trim to the same landmark-aligned grid used by \code{\link[=conscape_prep]{conscape_prep()}}.}
+
+\item{stop_julia}{Logical. If \code{TRUE} (default), close the Julia session when
+\code{tile_design()} exits. Set to \code{FALSE} to keep Julia open for faster
+repeated calls with the same Julia path and process settings. Use
+\code{\link[=conscape_julia_stop]{conscape_julia_stop()}} when finished.}
 }
 \value{
 A named list of class \code{"ConScapeRtools_design"} with elements:
@@ -52,6 +87,12 @@ accessible as \code{exp_d} for backwards compatibility.
 \code{\link[=conscape_prep]{conscape_prep()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
 \item \code{theta} – the \code{theta} value used for calibration, to pass to
 \code{\link[=run_conscape]{run_conscape()}}.
+\item \code{landmark} – the landmark value used for tile and trim rounding.
+\item \code{trim_threshold} – the requested maximum proximity at the trim distance.
+\item \code{overlap_area_factor} – realized extended-area to retained-area ratio.
+\item \code{diagnostics} – a list describing requested trim, effective trim after
+landmark rounding, expected tile count, overlap area factor, and proximity
+at the effective trim.
 }
 
 The function also prints a short, colorized summary of these design
@@ -62,18 +103,18 @@ Uses the resolution and values of a movement affinity raster to derive a
 calibrated exponential decay parameter (\code{distance_scale}) and suggested tile
 width (\code{tile_d}) and overlap (\code{tile_trim}) for ConScape analyses, given a
 presumed maximum dispersal distance in ideal habitat. Internally, this builds
-a small synthetic landscape, runs ConScape's randomized shortest-path model,
-and calibrates the decay so that proximity at \code{max_d} drops to a specified
-threshold.
+a fully connected synthetic ideal-habitat landscape, runs ConScape's
+randomized shortest-path model from the center cell, and calibrates the decay
+so that proximity at \code{max_d} drops to \code{calibration_threshold}.
 }
 \details{
 The input \code{r_mov} must be in a projected CRS so that cell resolution and
 \code{max_d} are expressed in compatible distance units. Only the cell
 resolution and maximum values of \code{r_mov}, \code{r_source}, and \code{r_target}
-are used: the function constructs a synthetic square landscape whose
-size is chosen to span roughly four times \code{max_d}, sets the diagonal
-of the movement grid to the maximum movement probability, and assigns
-constant maximum source and target quality.
+are used: the function constructs a fully connected synthetic landscape
+whose size is chosen to span roughly four times \code{max_d}, fills the movement
+grid with the maximum movement probability, and assigns constant maximum
+source and target quality.
 
 A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
 costs are computed from the center cell to all others. The decay parameter
@@ -81,10 +122,10 @@ costs are computed from the center cell to all others. The decay parameter
 proximity at the cell closest to \code{max_d} drops to a specified threshold.
 This value is then used to derive:
 \itemize{
-\item \code{tile_d} – a suggested minimum interior tile width for ConScape runs,
-\item \code{tile_trim} – a suggested minimum tile overlap, chosen so that
-contributions from beyond the trimmed edge are negligible under the
-calibrated decay.
+\item \code{tile_trim} from \code{trim_threshold}, so tile-edge influence is explicit,
+\item \code{tile_d} from \code{tile_width}, \code{max_tile_cells}, or \code{overlap_area_factor},
+\item diagnostics showing requested and effective trim, expected tile count,
+overlap area factor, and proximity at the final trim distance.
 }
 
 Pass \code{tile_d} and \code{tile_trim} to \code{\link[=conscape_prep]{conscape_prep()}}, and \code{distance_scale}
@@ -112,10 +153,15 @@ td <- tile_design(r_mov    = affinity,
                   r_target = habitat,
                   max_d    = 7000,
                   theta    = 0.1,
-                  jl_home  = jl_home)
+                  jl_home  = jl_home,
+                  trim_threshold = 0.01,
+                  overlap_area_factor = 2,
+                  landmark = 5L)
+
+td$diagnostics
 
 ## Pass results directly to conscape_prep() and run_conscape()
-# td$tile_d, td$tile_trim  --> conscape_prep()
+# td$tile_d, td$tile_trim, td$landmark  --> conscape_prep()
 # td$distance_scale, td$theta --> run_conscape()
 }
 }

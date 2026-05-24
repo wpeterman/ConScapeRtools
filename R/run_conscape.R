@@ -94,6 +94,10 @@
 #'   [conscape_sensitivity()]. Pass `TRUE` for the default quality and linked
 #'   affinity-cost elasticities; pass a character vector to specify `wrt`
 #'   values directly. See [conscape_sensitivity()] for full options.
+#' @param stop_julia Logical. If `TRUE` (default), close the Julia session when
+#'   `run_conscape()` exits. Set to `FALSE` to keep Julia open for faster
+#'   repeated ConScape calls with the same Julia path and process settings. Use
+#'   [conscape_julia_stop()] when finished.
 #' @param hab_target Deprecated. Use `target_qualities` instead.
 #' @param hab_src Deprecated. Use `source_qualities` instead.
 #' @param mov_prob Deprecated. Use `affinities` instead.
@@ -182,7 +186,8 @@
 #'                   r_target = habitat,
 #'                   max_d    = 8500,
 #'                   theta    = 0.15,
-#'                   jl_home  = jl_home)
+#'                   jl_home  = jl_home,
+#'                   landmark = 5L)
 #'
 #' ## Prepare tiled rasters
 #' prep <- conscape_prep(tile_d         = td$tile_d,
@@ -191,7 +196,7 @@
 #'                       r_mov          = affinity,
 #'                       r_src          = habitat,
 #'                       clear_dir      = TRUE,
-#'                       landmark       = 5L)
+#'                       landmark       = td$landmark)
 #'
 #' ## Serial run (tiled)
 #' cs_serial <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
@@ -268,6 +273,7 @@ run_conscape <- function(conscape_prep = NULL,
                          connectivity_function = "expected_cost",
                          metrics = c("betweenness_kweighted", "connected_habitat"),
                          sensitivity = NULL,
+                         stop_julia = TRUE,
                          hab_target = NULL,
                          hab_src = NULL,
                          mov_prob = NULL,
@@ -311,6 +317,9 @@ run_conscape <- function(conscape_prep = NULL,
   if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) || landmark < 1) {
     stop("landmark must be a positive integer.", call. = FALSE)
   }
+  if (!is.logical(stop_julia) || length(stop_julia) != 1L || is.na(stop_julia)) {
+    stop("stop_julia must be TRUE or FALSE.", call. = FALSE)
+  }
 
   landmark <- as.integer(landmark)
   cost_function <- normalize_conscape_cost_function(cost_function)
@@ -327,19 +336,27 @@ run_conscape <- function(conscape_prep = NULL,
   sensitivity_target_equal_source <- if (is.null(sensitivity)) TRUE else sensitivity$target_equal_source
   sensitivity_require_landmark_one <- if (is.null(sensitivity)) TRUE else sensitivity$require_landmark_one
 
-  stop_conscape_julia()
+  if (isTRUE(stop_julia)) {
+    stop_conscape_julia()
+    on.exit(stop_conscape_julia(), add = TRUE)
+  } else if (isTRUE(parallel) && isFALSE(parallel_R) && conscape_julia_status()) {
+    current_threads <- try(suppressMessages(juliaEval("Threads.nthreads()")), silent = TRUE)
+    if (inherits(current_threads, "try-error") ||
+        !identical(as.integer(current_threads), as.integer(workers))) {
+      warning(
+        "Reusing an existing Julia session may not honor the requested workers value. ",
+        "Julia thread count is fixed when Julia starts. Call conscape_julia_stop() ",
+        "or set stop_julia = TRUE before changing threaded Julia settings.",
+        call. = FALSE
+      )
+    }
+  }
+
   if(parallel & isFALSE(parallel_R)){
     Sys.setenv(JULIA_NUM_THREADS = workers)
   }
 
-  clear_juliaconnector_finalized_refs()
-  if(!juliaSetupOk()){
-    Sys.setenv(JULIA_BINDIR = jl_home)
-  }
-
-  if(!juliaSetupOk()){
-    stop("Check that the path to the Julia binary directory is correct")
-  }
+  conscape_julia_start(jl_home, quiet = TRUE)
 
   if(dir.exists(out_dir)){
     if(length(list.files(out_dir)) > 0 & isFALSE(clear_dir)){
@@ -758,7 +775,6 @@ run_conscape <- function(conscape_prep = NULL,
   }
 
   # juliaEval("GC.gc()")
-  stop_conscape_julia()
   gc()
   return(out)
 } ## End function

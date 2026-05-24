@@ -47,6 +47,13 @@ print.ConScapeRtools_design <- function(x, ...) {
   cat("  theta:          ", conscape_format_value(x$theta), "\n", sep = "")
   cat("  tile_d:         ", conscape_format_value(x$tile_d), "\n", sep = "")
   cat("  tile_trim:      ", conscape_format_value(x$tile_trim), "\n", sep = "")
+  if (!is.null(x$landmark)) {
+    cat("  landmark:       ", conscape_format_value(x$landmark), "\n", sep = "")
+  }
+  if (is.list(x$diagnostics) && !is.null(x$diagnostics$expected_tile_count)) {
+    cat("  expected tiles: ", conscape_format_value(x$diagnostics$expected_tile_count), "\n", sep = "")
+    cat("  area factor:    ", conscape_format_value(round(x$overlap_area_factor, 3)), "\n", sep = "")
+  }
   invisible(x)
 }
 
@@ -54,14 +61,46 @@ print.ConScapeRtools_design <- function(x, ...) {
 #' @method summary ConScapeRtools_design
 #' @export
 summary.ConScapeRtools_design <- function(object, ...) {
+  diagnostics <- object$diagnostics
+  diagnostic_value <- function(name) {
+    if (is.list(diagnostics) && !is.null(diagnostics[[name]])) {
+      return(diagnostics[[name]])
+    }
+    NA_real_
+  }
   out <- data.frame(
-    parameter = c("distance_scale", "theta", "tile_d", "tile_trim"),
-    value = c(object$distance_scale, object$theta, object$tile_d, object$tile_trim),
+    parameter = c(
+      "distance_scale",
+      "theta",
+      "tile_d",
+      "tile_trim",
+      "landmark",
+      "trim_threshold",
+      "expected_tile_count",
+      "overlap_area_factor",
+      "proximity_at_trim"
+    ),
+    value = c(
+      object$distance_scale,
+      object$theta,
+      object$tile_d,
+      object$tile_trim,
+      if (is.null(object$landmark)) NA_real_ else object$landmark,
+      if (is.null(object$trim_threshold)) NA_real_ else object$trim_threshold,
+      diagnostic_value("expected_tile_count"),
+      if (is.null(object$overlap_area_factor)) NA_real_ else object$overlap_area_factor,
+      diagnostic_value("proximity_at_effective_trim")
+    ),
     description = c(
       "Exponential distance-decay numerator for run_conscape()",
       "Randomized shortest-path theta used during calibration",
       "Suggested minimum interior tile width",
-      "Suggested minimum tile overlap and mosaic trim width"
+      "Suggested minimum tile overlap and mosaic trim width",
+      "Landmark value used to round tile width and trim",
+      "Requested maximum proximity at the trim distance",
+      "Expected number of interior tiles for r_mov",
+      "Extended tile area divided by retained interior tile area",
+      "Expected proximity at the effective trim distance"
     ),
     stringsAsFactors = FALSE
   )

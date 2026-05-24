@@ -3,6 +3,7 @@ mock_julia <- function() {
     stopJulia = function() invisible(TRUE),
     juliaSetupOk = function() TRUE,
     juliaEval = function(...) invisible(TRUE),
+    ConScapeR_setup = function(...) invisible(TRUE),
     .env = asNamespace("ConScapeRtools")
   )
 }
@@ -56,6 +57,83 @@ test_that("run_conscape validates single-raster geometry before running Julia", 
       jl_home = "C:/Julia/bin"
     ),
     "share extent"
+  )
+})
+
+test_that("run_conscape can leave Julia open when requested", {
+  stop_calls <- 0L
+  testthat::local_mocked_bindings(
+    stopJulia = function() {
+      stop_calls <<- stop_calls + 1L
+      invisible(TRUE)
+    },
+    juliaSetupOk = function() TRUE,
+    juliaEval = function(...) invisible(TRUE),
+    ConScapeR_setup = function(...) invisible(TRUE),
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  target <- make_test_raster()
+  src <- make_test_raster(n = 10)
+  mov <- make_test_raster()
+
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-bad-geometry-keep-julia"),
+      hab_target = target,
+      hab_src = src,
+      mov_prob = mov,
+      jl_home = "C:/Julia/bin",
+      stop_julia = FALSE
+    ),
+    "share extent"
+  )
+  expect_equal(stop_calls, 0L)
+})
+
+test_that("run_conscape warns when reusing Julia with threaded settings", {
+  mock_julia()
+  testthat::local_mocked_bindings(
+    juliaEval = function(expr, ...) {
+      if (identical(expr, "Threads.nthreads()")) return(1L)
+      invisible(TRUE)
+    },
+    juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir, hab_target, ...) {
+      for (i in seq_along(hab_target)) {
+        write_fake_conscape_outputs(
+          out_dir,
+          file.path(target_dir, hab_target[[i]]),
+          iter = paste0("-iter_", i)
+        )
+      }
+      invisible(TRUE)
+    },
+    conscape_julia_status = function() TRUE,
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  r <- make_test_raster(n = 10, vals = 1)
+  prep <- conscape_prep(
+    tile_d = 5,
+    tile_trim = 2,
+    asc_dir = file.path(tempdir(), "run-thread-reuse-prep"),
+    r_target = r,
+    r_mov = r,
+    r_src = r,
+    clear_dir = TRUE,
+    landmark = 5L,
+    progress = FALSE
+  )
+  expect_warning(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-thread-reuse-warning"),
+      conscape_prep = prep,
+      jl_home = "C:/Julia/bin",
+      parallel = TRUE,
+      workers = 2,
+      stop_julia = FALSE
+    ),
+    "may not honor the requested workers"
   )
 })
 
