@@ -1,3 +1,9 @@
+ConScapeRtools 0.4.16
+---------
+* Hardened JuliaConnectoR cleanup around stale finalized references during ConScape calls
+* Improved Julia-side GridRSP diagnostics for singular or degenerate graph failures
+* Added regression coverage for Julia lifecycle cleanup and tiled versus untiled agreement
+
 ConScapeRtools 0.4.15
 ---------
 * Refactored `tile_design()` to use fully connected ideal-habitat calibration, center-cell referencing, explicit trim thresholds, and separate tile-width controls

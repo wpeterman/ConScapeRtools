@@ -36,6 +36,49 @@ test_that("stop_conscape_julia clears stale finalized refs after stopping", {
   expect_null(pkg_local$finalizedRefs)
 })
 
+test_that("package Julia calls clear stale finalized refs", {
+  ns <- asNamespace("JuliaConnectoR")
+  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
+  old_refs <- pkg_local$finalizedRefs
+  on.exit(pkg_local$finalizedRefs <- old_refs, add = TRUE)
+
+  saw_cleared_refs <- FALSE
+  testthat::local_mocked_bindings(
+    juliaCall = function(...) {
+      saw_cleared_refs <<- is.null(pkg_local$finalizedRefs)
+      "ok"
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  pkg_local$finalizedRefs <- as.raw(seq_len(8))
+  out <- getFromNamespace("juliaCall_conscape", "ConScapeRtools")("identity", 1)
+
+  expect_equal(out, "ok")
+  expect_true(saw_cleared_refs)
+})
+
+test_that("package Julia calls clear stale finalized refs after errors", {
+  ns <- asNamespace("JuliaConnectoR")
+  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
+  old_refs <- pkg_local$finalizedRefs
+  on.exit(pkg_local$finalizedRefs <- old_refs, add = TRUE)
+
+  testthat::local_mocked_bindings(
+    juliaCall = function(...) {
+      pkg_local$finalizedRefs <<- as.raw(seq_len(8))
+      stop("Julia call failed", call. = FALSE)
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_error(
+    getFromNamespace("juliaCall_conscape", "ConScapeRtools")("identity", 1),
+    "Julia call failed"
+  )
+  expect_null(pkg_local$finalizedRefs)
+})
+
 test_that("exported Julia helpers start and stop", {
   started <- FALSE
   stopped <- FALSE

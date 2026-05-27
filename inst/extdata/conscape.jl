@@ -1,5 +1,6 @@
 using Logging
 using ConScape
+using LinearAlgebra
 using SparseArrays
 using Statistics
 
@@ -102,6 +103,36 @@ end
 function _write_surface(out_dir, specs, id, iter, matrix, meta)
     dir_name, prefix = specs[id]
     ConScape.writeasc(joinpath(out_dir, dir_name, prefix * iter * ".asc"), matrix, meta)
+end
+
+function _positive_count(x)
+    if x isa SparseMatrixCSC
+        return nnz(x)
+    else
+        return count(v -> isfinite(v) && v > 0.0, x)
+    end
+end
+
+function _gridsrp_failure_message(e, mov_prob, hab_qual_source, coarse_target_qualities, theta)
+    msg = sprint(showerror, e)
+    movement_cells = _positive_count(mov_prob)
+    source_cells = _positive_count(hab_qual_source)
+    target_cells = _positive_count(coarse_target_qualities)
+    context = "movement cells > 0: $movement_cells; source cells > 0: $source_cells; coarse target cells > 0: $target_cells; theta: $theta"
+
+    if e isa SingularException || occursin("SingularException", msg)
+        return "GridRSP failed because ConScape built a singular linear system. " *
+               "This usually indicates a disconnected or degenerate movement graph, " *
+               "zero or isolated source/target cells after masking and coarse graining, " *
+               "or an extreme theta value for this landscape. $context. Original error: $msg"
+    elseif occursin("reducing over an empty collection", msg)
+        return "GridRSP failed because ConScape found no usable graph entries after masking, " *
+               "cost transformation, and theta weighting. Check that affinities are positive " *
+               "where movement is possible and that source/target cells overlap reachable habitat. " *
+               "$context. Original error: $msg"
+    else
+        return "GridRSP failed: $msg. $context"
+    end
 end
 
 function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res,
@@ -231,7 +262,12 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                         try
                             ConScape.GridRSP(g_coarse, θ = theta)
                         catch e2
-                            throw(ErrorException("GridRSP failed: $e2"))
+                            throw(ErrorException(_gridsrp_failure_message(
+                                e2,
+                                mov_prob,
+                                hab_qual_source,
+                                coarse_target_qualities,
+                                theta)))
                         end
                     end
 

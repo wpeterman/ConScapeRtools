@@ -559,17 +559,17 @@ run_conscape <- function(conscape_prep = NULL,
         invisible(juliaEval(conscape_batch_file))
 
         max_retries <- 5L
-        invisible(cs_out <- juliaCall("conscape_batch",
-                                       src_dir, mov_dir, target_dir, out_dir,
-                                       hab_target, hab_src, mov_prob,
-                                       landmark, theta, exp_d, NA_val,
-                                       max_retries, progress,
-                                       metrics, connectivity_function, cost_function,
-                                       sensitivity_wrt, sensitivity_method,
-                                       sensitivity_landscape_measure, sensitivity_unitless,
-                                       sensitivity_one_out_of, sensitivity_diagvalue,
-                                       sensitivity_target_equal_source,
-                                       sensitivity_require_landmark_one))
+        invisible(cs_out <- juliaCall_conscape("conscape_batch",
+                                                src_dir, mov_dir, target_dir, out_dir,
+                                                hab_target, hab_src, mov_prob,
+                                                landmark, theta, exp_d, NA_val,
+                                                max_retries, progress,
+                                                metrics, connectivity_function, cost_function,
+                                                sensitivity_wrt, sensitivity_method,
+                                                sensitivity_landscape_measure, sensitivity_unitless,
+                                                sensitivity_one_out_of, sensitivity_diagvalue,
+                                                sensitivity_target_equal_source,
+                                                sensitivity_require_landmark_one))
 
       } else {
 
@@ -587,17 +587,17 @@ run_conscape <- function(conscape_prep = NULL,
         invisible(juliaEval(conscape_batch_file))
 
         max_retries <- 5L
-        invisible(cs_out <- juliaCall("conscape_batch_distributed",
-                                       src_dir, mov_dir, target_dir, out_dir,
-                                       hab_target, hab_src, mov_prob,
-                                       landmark, theta, exp_d, NA_val,
-                                       max_retries, progress,
-                                       metrics, connectivity_function, cost_function,
-                                       sensitivity_wrt, sensitivity_method,
-                                       sensitivity_landscape_measure, sensitivity_unitless,
-                                       sensitivity_one_out_of, sensitivity_diagvalue,
-                                       sensitivity_target_equal_source,
-                                       sensitivity_require_landmark_one))
+        invisible(cs_out <- juliaCall_conscape("conscape_batch_distributed",
+                                                src_dir, mov_dir, target_dir, out_dir,
+                                                hab_target, hab_src, mov_prob,
+                                                landmark, theta, exp_d, NA_val,
+                                                max_retries, progress,
+                                                metrics, connectivity_function, cost_function,
+                                                sensitivity_wrt, sensitivity_method,
+                                                sensitivity_landscape_measure, sensitivity_unitless,
+                                                sensitivity_one_out_of, sensitivity_diagvalue,
+                                                sensitivity_target_equal_source,
+                                                sensitivity_require_landmark_one))
       }
     }
 
@@ -640,20 +640,20 @@ run_conscape <- function(conscape_prep = NULL,
       ## Julia order
       iter <- ""
 
-      suppressMessages({cs_out <- juliaCall('conscape',
-                                            normalizePath(hab_src_dir, winslash = "\\"),
-                                            normalizePath(mov_prob_dir, winslash = "\\") ,
-                                            normalizePath(hab_target_dir, winslash = "\\"),
-                                             out_dir,
-                                             "hab_target.asc", "hab_src.asc", "mov_prob.asc",
-                                             # hab_target_file, hab_src_file, mov_prob_file,
-                                             landmark, theta, exp_d, NA_val, iter,
-                                             metrics, connectivity_function, cost_function,
-                                             sensitivity_wrt, sensitivity_method,
-                                             sensitivity_landscape_measure, sensitivity_unitless,
-                                             sensitivity_one_out_of, sensitivity_diagvalue,
-                                             sensitivity_target_equal_source,
-                                             sensitivity_require_landmark_one)})
+      suppressMessages({cs_out <- juliaCall_conscape('conscape',
+                                                     normalizePath(hab_src_dir, winslash = "\\"),
+                                                     normalizePath(mov_prob_dir, winslash = "\\") ,
+                                                     normalizePath(hab_target_dir, winslash = "\\"),
+                                                     out_dir,
+                                                     "hab_target.asc", "hab_src.asc", "mov_prob.asc",
+                                                     # hab_target_file, hab_src_file, mov_prob_file,
+                                                     landmark, theta, exp_d, NA_val, iter,
+                                                     metrics, connectivity_function, cost_function,
+                                                     sensitivity_wrt, sensitivity_method,
+                                                     sensitivity_landscape_measure, sensitivity_unitless,
+                                                     sensitivity_one_out_of, sensitivity_diagvalue,
+                                                     sensitivity_target_equal_source,
+                                                     sensitivity_require_landmark_one)})
     } else {
 
 
@@ -671,16 +671,16 @@ run_conscape <- function(conscape_prep = NULL,
         r_source <- hab_src[i]
         r_res <- mov_prob[i]
 
-        suppressMessages({cs_out <- juliaCall('conscape',
-                                               src_dir, mov_dir, target_dir, out_dir,
-                                               r_target, r_source, r_res,
-                                               landmark, theta, exp_d, NA_val, iter,
-                                               metrics, connectivity_function, cost_function,
-                                               sensitivity_wrt, sensitivity_method,
-                                               sensitivity_landscape_measure, sensitivity_unitless,
-                                               sensitivity_one_out_of, sensitivity_diagvalue,
-                                               sensitivity_target_equal_source,
-                                               sensitivity_require_landmark_one)})
+        suppressMessages({cs_out <- juliaCall_conscape('conscape',
+                                                       src_dir, mov_dir, target_dir, out_dir,
+                                                       r_target, r_source, r_res,
+                                                       landmark, theta, exp_d, NA_val, iter,
+                                                       metrics, connectivity_function, cost_function,
+                                                       sensitivity_wrt, sensitivity_method,
+                                                       sensitivity_landscape_measure, sensitivity_unitless,
+                                                       sensitivity_one_out_of, sensitivity_diagvalue,
+                                                       sensitivity_target_equal_source,
+                                                       sensitivity_require_landmark_one)})
 
         if(isTRUE(progress)){
           setTxtProgressBar(pb,i)
@@ -809,16 +809,16 @@ cs_par.func <- function(i,
                         .sensitivity_target_equal_source,
                         .sensitivity_require_landmark_one){
   iter <- paste0('-iter_', i)
-  invisible({cs_out <- juliaCall('conscape',
-                                 .src_dir, .mov_dir, .target_dir, .out_dir,
-                                 .hab_target[i], .hab_src[i], .mov_prob[i],
-                                 .landmark, .theta, .exp_d, .NA_val, iter,
-                                 .metrics, .connectivity_function, .cost_function,
-                                 .sensitivity_wrt, .sensitivity_method,
-                                 .sensitivity_landscape_measure,
-                                 .sensitivity_unitless, .sensitivity_one_out_of,
-                                 .sensitivity_diagvalue,
-                                 .sensitivity_target_equal_source,
-                                 .sensitivity_require_landmark_one)})
+  invisible({cs_out <- juliaCall_conscape('conscape',
+                                          .src_dir, .mov_dir, .target_dir, .out_dir,
+                                          .hab_target[i], .hab_src[i], .mov_prob[i],
+                                          .landmark, .theta, .exp_d, .NA_val, iter,
+                                          .metrics, .connectivity_function, .cost_function,
+                                          .sensitivity_wrt, .sensitivity_method,
+                                          .sensitivity_landscape_measure,
+                                          .sensitivity_unitless, .sensitivity_one_out_of,
+                                          .sensitivity_diagvalue,
+                                          .sensitivity_target_equal_source,
+                                          .sensitivity_require_landmark_one)})
   # juliaEval("GC.gc()")
 }

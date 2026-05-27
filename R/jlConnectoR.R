@@ -15,6 +15,17 @@ clear_juliaconnector_finalized_refs <- function() {
   invisible(TRUE)
 }
 
+juliaCall_conscape <- function(...) {
+  clear_juliaconnector_finalized_refs()
+  tryCatch(
+    juliaCall(...),
+    error = function(e) {
+      clear_juliaconnector_finalized_refs()
+      stop(e)
+    }
+  )
+}
+
 stop_conscape_julia <- function() {
   invisible(gc())
   try(stopJulia(), silent = TRUE)
