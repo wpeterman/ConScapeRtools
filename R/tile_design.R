@@ -56,9 +56,9 @@
 #' resolution and maximum values of `r_mov`, `r_source`, and `r_target`
 #' are used: the function constructs a fully connected synthetic landscape
 #' whose size is chosen so that the center cell can reach at least `max_d`,
-#' fills the movement and target grids with their maximum values, and assigns
-#' source quality only to the center cell. This keeps the calibration landscape
-#' fully connected while avoiding an expensive all-sources cost matrix.
+#' fills the movement grid with its maximum value, and assigns source and target
+#' quality only to the center cell. This keeps the calibration landscape fully
+#' connected while avoiding an expensive all-targets cost matrix.
 #'
 #' A ConScape `Grid` and `GridRSP` object are then created, and expected
 #' costs are computed from the center cell to all others. The decay parameter
@@ -228,7 +228,9 @@ tile_design <- function(r_mov,
     stop("r_mov, r_source, and r_target must contain at least one finite value.", call. = FALSE)
   }
 
-  ## Create a fully connected ideal-habitat calibration raster
+  ## Create a fully connected ideal-habitat calibration raster.
+  ## Movement is connected everywhere, but source and target are center-only so
+  ## ConScape returns one expected-cost column instead of an all-target matrix.
   mov <- terra::rast(nrows = cal_nrow, ncols = cal_ncol,
                      vals = mx_p,
                      resolution = r_res, crs = r_crs,
@@ -240,7 +242,7 @@ tile_design <- function(r_mov,
                      xmin = 0, xmax = resx * cal_ncol,
                      ymin = 0, ymax = resy * cal_nrow)
   target <- terra::rast(nrows = cal_nrow, ncols = cal_ncol,
-                        vals = mx_target,
+                        vals = 0,
                         resolution = r_res, crs = r_crs,
                         xmin = 0, xmax = resx * cal_ncol,
                         ymin = 0, ymax = resy * cal_nrow)
@@ -251,6 +253,7 @@ tile_design <- function(r_mov,
     col = ceiling(terra::ncol(mov) / 2)
   )
   src[center_cell] <- mx_src
+  target[center_cell] <- mx_target
   cell_xy <- terra::crds(target)
   center_coord <- cell_xy[center_cell, ]
   e_dist <- sqrt((cell_xy[, 1] - center_coord[1])^2 +
@@ -344,6 +347,7 @@ tile_design <- function(r_mov,
     trim_extent_factor = trim_extent_factor,
     source_cell = center_cell,
     source_cell_count = 1L,
+    target_cell_count = 1L,
     max_d_cell = max_cell,
     max_d_cell_distance = as.numeric(e_dist[max_cell])
   )

@@ -342,3 +342,30 @@ test_that("run_conscape guards sensitivity against coarse graining by default", 
     "landmark = 1L"
   )
 })
+
+test_that("run_conscape reports prep landmark requirement for sensitivity", {
+  mock_julia()
+  r <- make_test_raster(n = 6, vals = 1)
+  prep <- conscape_prep(
+    tile_d = 6,
+    tile_trim = 0,
+    asc_dir = file.path(tempdir(), "run-sensitivity-prep-guard"),
+    r_target = r,
+    r_src = r,
+    r_mov = r,
+    landmark = 3L,
+    clear_dir = TRUE,
+    progress = FALSE
+  )
+
+  expect_error(
+    run_conscape(
+      conscape_prep = prep,
+      out_dir = file.path(tempdir(), "run-sensitivity-prep-guard-out"),
+      landmark = 1L,
+      sensitivity = conscape_sensitivity(wrt = "Q"),
+      jl_home = "C:/Julia/bin"
+    ),
+    "create that object with landmark = 1L"
+  )
+})

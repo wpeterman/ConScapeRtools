@@ -69,8 +69,9 @@ of \code{out_dir} are removed before writing new results. If \code{FALSE} and
 \item{landmark}{Integer coarse-graining window size passed to ConScape's
 \code{coarse_graining()} (default \code{10L}). Larger values aggregate target
 qualities to fewer cells, reducing computation. When \code{conscape_prep} is
-provided, \code{landmark} is taken from that object. Set \code{landmark = 1L} for
-sensitivity runs so that target qualities are not altered by coarse graining.}
+provided, \code{landmark} is taken from that object. For sensitivity runs with
+\code{conscape_prep}, create the prep object with \code{landmark = 1L} so that target
+qualities are not altered by coarse graining.}
 
 \item{theta}{Parameter controlling the amount of randomness in paths.
 As \code{theta} approaches 0, movement is increasingly random; as \code{theta}
@@ -225,9 +226,9 @@ Tiled sensitivity uses the same tiling and mosaicking machinery as the
 default metric outputs. It is a tile-local approximation to full-landscape
 sensitivity, so choose a \code{tile_trim} large enough that paths crossing tile
 edges have negligible influence on interior retained cells. For sensitivity
-runs, use \code{landmark = 1L} so that coarse-graining does not alter target
-qualities (the ConScape sensitivity API currently requires target quality
-to equal source quality).
+runs, create any \code{\link[=conscape_prep]{conscape_prep()}} object with \code{landmark = 1L} so that
+coarse-graining does not alter target qualities (the ConScape sensitivity
+API currently requires target quality to equal source quality).
 }
 \examples{
 \dontrun{

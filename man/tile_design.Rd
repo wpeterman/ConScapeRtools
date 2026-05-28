@@ -113,9 +113,9 @@ The input \code{r_mov} must be in a projected CRS so that cell resolution and
 resolution and maximum values of \code{r_mov}, \code{r_source}, and \code{r_target}
 are used: the function constructs a fully connected synthetic landscape
 whose size is chosen so that the center cell can reach at least \code{max_d},
-fills the movement and target grids with their maximum values, and assigns
-source quality only to the center cell. This keeps the calibration landscape
-fully connected while avoiding an expensive all-sources cost matrix.
+fills the movement grid with its maximum value, and assigns source and target
+quality only to the center cell. This keeps the calibration landscape fully
+connected while avoiding an expensive all-targets cost matrix.
 
 A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
 costs are computed from the center cell to all others. The decay parameter

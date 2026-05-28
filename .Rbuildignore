@@ -6,9 +6,13 @@
 ^examples$
 ^tiles_test$
 ^cran-comments\.md$
+^AGENTS\.md$
 ^.*\.Rcheck$
 ^ConScapeRtools_.*\.tar\.gz$
 ^\.positai$
 ^\.claude$
+^vignettes/conscape_results$
+^vignettes/conscape_sensitivity_tiles$
+^vignettes/conscape_tiles$
 ^doc$
 ^Meta$

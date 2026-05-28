@@ -125,7 +125,7 @@ test_that("tile_design rejects invalid Julia setup", {
   )
 })
 
-test_that("tile_design calibration raster is fully connected and center-referenced", {
+test_that("tile_design calibration raster is compact and center-referenced", {
   r <- make_test_raster(n = 5, vals = 1)
   captured <- NULL
 
@@ -169,11 +169,16 @@ test_that("tile_design calibration raster is fully connected and center-referenc
     terra::values(captured$sources, mat = FALSE)[out$diagnostics$source_cell],
     1
   )
-  expect_equal(unique(terra::values(captured$targets, mat = FALSE)), 1)
+  expect_equal(sum(terra::values(captured$targets, mat = FALSE) > 0), 1)
+  expect_equal(
+    terra::values(captured$targets, mat = FALSE)[out$diagnostics$source_cell],
+    1
+  )
   expect_gte(out$diagnostics$calibration_radius, 2)
   expect_lte(out$diagnostics$calibration_cells, 49)
   expect_gt(out$diagnostics$source_cell, 1)
   expect_equal(out$diagnostics$source_cell_count, 1L)
+  expect_equal(out$diagnostics$target_cell_count, 1L)
   expect_lte(out$diagnostics$proximity_at_effective_trim, 0.02)
   expect_equal(out$diagnostics$tile_width_source, "overlap_area_factor")
   expect_equal(out$landmark, 5L)

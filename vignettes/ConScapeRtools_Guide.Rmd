@@ -86,9 +86,9 @@ parameter and an explicit tile overlap. `tile_design()` builds a fully connected
 synthetic ideal-habitat ConScape problem, computes expected costs from the
 center cell, and chooses an exponential distance scale so that proximity has
 decayed to a small threshold at the specified maximum distance.
-The calibration uses a single center source cell with fully connected movement
-and target surfaces, so it avoids the expensive all-sources cost matrix while
-still measuring center-referenced costs in ideal habitat.
+The calibration uses fully connected movement with single center source and
+target cells, so ConScape returns one center-referenced expected-cost column
+instead of an expensive all-targets matrix.
 
 The overlap is controlled by `trim_threshold`: the returned `tile_trim` is the
 landmark-rounded distance at which the calibrated proximity is no greater than
@@ -101,7 +101,7 @@ trim distance is therefore read from the calibrated cost-to-proximity curve in
 map units before it is rounded to the raster and landmark grid.
 
 ```{r tile-design, eval=FALSE}
-jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.11.4/bin"
+jl_home <- "C:/Users/you/AppData/Local/Programs/Julia-1.12.6/bin"
 
 td <- tile_design(
   r_mov    = affinity,
@@ -235,12 +235,23 @@ compare across surfaces because they describe response to proportional change.
 Use `unitless = FALSE` for raw unit-change sensitivities.
 
 ```{r sensitivity-run, eval=FALSE}
+prep_sens <- conscape_prep(
+  tile_d = td$tile_d,
+  tile_trim = td$tile_trim,
+  asc_dir = "conscape_sensitivity_tiles",
+  r_target = habitat,
+  r_src = habitat,
+  r_mov = affinity,
+  target_threshold = 0,
+  landmark = 1L,
+  clear_dir = TRUE
+)
+
 cs_sens <- run_conscape(
-  conscape_prep  = prep,
+  conscape_prep  = prep_sens,
   out_dir        = "conscape_sensitivity",
   theta          = td$theta,
   distance_scale = td$distance_scale,
-  landmark       = 1L,
   metrics        = c("connected_habitat", "betweenness_kweighted"),
   sensitivity    = sens,
   jl_home        = jl_home
@@ -256,8 +267,9 @@ There are two important practical constraints.
 First, the current ConScape sensitivity implementation assumes source and target
 qualities are equal. Because `landmark > 1L` coarse-grains target qualities,
 `run_conscape()` requires `landmark = 1L` by default when sensitivity is
-requested. This keeps the target-quality surface aligned with the source-quality
-surface.
+requested. When using `conscape_prep`, this means preparing the sensitivity
+tiles with `landmark = 1L`. This keeps the target-quality surface aligned with
+the source-quality surface.
 
 Second, tiled sensitivity is a tile-local approximation. It uses the same tile
 overlap and mosaicking strategy as `btwn` and `fcon`, but sensitivity to

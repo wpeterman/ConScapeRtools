@@ -1,3 +1,8 @@
+ConScapeRtools 0.4.18
+---------
+* Reduced `tile_design()` calibration work by using a center-only synthetic target, avoiding all-target expected-cost matrices
+* Clarified sensitivity workflows so prepared tiled sensitivity runs require `conscape_prep(..., landmark = 1L)`
+
 ConScapeRtools 0.4.17
 ---------
 * Removed an unnecessary final Julia round trip from `tile_design()` to avoid JuliaConnectoR reference-cleanup errors after successful calibration

@@ -33,8 +33,9 @@
 #' @param landmark Integer coarse-graining window size passed to ConScape's
 #'   `coarse_graining()` (default `10L`). Larger values aggregate target
 #'   qualities to fewer cells, reducing computation. When `conscape_prep` is
-#'   provided, `landmark` is taken from that object. Set `landmark = 1L` for
-#'   sensitivity runs so that target qualities are not altered by coarse graining.
+#'   provided, `landmark` is taken from that object. For sensitivity runs with
+#'   `conscape_prep`, create the prep object with `landmark = 1L` so that target
+#'   qualities are not altered by coarse graining.
 #' @param theta Parameter controlling the amount of randomness in paths.
 #'   As `theta` approaches 0, movement is increasingly random; as `theta`
 #'   increases, paths approach deterministic least-cost paths. Default is `0.01`.
@@ -141,9 +142,9 @@
 #' default metric outputs. It is a tile-local approximation to full-landscape
 #' sensitivity, so choose a `tile_trim` large enough that paths crossing tile
 #' edges have negligible influence on interior retained cells. For sensitivity
-#' runs, use `landmark = 1L` so that coarse-graining does not alter target
-#' qualities (the ConScape sensitivity API currently requires target quality
-#' to equal source quality).
+#' runs, create any [conscape_prep()] object with `landmark = 1L` so that
+#' coarse-graining does not alter target qualities (the ConScape sensitivity
+#' API currently requires target quality to equal source quality).
 #'
 #' @return
 #' When tiles are used and `mosaic = TRUE`, returns an object of class
@@ -391,7 +392,8 @@ run_conscape <- function(conscape_prep = NULL,
       !identical(landmark, 1L)) {
     stop(
       "ConScape sensitivity currently assumes source and target qualities are identical. ",
-      "Use landmark = 1L so coarse_graining() leaves target qualities unchanged, ",
+      "Use landmark = 1L so coarse_graining() leaves target qualities unchanged. ",
+      "When using conscape_prep, create that object with landmark = 1L; ",
       "or set require_landmark_one = FALSE in conscape_sensitivity() for an experimental run.",
       call. = FALSE
     )

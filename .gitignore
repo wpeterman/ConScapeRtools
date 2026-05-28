@@ -12,5 +12,8 @@ examples/
 *.Rcheck/
 ConScapeRtools_*.tar.gz
 .claude
+vignettes/conscape_results/
+vignettes/conscape_sensitivity_tiles/
+vignettes/conscape_tiles/
 doc/
 Meta/
