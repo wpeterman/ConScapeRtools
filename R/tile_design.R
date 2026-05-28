@@ -366,7 +366,6 @@ tile_design <- function(r_mov,
             "Overlap area factor: " %+% red$bold(round(out$overlap_area_factor, 2)) %+% "\n",
             "Proximity at trim: " %+% red$bold(signif(diagnostics$proximity_at_effective_trim, 3)) %+% "\n\n"))
   class(out) <- 'ConScapeRtools_design'
-  invisible(suppressMessages(juliaEval('1+1')))
   return(out)
 }
 

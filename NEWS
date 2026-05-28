@@ -1,3 +1,7 @@
+ConScapeRtools 0.4.17
+---------
+* Removed an unnecessary final Julia round trip from `tile_design()` to avoid JuliaConnectoR reference-cleanup errors after successful calibration
+
 ConScapeRtools 0.4.16
 ---------
 * Hardened JuliaConnectoR cleanup around stale finalized references during ConScape calls

@@ -231,6 +231,7 @@ test_that("tile_design supports explicit tile width and max tile cells", {
 test_that("tile_design can keep Julia open when requested", {
   r <- make_test_raster(n = 5, vals = 1)
   stop_calls <- 0L
+  eval_calls <- 0L
 
   testthat::local_mocked_bindings(
     juliaSetupOk = function() TRUE,
@@ -238,7 +239,10 @@ test_that("tile_design can keep Julia open when requested", {
     Grid = function(...) "grid",
     GridRSP = function(...) "rsp",
     expected_cost = function(...) matrix(seq_len(49), ncol = 1),
-    juliaEval = function(...) TRUE,
+    juliaEval = function(...) {
+      eval_calls <<- eval_calls + 1L
+      TRUE
+    },
     stopJulia = function() {
       stop_calls <<- stop_calls + 1L
       invisible(TRUE)
@@ -256,4 +260,5 @@ test_that("tile_design can keep Julia open when requested", {
 
   expect_s3_class(out, "ConScapeRtools_design")
   expect_equal(stop_calls, 0L)
+  expect_equal(eval_calls, 0L)
 })
