@@ -135,6 +135,22 @@ function _gridsrp_failure_message(e, mov_prob, hab_qual_source, coarse_target_qu
     end
 end
 
+function _with_conscape_logging(quiet::Bool, f::Function)
+    if quiet
+        Logging.with_logger(Logging.NullLogger()) do
+            redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    f()
+                end
+            end
+        end
+    else
+        Logging.with_logger(Logging.NullLogger()) do
+            f()
+        end
+    end
+end
+
 function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res,
                   land_mark, theta, exp_d, NA_val, iter,
                   metrics = ["betweenness_kweighted", "connected_habitat"],
@@ -147,12 +163,11 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                   sensitivity_one_out_of = 1,
                   sensitivity_diagvalue = nothing,
                   sensitivity_target_equal_source = true,
-                  sensitivity_require_landmark_one = true)
+                  sensitivity_require_landmark_one = true,
+                  quiet = true)
 
-    Logging.with_logger(Logging.NullLogger()) do
-        redirect_stdout(devnull) do
-            redirect_stderr(devnull) do
-                try
+    _with_conscape_logging(quiet) do
+        try
                     targetdir = joinpath(target_dir)
                     movdir = joinpath(mov_dir)
                     srcdir = joinpath(src_dir)
@@ -343,10 +358,8 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                         end
                     end
 
-                catch e
-                    throw(ErrorException("Unexpected failure in conscape: $e"))
-                end
-            end
+        catch e
+            throw(ErrorException("Unexpected failure in conscape: $e"))
         end
     end
 

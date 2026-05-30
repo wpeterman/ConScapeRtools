@@ -1,3 +1,7 @@
+ConScapeRtools 0.4.19
+---------
+* Hardened threaded Julia `run_conscape()` execution by avoiding per-thread output redirection and treating empty-target tiles as completed outputs
+
 ConScapeRtools 0.4.18
 ---------
 * Reduced `tile_design()` calibration work by using a center-only synthetic target, avoiding all-target expected-cost matrices

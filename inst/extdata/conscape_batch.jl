@@ -52,9 +52,10 @@ function conscape_batch(src_dir, mov_dir, target_dir, out_dir,
                                   sensitivity_one_out_of,
                                   sensitivity_diagvalue,
                                   sensitivity_target_equal_source,
-                                  sensitivity_require_landmark_one)
+                                  sensitivity_require_landmark_one,
+                                  false)
 
-                if result == "done"
+                if result in ("done", "skipped_empty_targets")
                     success = true
                     results[i] = "ok"
 

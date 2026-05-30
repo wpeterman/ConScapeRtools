@@ -10,6 +10,14 @@ test_that("Julia helper scripts referenced by run_conscape are installed", {
   expect_true(file.exists(system.file("extdata", "conscape_batch_distributed.jl", package = "ConScapeRtools")))
 })
 
+test_that("threaded Julia batch avoids per-thread output redirection", {
+  batch_file <- system.file("extdata", "conscape_batch.jl", package = "ConScapeRtools")
+  batch <- paste(readLines(batch_file, warn = FALSE), collapse = "\n")
+
+  expect_match(batch, "sensitivity_require_landmark_one,\\s*false\\)")
+  expect_match(batch, 'result in \\("done", "skipped_empty_targets"\\)', fixed = FALSE)
+})
+
 test_that("tile_design validates source and target inputs before Julia setup", {
   r <- make_test_raster()
   expect_error(
