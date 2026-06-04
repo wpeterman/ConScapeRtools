@@ -135,7 +135,7 @@ function _gridsrp_failure_message(e, mov_prob, hab_qual_source, coarse_target_qu
     end
 end
 
-function _with_conscape_logging(quiet::Bool, f::Function)
+function _with_conscape_logging(f::Function, quiet::Bool)
     if quiet
         Logging.with_logger(Logging.NullLogger()) do
             redirect_stdout(devnull) do

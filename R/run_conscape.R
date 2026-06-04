@@ -367,9 +367,8 @@ run_conscape <- function(conscape_prep = NULL,
              recursive = T,
              force = T)
     }
-  } else {
-    dir.create(out_dir, recursive = TRUE)
   }
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
   single_rast <- FALSE
   target_mask <- NULL

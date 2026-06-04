@@ -42,6 +42,31 @@ test_that("run_conscape rejects non-empty output directory when requested", {
   )
 })
 
+test_that("run_conscape recreates output directory immediately after clearing it", {
+  mock_julia()
+  testthat::local_mocked_bindings(
+    juliaCall = function(...) stop("simulated Julia failure"),
+    .env = asNamespace("ConScapeRtools")
+  )
+  out_dir <- file.path(tempdir(), "run-clear-recreate")
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  writeLines("existing", file.path(out_dir, "existing.txt"))
+  r <- make_test_raster(n = 3, vals = 1)
+
+  expect_error(
+    run_conscape(
+      out_dir = out_dir,
+      hab_target = r,
+      hab_src = r,
+      mov_prob = r,
+      jl_home = "C:/Julia/bin"
+    ),
+    "simulated Julia failure"
+  )
+  expect_true(dir.exists(out_dir))
+  expect_false(file.exists(file.path(out_dir, "existing.txt")))
+})
+
 test_that("run_conscape validates single-raster geometry before running Julia", {
   mock_julia()
   target <- make_test_raster()

@@ -1,3 +1,8 @@
+ConScapeRtools 0.4.20
+---------
+* Fixed Julia 1.12 `run_conscape()` logging helper dispatch for serial and threaded analyses
+* Recreated `out_dir` immediately after clearing it so failed runs leave a stable output path
+
 ConScapeRtools 0.4.19
 ---------
 * Hardened threaded Julia `run_conscape()` execution by avoiding per-thread output redirection and treating empty-target tiles as completed outputs
