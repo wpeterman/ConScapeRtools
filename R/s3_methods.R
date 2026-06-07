@@ -24,8 +24,8 @@ conscape_format_value <- function(x) {
 #' @description
 #' Print and summarize the main object types returned by ConScapeRtools:
 #' design objects from [tile_design()], prep objects from [conscape_prep()],
-#' result objects from [run_conscape()], and sensitivity specifications from
-#' [conscape_sensitivity()].
+#' window design objects from [window_design()], result objects from
+#' [run_conscape()], and sensitivity specifications from [conscape_sensitivity()].
 #'
 #' @param x Object to print or plot.
 #' @param object Object to summarize.
@@ -47,6 +47,10 @@ print.ConScapeRtools_design <- function(x, ...) {
   cat("  theta:          ", conscape_format_value(x$theta), "\n", sep = "")
   cat("  tile_d:         ", conscape_format_value(x$tile_d), "\n", sep = "")
   cat("  tile_trim:      ", conscape_format_value(x$tile_trim), "\n", sep = "")
+  if (!is.null(x$centersize) && !is.null(x$buffer)) {
+    cat("  centersize:     ", conscape_format_value(x$centersize), "\n", sep = "")
+    cat("  buffer:         ", conscape_format_value(x$buffer), "\n", sep = "")
+  }
   if (!is.null(x$landmark)) {
     cat("  landmark:       ", conscape_format_value(x$landmark), "\n", sep = "")
   }
@@ -74,6 +78,8 @@ summary.ConScapeRtools_design <- function(object, ...) {
       "theta",
       "tile_d",
       "tile_trim",
+      "centersize",
+      "buffer",
       "landmark",
       "trim_threshold",
       "expected_tile_count",
@@ -85,6 +91,8 @@ summary.ConScapeRtools_design <- function(object, ...) {
       object$theta,
       object$tile_d,
       object$tile_trim,
+      if (is.null(object$centersize)) NA_real_ else object$centersize,
+      if (is.null(object$buffer)) NA_real_ else object$buffer,
       if (is.null(object$landmark)) NA_real_ else object$landmark,
       if (is.null(object$trim_threshold)) NA_real_ else object$trim_threshold,
       diagnostic_value("expected_tile_count"),
@@ -96,6 +104,8 @@ summary.ConScapeRtools_design <- function(object, ...) {
       "Randomized shortest-path theta used during calibration",
       "Suggested minimum interior tile width",
       "Suggested minimum tile overlap and mosaic trim width",
+      "Equivalent center window size for WindowedProblem",
+      "Equivalent buffer width for WindowedProblem",
       "Landmark value used to round tile width and trim",
       "Requested maximum proximity at the trim distance",
       "Expected number of interior tiles for r_mov",
@@ -106,6 +116,81 @@ summary.ConScapeRtools_design <- function(object, ...) {
   )
   class(out) <- c("summary_ConScapeRtools_design", class(out))
   out
+}
+
+#' @rdname conscape_s3_methods
+#' @method print ConScapeRtools_window_design
+#' @export
+print.ConScapeRtools_window_design <- function(x, ...) {
+  cat("ConScape window design\n")
+  cat("  centersize:       ", conscape_format_value(x$centersize), " cells\n", sep = "")
+  cat("  buffer:           ", conscape_format_value(x$buffer), " cells\n", sep = "")
+  cat("  tile_d:           ", conscape_format_value(x$tile_d), "\n", sep = "")
+  cat("  tile_trim:        ", conscape_format_value(x$tile_trim), "\n", sep = "")
+  cat("  source window:    ",
+      conscape_format_value(x$diagnostics$total_window_width_cells),
+      " x ",
+      conscape_format_value(x$diagnostics$total_window_width_cells),
+      " cells\n", sep = "")
+  cat("  expected windows: ", conscape_format_value(x$diagnostics$expected_windows), "\n", sep = "")
+  cat("  area factor:      ",
+      conscape_format_value(round(x$diagnostics$overlap_area_factor, 3)),
+      "\n", sep = "")
+  invisible(x)
+}
+
+#' @rdname conscape_s3_methods
+#' @method summary ConScapeRtools_window_design
+#' @export
+summary.ConScapeRtools_window_design <- function(object, ...) {
+  diagnostics <- object$diagnostics
+  out <- data.frame(
+    parameter = c(
+      "centersize",
+      "buffer",
+      "tile_d",
+      "tile_trim",
+      "source_window_cells",
+      "center_cells",
+      "expected_windows",
+      "overlap_area_factor",
+      "workload_proxy"
+    ),
+    value = c(
+      object$centersize,
+      object$buffer,
+      object$tile_d,
+      object$tile_trim,
+      diagnostics$source_window_cells,
+      diagnostics$center_cells,
+      diagnostics$expected_windows,
+      diagnostics$overlap_area_factor,
+      diagnostics$workload_proxy
+    ),
+    description = c(
+      "Center window size in cells",
+      "Context buffer width in cells",
+      "Equivalent center width in map units",
+      "Equivalent buffer width in map units",
+      "Cells in the full source/context window",
+      "Cells retained as center targets",
+      "Approximate number of windows over r",
+      "Context window area divided by center area",
+      "Approximate source cells times target cells times windows"
+    ),
+    stringsAsFactors = FALSE
+  )
+  class(out) <- c("summary_ConScapeRtools_window_design", class(out))
+  out
+}
+
+#' @rdname conscape_s3_methods
+#' @method print summary_ConScapeRtools_window_design
+#' @export
+print.summary_ConScapeRtools_window_design <- function(x, ...) {
+  cat("ConScape window design summary\n")
+  print.data.frame(x, row.names = FALSE, ...)
+  invisible(x)
 }
 
 #' @rdname conscape_s3_methods

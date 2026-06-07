@@ -145,12 +145,91 @@ prep <- conscape_prep(
 )
 
 prep$input_slots
+prep$target_mode
 ```
 
 The `landmark` argument is ConScape's coarse-graining window size. Larger
 values can make large runs faster because target qualities are aggregated to
 fewer target cells. Tile dimensions and overlaps are aligned to this value so
 the coarse-grained target cells fall in consistent locations across tiles.
+
+## Target mode: how each tile's RSP problem is posed
+
+`conscape_prep()` exposes a `target_mode` argument. The default,
+`target_mode = "auto"`, resolves to `"center"` whenever `tile_d`/`tile_trim`
+(or `centersize`/`buffer`) are supplied. The choice between `"center"` and
+`"full"` controls which cells in a buffered tile act as RSP absorbing targets
+when ConScape solves the per-tile linear system
+`Z = (I - W) \ I_target`.
+
+- `"center"` *(default)* restricts the target raster written for each tile
+  to its **center** cells (the interior region defined by `tile_d`). Source
+  qualities and affinities are kept in full across the buffer. Adjacent
+  tiles' centers are disjoint and together cover the landscape exactly once,
+  so the tile-level outputs are combined with `mosaic_conscape(method = "sum")`
+  and the result equals the untiled solution up to buffer-truncation error.
+  This is the mathematically correct windowing of the ConScape problem and
+  is the same per-window math that ConScape's experimental dev
+  `WindowedProblem` uses, executed against the stable bundled Julia API.
+
+- `"full"` keeps every cell of the buffered tile as a target. Each tile
+  produces a full surface and overlapping tiles are averaged with
+  `mosaic_conscape(method = "mosaic")` (the legacy default). The averaged
+  estimator is **biased**: each tile undercounts targets that fall in other
+  tiles. Use `"full"` only to reproduce results from earlier ConScapeRtools
+  versions; expect smoothing artifacts near tile borders.
+
+`run_conscape()` reads `prep$target_mode` and selects the matching mosaic
+reduction automatically, so the two defaults stay aligned without further
+configuration.
+
+### Convergence behavior in practice
+
+Both `"center"` (sum mosaic) and `"full"` (mean mosaic) tile modes converge
+to the untiled solution as buffer grows, by two different mechanisms:
+
+* `"center"` + sum mosaic: each tile restricts targets to its center cells
+  and sums per-cell contributions across overlapping tiles. The reconstruction
+  is exact up to paths that exit every relevant tile's buffer; that
+  truncation is bounded by proximity at the buffer edge, so error decays
+  approximately as `exp(-buffer / distance_scale)`.
+
+* `"full"` + mean mosaic: each tile keeps full buffered targets and computes
+  a per-cell fcon biased low because it cannot see targets in other tiles.
+  As buffer grows toward the landscape size, each tile's view approaches the
+  full untiled landscape and the bias shrinks; the mean of many near-correct
+  per-tile estimates approaches the untiled value.
+
+**Why `"center"` is still the default.** The two modes' per-cell errors are
+comparable at small buffer. The decisive difference is per-tile compute:
+each tile in `"center"` mode solves `Z = (I - W) \ I_target` over only its
+center-cell target columns, so per-tile cost stays bounded as the landscape
+grows. `"full"` mode requires every tile to solve `Z` over its full
+buffered target set, which becomes prohibitive on landscapes too large to
+fit in a single tile's buffered window. If a landscape *is* small enough
+that every tile's buffered window covers most of it, you should typically
+not be tiling at all.
+
+A reproducible convergence comparison on the package data lives at
+`tests/testthat/test-tiled-untiled-convergence.R`. With `centersize = 20`,
+`distance_scale = 20`, `theta = 0.1` on an 80x80 crop of the package
+suitability/affinity rasters, the test reports (max-abs error against the
+untiled reference, both modes, buffer values 5 to 40):
+
+```
+       mode buffer   btwn      fcon
+ center_sum      5  343.27     7.57
+  full_mean      5  320.97     6.46
+ center_sum     10  190.73     3.55
+  full_mean     10  160.08     3.17
+ center_sum     20   40.58     0.58
+  full_mean     20   24.78     0.59
+ center_sum     40    1.74     0.024
+  full_mean     40    0.97     0.024
+```
+
+Both modes converge to near-zero error at large buffer; `"center"` is the
+scalable choice.
 
 # Running Connectivity Metrics
 
@@ -394,11 +473,19 @@ Before running a large analysis:
    `td$diagnostics$proximity_at_effective_trim` before launching a large run.
 3. Choose `theta` based on the movement model: small values (near 0) allow more
    random movement; large values approach deterministic least-cost paths.
-4. Use `landmark > 1L` for faster default metric runs when coarse-grained target
+4. Leave `target_mode` at its default. `"auto"` resolves to `"center"` for any
+   tiled run, which restricts each tile's RSP absorbing target set to the tile
+   center and combines outputs with a sum mosaic. This converges to the untiled
+   solution as the buffer grows. Pass `target_mode = "full"` only when
+   reproducing older results that depended on the legacy mean-mosaic estimator.
+5. Use `landmark > 1L` for faster default metric runs when coarse-grained target
    qualities are acceptable.
-5. Use `landmark = 1L` for sensitivity workflows to keep target and source
+6. Use `landmark = 1L` for sensitivity workflows to keep target and source
    qualities identical.
-6. Start with the default `metrics` (`connected_habitat` and
+7. Start with the default `metrics` (`connected_habitat` and
    `betweenness_kweighted`) before adding additional metrics or sensitivity.
-7. Add sensitivity outputs only after the base workflow is verified and stable.
-8. Compare tiled and untiled runs on a small landscape crop before scaling up.
+8. Add sensitivity outputs only after the base workflow is verified and stable.
+9. Compare tiled and untiled runs on a small landscape crop before scaling up.
+   The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)
+   demonstrates the expected error behavior of each tile mode as a function of
+   buffer width and serves as a reproducible diagnostic template.

@@ -5,8 +5,8 @@
 \title{Prepare rasters and tiles for \code{run_conscape()}}
 \usage{
 conscape_prep(
-  tile_d,
-  tile_trim,
+  tile_d = NULL,
+  tile_trim = NULL,
   asc_dir = NULL,
   r_target,
   r_mov,
@@ -14,19 +14,24 @@ conscape_prep(
   target_threshold = 0,
   clear_dir = FALSE,
   landmark = 10L,
-  progress = TRUE
+  progress = TRUE,
+  centersize = NULL,
+  buffer = NULL,
+  window_units = c("cells", "map"),
+  target_mode = c("auto", "full", "center")
 )
 }
 \arguments{
 \item{tile_d}{Target interior tile width in map units (e.g., meters).
 Internally, tile dimensions are converted to a number of cells and rounded
 up to the nearest multiple of \code{landmark} to ensure that coarse–graining
-windows in ConScape align across tiles.}
+windows in ConScape align across tiles. Optional when \code{centersize} and
+\code{buffer} are supplied.}
 
 \item{tile_trim}{Minimum overlap width between neighbouring tiles, in map
 units. The actual overlap used may be increased so that the overlap in
 cells is a multiple of \code{landmark}. This overlap is removed again in
-\code{\link[=mosaic_conscape]{mosaic_conscape()}}.}
+\code{\link[=mosaic_conscape]{mosaic_conscape()}}. Optional when \code{centersize} and \code{buffer} are supplied.}
 
 \item{asc_dir}{Directory where \code{.asc} tiles and ancillary files will be
 written. If \code{NULL} (default), a new directory is created under the current
@@ -59,6 +64,42 @@ overlaps are aligned with the coarse–graining grid.}
 
 \item{progress}{Logical. If \code{TRUE}, simple text messages are printed to
 report tiling progress.}
+
+\item{centersize}{Optional center window size used by the buffered-window
+mode. By default this is interpreted as a number of raster cells. When
+supplied with \code{buffer}, \code{tile_d} is derived from \code{centersize} and the
+final mosaicked output is retained for the corresponding center tile.}
+
+\item{buffer}{Optional buffer width used by the buffered-window mode. By
+default this is interpreted as a number of raster cells. When supplied
+with \code{centersize}, \code{tile_trim} is derived from \code{buffer}.}
+
+\item{window_units}{Units for \code{centersize} and \code{buffer}: \code{"cells"}
+(default) or \code{"map"}.}
+
+\item{target_mode}{Controls which cells in a buffered tile act as RSP
+absorbing targets when ConScape solves the tile.
+\itemize{
+\item \code{"center"} (the default under \code{"auto"}) restricts the target raster
+written for each tile to its center cells; buffered source qualities
+and affinities are kept in full. Adjacent tiles' centers are disjoint,
+so every cell is a target in exactly one tile, and \code{\link[=mosaic_conscape]{mosaic_conscape()}}
+(called by \code{\link[=run_conscape]{run_conscape()}}) combines outputs with \code{method = "sum"} to
+reconstruct the global source-to-target sums up to buffer truncation.
+This matches the per-window math used by ConScape's dev
+\code{WindowedProblem} and converges to the untiled solution as buffer
+grows.
+\item \code{"full"} preserves the legacy ConScapeRtools behavior: every cell in
+the buffered tile is a target, every tile produces a full surface, and
+overlapping tiles are averaged with \code{method = "mosaic"} (mean). This is
+a smoothed approximation; individual tiles undercount targets that
+fall in other tiles, so the mean is biased low. Use only for backward
+compatibility.
+\item \code{"auto"} (default) chooses \code{"center"} whenever \code{centersize}/\code{buffer}
+or \code{tile_d}/\code{tile_trim} are supplied. The center-target geometry is
+derived from \code{tile_d} and \code{tile_trim} (rounded to whole cells) when
+those arguments are used.
+}}
 }
 \value{
 A named list of class \code{"ConScapeRtools_prep"} with elements:
@@ -80,9 +121,9 @@ This object is intended to be passed directly to \code{\link[=run_conscape]{run_
 }
 \description{
 Convenience wrapper that (i) checks that all input rasters are compatible,
-(ii) designs a landmark–aligned tiling scheme with \code{make_tiles()}, (iii)
-applies the same tiling to the target, source, and movement rasters via
-\code{tile_rast()}, and (iv) writes a binary mask that is used later by
+(ii) designs a landmark-aligned tiling scheme with \code{make_tiles()}, (iii)
+applies the same tiling to the target, source, and movement rasters, and
+(iv) writes a binary mask that is used later by
 \code{\link[=run_conscape]{run_conscape()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
 }
 \details{

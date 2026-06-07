@@ -313,6 +313,61 @@ test_that("run_conscape warns when mocked threaded execution misses outputs", {
     "Parallel execution failed"
   )
   expect_s3_class(out, "ConScapeResults")
+  expect_true("diagnostics" %in% names(out))
+  expect_true("output_validation" %in% names(out$diagnostics))
+})
+
+test_that("run_conscape validates requested parallel outputs instead of defaults", {
+  mock_julia()
+  r <- make_test_raster(n = 10, vals = 1)
+  prep <- conscape_prep(
+    tile_d = 5,
+    tile_trim = 2,
+    asc_dir = file.path(tempdir(), "run-parallel-criticality-prep"),
+    r_target = r,
+    r_mov = r,
+    r_src = r,
+    clear_dir = TRUE,
+    landmark = 5L,
+    progress = FALSE
+  )
+
+  testthat::local_mocked_bindings(
+    juliaCall = function(name, src_dir, mov_dir, target_dir, out_dir,
+                         hab_target, hab_src, mov_prob, ...) {
+      dir.create(file.path(out_dir, "criticality"), recursive = TRUE, showWarnings = FALSE)
+      for (i in seq_along(hab_target)) {
+        tile <- terra::rast(file.path(target_dir, hab_target[[i]]))
+        terra::writeRaster(
+          tile,
+          file.path(out_dir, "criticality", paste0("criticality-r_", i, ".asc")),
+          overwrite = TRUE,
+          NAflag = -9999
+        )
+      }
+      "ok"
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_warning(
+    out <- run_conscape(
+      conscape_prep = prep,
+      out_dir = file.path(tempdir(), "run-parallel-criticality"),
+      theta = 0.1,
+      exp_d = 50,
+      jl_home = "C:/Julia/bin",
+      parallel = TRUE,
+      workers = 2,
+      metrics = "criticality",
+      mosaic = FALSE
+    ),
+    NA
+  )
+  expect_s3_class(out, "ConScapeResults")
+  expect_true("criticality" %in% names(out$outdirs))
+  expect_false("btwn" %in% names(out$outdirs))
+  expect_true(all(out$diagnostics$output_validation$ok))
 })
 
 test_that("run_conscape accepts ConScape-native slot aliases", {
@@ -350,6 +405,76 @@ test_that("run_conscape accepts ConScape-native slot aliases", {
   expect_equal(calls[[1]][[3]], "minuslog")
 })
 
+test_that("run_conscape forwards experimental ConScape dev modes", {
+  calls <- list()
+  testthat::local_mocked_bindings(
+    run_conscape_dev_backend = function(...) {
+      calls[[length(calls) + 1L]] <<- list(...)
+      out <- make_test_raster(n = 3, vals = 1)
+      names(out) <- "btwn"
+      out
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  r <- make_test_raster(n = 6, vals = 1)
+  out <- run_conscape(
+    out_dir = file.path(tempdir(), "run-dev-batch"),
+    target_qualities = r,
+    source_qualities = r,
+    affinities = r,
+    backend = "conscape_dev",
+    dev_mode = "batch",
+    centersize = 3,
+    buffer = 1,
+    batch_grain = 2,
+    batch_ext = "tif",
+    dev_project = "C:/Julia/conscape-dev-project",
+    install_dev_conscape = TRUE,
+    dev_conscape_rev = "alg_efficiency",
+    dev_conscape_url = "https://github.com/ConScape/ConScape.jl",
+    landmark = 1L,
+    jl_home = "C:/Julia/bin"
+  )
+
+  expect_s4_class(out, "SpatRaster")
+  expect_equal(calls[[1]]$dev_mode, "batch")
+  expect_equal(calls[[1]]$batch_grain, 2)
+  expect_equal(calls[[1]]$batch_ext, "tif")
+  expect_equal(calls[[1]]$dev_project, "C:/Julia/conscape-dev-project")
+  expect_true(calls[[1]]$install_dev_conscape)
+  expect_equal(calls[[1]]$dev_conscape_rev, "alg_efficiency")
+  expect_equal(calls[[1]]$dev_conscape_url, "https://github.com/ConScape/ConScape.jl")
+  expect_equal(calls[[1]]$window_shape, "square")
+})
+
+test_that("run_conscape validates experimental batch options early", {
+  testthat::local_mocked_bindings(
+    run_conscape_dev_backend = function(...) {
+      list(...)
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  r <- make_test_raster(n = 3, vals = 1)
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "bad-dev-batch"),
+      target_qualities = r,
+      source_qualities = r,
+      affinities = r,
+      backend = "conscape_dev",
+      dev_mode = "batch",
+      landmark = 1L,
+      centersize = 3,
+      buffer = 1,
+      batch_grain = 0,
+      jl_home = "C:/Julia/bin"
+    ),
+    "batch_grain"
+  )
+})
+
 test_that("run_conscape guards sensitivity against coarse graining by default", {
   mock_julia()
   r <- make_test_raster(n = 6, vals = 1)
@@ -369,6 +494,10 @@ test_that("run_conscape guards sensitivity against coarse graining by default", 
 })
 
 test_that("run_conscape reports prep landmark requirement for sensitivity", {
+  # Sensitivity requires target_mode = "full" (Fix 1: center mode is rejected
+  # because it violates ConScape.sensitivity's target_equal_source = TRUE
+  # precondition). Use full-mode prep here so this test exercises the
+  # landmark-precondition check rather than the center-mode rejection.
   mock_julia()
   r <- make_test_raster(n = 6, vals = 1)
   prep <- conscape_prep(
@@ -379,6 +508,7 @@ test_that("run_conscape reports prep landmark requirement for sensitivity", {
     r_src = r,
     r_mov = r,
     landmark = 3L,
+    target_mode = "full",
     clear_dir = TRUE,
     progress = FALSE
   )
@@ -392,5 +522,36 @@ test_that("run_conscape reports prep landmark requirement for sensitivity", {
       jl_home = "C:/Julia/bin"
     ),
     "create that object with landmark = 1L"
+  )
+})
+
+test_that("run_conscape rejects sensitivity with center-mode prep (Fix 1)", {
+  # Center-mode prep + sensitivity request must error early with a clear
+  # workaround message, before any Julia start or out_dir clearing.
+  mock_julia()
+  r <- make_test_raster(n = 6, vals = 1)
+  prep <- conscape_prep(
+    tile_d = 6,
+    tile_trim = 0,
+    asc_dir = file.path(tempdir(), "run-sensitivity-center-guard"),
+    r_target = r,
+    r_src = r,
+    r_mov = r,
+    landmark = 1L,
+    target_mode = "center",
+    clear_dir = TRUE,
+    progress = FALSE
+  )
+  expect_identical(prep$target_mode, "center")
+
+  expect_error(
+    run_conscape(
+      conscape_prep = prep,
+      out_dir = file.path(tempdir(), "run-sensitivity-center-guard-out"),
+      landmark = 1L,
+      sensitivity = conscape_sensitivity(wrt = "Q"),
+      jl_home = "C:/Julia/bin"
+    ),
+    "target_mode = \"center\""
   )
 })

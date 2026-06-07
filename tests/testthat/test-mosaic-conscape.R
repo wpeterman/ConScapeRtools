@@ -53,6 +53,18 @@ test_that("mosaic_conscape can average overlapping tiles", {
   expect_equal(unique(terra::values(out, mat = FALSE)), 3)
 })
 
+test_that("mosaic_conscape can combine tiles in chunks", {
+  root <- file.path(tempdir(), "mosaic-chunk-test")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  for (i in 1:5) {
+    write_test_asc(make_test_raster(n = 5, vals = i),
+                   file.path(root, paste0("tile-", i, ".asc")))
+  }
+
+  out <- mosaic_conscape(root, tile_trim = 0, method = "mosaic", chunk_size = 2)
+  expect_equal(unique(terra::values(out, mat = FALSE)), 3)
+})
+
 test_that("mosaic_conscape rejects mismatched non-empty CRS values", {
   root <- file.path(tempdir(), "mosaic-crs-test")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)

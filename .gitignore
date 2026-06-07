@@ -8,7 +8,13 @@
 .quarto
 .positai
 tiles_test/
-examples/
+# Top-level examples/ (personal scratch dir); inst/examples/ is shipped.
+/examples/
+# Saved RDS artifacts from inst/examples/validate_workflows.R runs are
+# regenerated on demand and embedded as text in the vignette.
+inst/examples/*.rds
+# Temporary author scripts created during interactive R sessions.
+_tmp_*.R
 *.Rcheck/
 ConScapeRtools_*.tar.gz
 .claude

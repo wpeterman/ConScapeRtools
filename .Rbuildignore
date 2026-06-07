@@ -12,7 +12,10 @@
 ^\.positai$
 ^\.claude$
 ^vignettes/conscape_results$
+^vignettes/conscape_sensitivity$
 ^vignettes/conscape_sensitivity_tiles$
 ^vignettes/conscape_tiles$
 ^doc$
 ^Meta$
+^_tmp_.*\.R$
+^inst/examples/validate_workflows_.*\.rds$

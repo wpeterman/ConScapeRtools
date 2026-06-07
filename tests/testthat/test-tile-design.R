@@ -66,9 +66,15 @@ test_that("tile_design uses target as source when source is omitted", {
   expect_s3_class(out, "ConScapeRtools_design")
   expect_true(all(c(
     "distance_scale", "exp_d", "tile_d", "tile_trim", "theta",
-    "landmark", "trim_threshold", "overlap_area_factor", "diagnostics"
+    "centersize", "buffer", "landmark", "trim_threshold",
+    "overlap_area_factor", "window", "diagnostics"
   ) %in% names(out)))
   expect_equal(out$distance_scale, out$exp_d)
+  expect_equal(out$centersize, out$diagnostics$tile_cells)
+  expect_equal(out$buffer, out$diagnostics$overlap_cells)
+  expect_s3_class(out$window, "ConScapeRtools_window_design")
+  expect_equal(out$window$centersize, out$centersize)
+  expect_equal(out$window$buffer, out$buffer)
   expect_equal(out$theta, 0.2)
   expect_equal(out$trim_threshold, 0.01)
   expect_gt(out$tile_d, 0)

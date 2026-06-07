@@ -71,15 +71,32 @@ to proportional change. Set \code{unitless = FALSE} for raw unit-change
 sensitivities.
 
 For tiled workflows, sensitivity is computed independently within each tile
-and then mosaicked by \code{\link[=run_conscape]{run_conscape()}}. This is most defensible with
-\code{landscape_measure = "sum"}, \code{landmark = 1L}, identical source and target
-qualities, and a conservative tile overlap. The current ConScape
-implementation assumes source and target qualities are equal; therefore
-\code{\link[=run_conscape]{run_conscape()}} requires \code{landmark = 1L} by default when sensitivity is
-requested so that target qualities are not altered by coarse graining.
-Tile-wise \code{landscape_measure = "eigenanalysis"} is available through
-ConScape, but should be interpreted cautiously because eigenvalue summaries
-are intrinsically global.
+and then mosaicked by \code{\link[=run_conscape]{run_conscape()}}. Two preconditions apply:
+\enumerate{
+\item The \code{\link[=conscape_prep]{conscape_prep()}} object must be built with
+\code{target_mode = "full"}. The new default \code{target_mode = "center"}
+(which fcon / btwn rely on) sets per-tile target qualities to a
+strict subset of source qualities; ConScape's sensitivity API
+assumes target equals source per cell, which is violated inside
+every center-mode tile. \code{\link[=run_conscape]{run_conscape()}} refuses the combination
+and tells you to recreate the prep with \code{target_mode = "full"}.
+\item Build the prep with \code{landmark = 1L} so that coarse graining does
+not alter target qualities.
+}
+
+Even with both preconditions satisfied, tiled sensitivity is a
+tile-local approximation to landscape-level sensitivity. Each tile
+computes the derivative of its own per-tile landscape summary, not
+the global one, and \code{\link[=run_conscape]{run_conscape()}} mean-mosaics overlapping
+per-tile estimates. The approximation converges to the untiled
+answer as buffer grows; see
+\code{tests/testthat/test-sensitivity-convergence.R} for a reproducible
+convergence sweep. Use \code{landscape_measure = "sum"} for the most
+defensible tiled estimator. \code{landscape_measure = "eigenanalysis"}
+is available through ConScape but should be interpreted cautiously
+because eigenvalue summaries are intrinsically global. For strict
+correctness, run sensitivity untiled when the landscape fits in a
+single graph.
 }
 \examples{
 sens <- conscape_sensitivity(wrt = c("Q", "A&C=f(A)"))

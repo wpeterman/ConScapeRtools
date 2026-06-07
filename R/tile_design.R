@@ -89,6 +89,10 @@
 #'   [conscape_prep()].
 #' * `tile_trim` – suggested minimum tile overlap / trim width (map units) for
 #'   [conscape_prep()] and [mosaic_conscape()].
+#' * `centersize` – equivalent center window size in cells for
+#'   `backend = "conscape_dev"`.
+#' * `buffer` – equivalent buffer width in cells for
+#'   `backend = "conscape_dev"`.
 #' * `theta` – the `theta` value used for calibration, to pass to
 #'   [run_conscape()].
 #' * `landmark` – the landmark value used for tile and trim rounding.
@@ -351,14 +355,23 @@ tile_design <- function(r_mov,
     max_d_cell = max_cell,
     max_d_cell_distance = as.numeric(e_dist[max_cell])
   )
+  wd <- window_design(
+    r = r_mov,
+    tile_d = effective_tile_width,
+    tile_trim = effective_tile_trim,
+    landmark = landmark
+  )
   out <- list(distance_scale = exp_d_val,
               exp_d = exp_d_val,
               tile_d = effective_tile_width,
               tile_trim = effective_tile_trim,
+              centersize = wd$centersize,
+              buffer = wd$buffer,
               theta = as.numeric(theta),
               landmark = landmark,
               trim_threshold = trim_threshold,
               overlap_area_factor = as.numeric(realized_overlap_area_factor),
+              window = wd,
               diagnostics = diagnostics)
 
   cat(green("\n" %+% cyan("     *** Tile Design Parameters ***") %+%"\n",

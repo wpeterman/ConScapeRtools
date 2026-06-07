@@ -85,6 +85,10 @@ accessible as \code{exp_d} for backwards compatibility.
 \code{\link[=conscape_prep]{conscape_prep()}}.
 \item \code{tile_trim} – suggested minimum tile overlap / trim width (map units) for
 \code{\link[=conscape_prep]{conscape_prep()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
+\item \code{centersize} – equivalent center window size in cells for
+\code{backend = "conscape_dev"}.
+\item \code{buffer} – equivalent buffer width in cells for
+\code{backend = "conscape_dev"}.
 \item \code{theta} – the \code{theta} value used for calibration, to pass to
 \code{\link[=run_conscape]{run_conscape()}}.
 \item \code{landmark} – the landmark value used for tile and trim rounding.

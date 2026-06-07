@@ -109,15 +109,31 @@ conscape_api_slots <- function() {
 #' sensitivities.
 #'
 #' For tiled workflows, sensitivity is computed independently within each tile
-#' and then mosaicked by [run_conscape()]. This is most defensible with
-#' `landscape_measure = "sum"`, `landmark = 1L`, identical source and target
-#' qualities, and a conservative tile overlap. The current ConScape
-#' implementation assumes source and target qualities are equal; therefore
-#' [run_conscape()] requires `landmark = 1L` by default when sensitivity is
-#' requested so that target qualities are not altered by coarse graining.
-#' Tile-wise `landscape_measure = "eigenanalysis"` is available through
-#' ConScape, but should be interpreted cautiously because eigenvalue summaries
-#' are intrinsically global.
+#' and then mosaicked by [run_conscape()]. Two preconditions apply:
+#'
+#' 1. The [conscape_prep()] object must be built with
+#'    `target_mode = "full"`. The new default `target_mode = "center"`
+#'    (which fcon / btwn rely on) sets per-tile target qualities to a
+#'    strict subset of source qualities; ConScape's sensitivity API
+#'    assumes target equals source per cell, which is violated inside
+#'    every center-mode tile. [run_conscape()] refuses the combination
+#'    and tells you to recreate the prep with `target_mode = "full"`.
+#' 2. Build the prep with `landmark = 1L` so that coarse graining does
+#'    not alter target qualities.
+#'
+#' Even with both preconditions satisfied, tiled sensitivity is a
+#' tile-local approximation to landscape-level sensitivity. Each tile
+#' computes the derivative of its own per-tile landscape summary, not
+#' the global one, and [run_conscape()] mean-mosaics overlapping
+#' per-tile estimates. The approximation converges to the untiled
+#' answer as buffer grows; see
+#' `tests/testthat/test-sensitivity-convergence.R` for a reproducible
+#' convergence sweep. Use `landscape_measure = "sum"` for the most
+#' defensible tiled estimator. `landscape_measure = "eigenanalysis"`
+#' is available through ConScape but should be interpreted cautiously
+#' because eigenvalue summaries are intrinsically global. For strict
+#' correctness, run sensitivity untiled when the landscape fits in a
+#' single graph.
 #'
 #' @param wrt Character vector describing the local perturbation target.
 #'   Supported values are `"Q"` (habitat quality), `"A"` (affinity),
@@ -314,30 +330,46 @@ conscape_cost_function_julia <- function(cost_function, adjacency_expr) {
 }
 
 conscape_metric_specs <- function() {
+  # mosaic_kind controls how run_conscape() reduces per-tile outputs into a
+  # final mosaic via pick_mosaic_method() below:
+  #   "additive"    -> each cell's untiled value is a sum over target cells j,
+  #                    and centers tile the landscape disjointly, so per-tile
+  #                    contributions sum across tiles (method = "sum" under
+  #                    center mode; method = "mosaic" mean-fallback under
+  #                    legacy full mode).
+  #   "averageable" -> each tile produces a tile-local landscape-summary
+  #                    quantity (sensitivity / elasticity surfaces). These
+  #                    are NOT partial sums; mean-mosaic of overlapping
+  #                    estimates is the appropriate reduction regardless of
+  #                    target_mode.
   list(
     connected_habitat = list(
       id = "connected_habitat",
       dir = "fcon",
       prefix = "fcon",
-      layer = "fcon"
+      layer = "fcon",
+      mosaic_kind = "additive"
     ),
     betweenness_kweighted = list(
       id = "betweenness_kweighted",
       dir = "btwn",
       prefix = "betweenness",
-      layer = "btwn"
+      layer = "btwn",
+      mosaic_kind = "additive"
     ),
     betweenness_qweighted = list(
       id = "betweenness_qweighted",
       dir = "btwn_qweighted",
       prefix = "betweenness_qweighted",
-      layer = "btwn_qweighted"
+      layer = "btwn_qweighted",
+      mosaic_kind = "additive"
     ),
     criticality = list(
       id = "criticality",
       dir = "criticality",
       prefix = "criticality",
-      layer = "criticality"
+      layer = "criticality",
+      mosaic_kind = "additive"
     )
   )
 }
@@ -363,7 +395,12 @@ conscape_output_specs <- function(metrics, sensitivity = NULL) {
   if (!is.null(sensitivity)) {
     sens_specs <- lapply(sensitivity$wrt, function(wrt) {
       id <- conscape_sensitivity_id(wrt, sensitivity$unitless)
-      list(id = id, dir = id, prefix = id, layer = id, wrt = wrt)
+      # Sensitivity / elasticity surfaces are tile-local landscape-summary
+      # derivatives; their per-tile values are overlapping estimates of the
+      # same quantity, not partial sums. They must always be mean-mosaicked
+      # regardless of target_mode. pick_mosaic_method() honors this.
+      list(id = id, dir = id, prefix = id, layer = id, wrt = wrt,
+           mosaic_kind = "averageable")
     })
     names(sens_specs) <- vapply(sens_specs, `[[`, character(1), "id")
     specs <- c(specs, sens_specs)
@@ -373,4 +410,17 @@ conscape_output_specs <- function(metrics, sensitivity = NULL) {
     stop("At least one metric or sensitivity output must be requested.", call. = FALSE)
   }
   specs
+}
+
+# Pick the mosaic_conscape() reduction for a single output spec, given the
+# tile prep's target_mode. Used by run_conscape() so different output layers
+# in the same run can use different reductions (e.g., btwn = sum,
+# elasticity_quality = mean) without the caller having to track this.
+pick_mosaic_method <- function(spec, target_mode) {
+  kind <- if (is.null(spec$mosaic_kind)) "additive" else spec$mosaic_kind
+  if (identical(kind, "averageable")) {
+    return("mosaic")  # mean: terra::mosaic(fun = "mean") inside mosaic_conscape()
+  }
+  # "additive" rows:
+  if (identical(target_mode, "center")) "sum" else "mosaic"
 }

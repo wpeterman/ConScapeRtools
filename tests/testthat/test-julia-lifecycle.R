@@ -130,3 +130,63 @@ test_that("conscape_julia_start reports invalid setup", {
     "path to the Julia"
   )
 })
+
+test_that("conscape_dev_backend_setup prepares an isolated Julia project", {
+  julia_bin <- file.path(tempdir(), "fake-julia-bin")
+  dir.create(julia_bin, recursive = TRUE, showWarnings = FALSE)
+  julia_exe <- file.path(julia_bin, "julia.exe")
+  writeLines("", julia_exe)
+
+  project <- file.path(tempdir(), "conscape-dev-project-test")
+  calls <- list()
+  testthat::local_mocked_bindings(
+    run_julia_command = function(command, args, stdout = TRUE, stderr = TRUE) {
+      calls[[length(calls) + 1L]] <<- list(
+        command = command,
+        args = args,
+        stdout = stdout,
+        stderr = stderr
+      )
+      "ConScape dev backend project prepared"
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  out <- conscape_dev_backend_setup(
+    jl_home = julia_bin,
+    project = project,
+    rev = "alg_efficiency",
+    url = "https://github.com/ConScape/ConScape.jl",
+    quiet = TRUE
+  )
+
+  expect_equal(out, normalizePath(project, winslash = "/", mustWork = TRUE))
+  expect_equal(calls[[1]]$command, julia_exe)
+  expect_true("--startup-file=no" %in% calls[[1]]$args)
+  expect_true("alg_efficiency" %in% calls[[1]]$args)
+  expect_true("https://github.com/ConScape/ConScape.jl" %in% calls[[1]]$args)
+})
+
+test_that("conscape_dev_backend_setup reports Julia setup failures", {
+  julia_bin <- file.path(tempdir(), "fake-julia-bin-fail")
+  dir.create(julia_bin, recursive = TRUE, showWarnings = FALSE)
+  writeLines("", file.path(julia_bin, "julia.exe"))
+
+  testthat::local_mocked_bindings(
+    run_julia_command = function(...) {
+      out <- "Pkg failed"
+      attr(out, "status") <- 1L
+      out
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_error(
+    conscape_dev_backend_setup(
+      jl_home = julia_bin,
+      project = file.path(tempdir(), "conscape-dev-project-fail"),
+      quiet = TRUE
+    ),
+    "Failed to prepare"
+  )
+})

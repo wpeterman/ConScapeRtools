@@ -14,12 +14,12 @@
 #'   subdirectories (e.g., `"btwn"`, `"fcon"`) are created inside `out_dir`.
 #' @param target_qualities Either (i) a path to a directory containing
 #'   target-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as
-#'   ConScape's `target_qualities` layer — cells that can *receive*
+#'   ConScape's `target_qualities` layer, cells that can *receive*
 #'   connectivity. The legacy name `hab_target` is accepted as a
 #'   backwards-compatible alias.
 #' @param source_qualities Either (i) a path to a directory containing
 #'   source-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as
-#'   ConScape's `source_qualities` layer — cells that *generate* connectivity.
+#'   ConScape's `source_qualities` layer, cells that *generate* connectivity.
 #'   The legacy name `hab_src` is accepted as a backwards-compatible alias.
 #' @param affinities Either (i) a path to a directory containing
 #'   affinity/permeability tiles (`*.asc`) or (ii) a single `SpatRaster` used
@@ -59,6 +59,9 @@
 #'   or Julia, depending on `parallel_R` and `distributed`).
 #' @param workers Integer number of parallel workers to use when
 #'   `parallel = TRUE`. Default is `1`.
+#' @param blas_threads Integer number of BLAS threads to allow inside each
+#'   Julia tile worker. The default, `1`, avoids oversubscribing CPU cores when
+#'   ConScape is already parallelized across tiles.
 #' @param distributed Logical. When `parallel = TRUE` and
 #'   `parallel_R = FALSE`, controls whether Julia uses distributed
 #'   workers (`TRUE`) or multithreading (`FALSE`, default).
@@ -68,6 +71,10 @@
 #' @param parallel_R Logical. If `TRUE`, tiles are processed in parallel
 #'   using R (`future`/`future.apply`). If `FALSE` (default), parallelism
 #'   is handled entirely within Julia.
+#' @param backend Execution backend. `"classic"` uses the stable bundled Julia
+#'   wrappers. `"conscape_dev"` is experimental and requires a ConScape
+#'   development installation exposing `Problem`, `WindowedProblem`, and
+#'   `solve`; `dev_mode = "batch"` additionally requires `BatchProblem`.
 #' @param tile_trim Width of the overlapping border (in map units) to
 #'   trim from each tile when mosaicking. When `conscape_prep` is supplied,
 #'   this value is taken from that object and passed automatically to
@@ -95,6 +102,34 @@
 #'   [conscape_sensitivity()]. Pass `TRUE` for the default quality and linked
 #'   affinity-cost elasticities; pass a character vector to specify `wrt`
 #'   values directly. See [conscape_sensitivity()] for full options.
+#' @param centersize Center window size in cells for the experimental
+#'   `"conscape_dev"` backend.
+#' @param buffer Buffer width in cells for the experimental `"conscape_dev"`
+#'   backend.
+#' @param window_shape Window shape for the experimental `"conscape_dev"`
+#'   backend. The current ConScape dev API supports `"square"` windows.
+#' @param dev_mode Experimental ConScape dev execution mode. `"windowed"` runs
+#'   `WindowedProblem` directly and returns a mosaicked raster stack. `"batch"`
+#'   wraps the problem in `BatchProblem`, writes intermediate batch rasters, and
+#'   mosaics them with ConScape after all batches complete.
+#' @param batch_grain Optional target thinning value passed to the experimental
+#'   ConScape `BatchProblem`. Leave `NULL` to preserve target qualities.
+#' @param batch_ext Raster extension for experimental `BatchProblem`
+#'   intermediates. Defaults to `".tif"`.
+#' @param dev_project Optional Julia project directory containing the ConScape
+#'   development backend dependencies. When supplied with
+#'   `backend = "conscape_dev"`, the project is activated via `JULIA_PROJECT`
+#'   before Julia starts.
+#' @param install_dev_conscape Logical. If `TRUE` and
+#'   `backend = "conscape_dev"`, create or update `dev_project` by installing
+#'   ConScape from `dev_conscape_url` at `dev_conscape_rev` before running.
+#'   This is opt-in because it downloads a development Git dependency.
+#' @param dev_conscape_rev Git branch, tag, or commit used when
+#'   `install_dev_conscape = TRUE`. Defaults to `"alg_efficiency"`.
+#' @param dev_conscape_url Git URL used when `install_dev_conscape = TRUE`.
+#' @param mosaic_chunk_size Maximum number of output tiles to hold in memory
+#'   during each mosaic batch. Smaller values reduce peak memory at the cost of
+#'   more temporary files.
 #' @param stop_julia Logical. If `TRUE` (default), close the Julia session when
 #'   `run_conscape()` exits. Set to `FALSE` to keep Julia open for faster
 #'   repeated ConScape calls with the same Julia path and process settings. Use
@@ -138,17 +173,41 @@
 #' `ConScape.sensitivity`; when that function is unavailable the Julia runner
 #' stops with an explicit message.
 #'
-#' Tiled sensitivity uses the same tiling and mosaicking machinery as the
-#' default metric outputs. It is a tile-local approximation to full-landscape
-#' sensitivity, so choose a `tile_trim` large enough that paths crossing tile
-#' edges have negligible influence on interior retained cells. For sensitivity
-#' runs, create any [conscape_prep()] object with `landmark = 1L` so that
-#' coarse-graining does not alter target qualities (the ConScape sensitivity
-#' API currently requires target quality to equal source quality).
+#' Tiled sensitivity uses the same tiling machinery as the default metric
+#' outputs but with two important constraints:
+#'
+#' 1. The [conscape_prep()] object **must** be built with
+#'    `target_mode = "full"`. The corrected `target_mode = "center"`
+#'    (the new default for fcon / btwn) sets per-tile target qualities
+#'    to a strict subset of source qualities, which violates the
+#'    `target_equal_source = TRUE` precondition of ConScape's analytical
+#'    sensitivity inside every tile. `run_conscape()` refuses
+#'    `conscape_prep$target_mode == "center"` with sensitivity requested
+#'    and tells you to recreate the prep with `target_mode = "full"`.
+#' 2. Build the prep with `landmark = 1L` so that ConScape's
+#'    `coarse_graining()` leaves target qualities equal to source
+#'    qualities.
+#'
+#' Even with both constraints satisfied, tiled sensitivity is a
+#' tile-local approximation to landscape-level sensitivity: each tile
+#' computes the derivative of its own per-tile landscape summary, not
+#' the global one, and the mosaic step averages overlapping per-tile
+#' estimates. The approximation converges to the untiled sensitivity
+#' as `tile_trim` (buffer) grows -- see
+#' `tests/testthat/test-sensitivity-convergence.R`. For strict
+#' correctness, run sensitivity untiled when the landscape fits in a
+#' single graph.
+#'
+#' `run_conscape()` mosaics sensitivity surfaces with `method = "mosaic"`
+#' (mean) regardless of `target_mode`, because sensitivity outputs are
+#' tile-local landscape-summary derivatives rather than pairwise sums.
+#' The mosaic dispatch is per output layer, so fcon / btwn can use
+#' sum mosaic while sensitivity uses mean mosaic in the same run when
+#' `target_mode = "full"` is in effect.
 #'
 #' @return
 #' When tiles are used and `mosaic = TRUE`, returns an object of class
-#' `"ConScapeResults"` — a named list containing:
+#' `"ConScapeResults"`, a named list containing:
 #'
 #' * `btwn` – `SpatRaster` of k-weighted betweenness (`betweenness_kweighted`),
 #'   when requested.
@@ -236,7 +295,7 @@
 #'                         distributed    = TRUE)
 #' plot(cs_dist)
 #'
-#' ## Untiled run — only suitable for small to moderate rasters
+#' ## Untiled run, only suitable for small to moderate rasters
 #' cs_single <- run_conscape(out_dir          = file.path(prep$asc_dir, "results"),
 #'                           target_qualities = habitat,
 #'                           source_qualities = habitat,
@@ -249,6 +308,60 @@
 #' plot(cs_serial$fcon - cs_single$fcon, main = "Tiled minus untiled")
 #' layerCor(c(cs_single$fcon, cs_serial$fcon), fun = "cor")
 #' layerCor(c(cs_single$btwn, cs_serial$btwn), fun = "cor")
+#'
+#' ## Experimental ConScape dev backend using package data.
+#' ## This creates or reuses a dedicated Julia project with ConScape's
+#' ## development backend API.
+#' habitat_demo <- terra::crop(
+#'   habitat,
+#'   terra::ext(
+#'     terra::xmin(habitat),
+#'     terra::xmin(habitat) + 40 * terra::res(habitat)[1],
+#'     terra::ymax(habitat) - 40 * terra::res(habitat)[2],
+#'     terra::ymax(habitat)
+#'   ),
+#'   snap = "near"
+#' )
+#' affinity_demo <- terra::crop(affinity, terra::ext(habitat_demo), snap = "near")
+#'
+#' dev_project <- conscape_dev_backend_setup(
+#'   jl_home = jl_home,
+#'   rev = "alg_efficiency"
+#' )
+#'
+#' cs_dev <- run_conscape(
+#'   target_qualities = habitat_demo,
+#'   source_qualities = habitat_demo,
+#'   affinities = affinity_demo,
+#'   out_dir = file.path(tempdir(), "conscape_dev_windowed"),
+#'   jl_home = jl_home,
+#'   backend = "conscape_dev",
+#'   dev_mode = "windowed",
+#'   centersize = 10,
+#'   buffer = 10,
+#'   dev_project = dev_project,
+#'   landmark = 1L,
+#'   theta = 0.15,
+#'   distance_scale = 150,
+#'   metrics = c("btwn", "fcon")
+#' )
+#'
+#' cs_dev_batch <- run_conscape(
+#'   target_qualities = habitat_demo,
+#'   source_qualities = habitat_demo,
+#'   affinities = affinity_demo,
+#'   out_dir = file.path(tempdir(), "conscape_dev_batch"),
+#'   jl_home = jl_home,
+#'   backend = "conscape_dev",
+#'   dev_mode = "batch",
+#'   centersize = 10,
+#'   buffer = 10,
+#'   dev_project = dev_project,
+#'   landmark = 1L,
+#'   theta = 0.15,
+#'   distance_scale = 150,
+#'   metrics = c("btwn", "fcon")
+#' )
 #' }
 #' @author Bill Peterman
 #' @importFrom JuliaConnectoR juliaImport juliaEval juliaSetupOk juliaGet juliaCall stopJulia
@@ -269,11 +382,24 @@ run_conscape <- function(conscape_prep = NULL,
                          distributed = FALSE,
                          progress = TRUE,
                          parallel_R = FALSE,
+                         backend = c("classic", "conscape_dev"),
                          tile_trim = 0,
                          cost_function = "minuslog",
                          connectivity_function = "expected_cost",
                          metrics = c("betweenness_kweighted", "connected_habitat"),
                          sensitivity = NULL,
+                         centersize = NULL,
+                         buffer = NULL,
+                         window_shape = c("square", "circle"),
+                         dev_mode = c("windowed", "batch"),
+                         batch_grain = NULL,
+                         batch_ext = ".tif",
+                         dev_project = NULL,
+                         install_dev_conscape = FALSE,
+                         dev_conscape_rev = "alg_efficiency",
+                         dev_conscape_url = "https://github.com/ConScape/ConScape.jl",
+                         blas_threads = 1L,
+                         mosaic_chunk_size = 64L,
                          stop_julia = TRUE,
                          hab_target = NULL,
                          hab_src = NULL,
@@ -321,8 +447,47 @@ run_conscape <- function(conscape_prep = NULL,
   if (!is.logical(stop_julia) || length(stop_julia) != 1L || is.na(stop_julia)) {
     stop("stop_julia must be TRUE or FALSE.", call. = FALSE)
   }
+  if (!is.numeric(blas_threads) || length(blas_threads) != 1L ||
+      is.na(blas_threads) || blas_threads < 1) {
+    stop("blas_threads must be a positive integer.", call. = FALSE)
+  }
+  if (!is.numeric(mosaic_chunk_size) || length(mosaic_chunk_size) != 1L ||
+      is.na(mosaic_chunk_size) || mosaic_chunk_size < 1) {
+    stop("mosaic_chunk_size must be a positive integer.", call. = FALSE)
+  }
 
   landmark <- as.integer(landmark)
+  blas_threads <- as.integer(blas_threads)
+  mosaic_chunk_size <- as.integer(mosaic_chunk_size)
+  backend <- match.arg(backend)
+  window_shape <- match.arg(window_shape)
+  dev_mode <- match.arg(dev_mode)
+  if (!is.null(batch_grain) &&
+      (!is.numeric(batch_grain) || length(batch_grain) != 1L ||
+       is.na(batch_grain) || batch_grain < 1)) {
+    stop("batch_grain must be NULL or a positive integer.", call. = FALSE)
+  }
+  if (!is.character(batch_ext) || length(batch_ext) != 1L ||
+      !nzchar(batch_ext)) {
+    stop("batch_ext must be a non-empty character string.", call. = FALSE)
+  }
+  if (!is.null(dev_project) &&
+      (!is.character(dev_project) || length(dev_project) != 1L ||
+       is.na(dev_project) || !nzchar(dev_project))) {
+    stop("dev_project must be NULL or a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.logical(install_dev_conscape) || length(install_dev_conscape) != 1L ||
+      is.na(install_dev_conscape)) {
+    stop("install_dev_conscape must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.character(dev_conscape_rev) || length(dev_conscape_rev) != 1L ||
+      is.na(dev_conscape_rev) || !nzchar(dev_conscape_rev)) {
+    stop("dev_conscape_rev must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.character(dev_conscape_url) || length(dev_conscape_url) != 1L ||
+      is.na(dev_conscape_url) || !nzchar(dev_conscape_url)) {
+    stop("dev_conscape_url must be a single non-empty character string.", call. = FALSE)
+  }
   cost_function <- normalize_conscape_cost_function(cost_function)
   connectivity_function <- normalize_conscape_connectivity_function(connectivity_function)
   metrics <- normalize_conscape_metrics(metrics)
@@ -336,6 +501,76 @@ run_conscape <- function(conscape_prep = NULL,
   sensitivity_diagvalue <- if (is.null(sensitivity)) NULL else sensitivity$diagvalue
   sensitivity_target_equal_source <- if (is.null(sensitivity)) TRUE else sensitivity$target_equal_source
   sensitivity_require_landmark_one <- if (is.null(sensitivity)) TRUE else sensitivity$require_landmark_one
+
+  # Sensitivity precondition: target_equal_source = TRUE.
+  #
+  # ConScape's analytical sensitivity (and its simulation counterpart) is only
+  # well-defined when each tile's per-cell target qualities equal its per-cell
+  # source qualities. The corrected `target_mode = "center"` semantics
+  # deliberately sets target = (center cells only) while source = (full
+  # buffered window), which violates that precondition inside every tile and
+  # also makes the sum-mosaic reduction inappropriate for per-cell
+  # sensitivity surfaces (they are tile-local landscape-summary derivatives,
+  # not pairwise contributions that partition disjointly over tiles).
+  #
+  # Until a center-mode-compatible sensitivity reduction is proven, refuse
+  # the combination and tell the user to recreate the prep with
+  # target_mode = "full". This must fire before we start Julia / clear
+  # out_dir so the failure is recoverable.
+  if (!is.null(sensitivity) &&
+      !is.null(conscape_prep) &&
+      inherits(conscape_prep, "ConScapeRtools_prep") &&
+      identical(conscape_prep$target_mode, "center")) {
+    stop(
+      "ConScape sensitivity is not valid under target_mode = \"center\".\n",
+      "Center-mode tiles use target = center cells and source = full buffered\n",
+      "window, which violates ConScape.sensitivity's `target_equal_source = TRUE`\n",
+      "precondition inside every tile, and the sum-mosaic reduction is not\n",
+      "appropriate for per-cell sensitivity surfaces.\n",
+      "\n",
+      "Workaround: recreate the prep with target_mode = \"full\":\n",
+      "  prep_sens <- conscape_prep(..., target_mode = \"full\", landmark = 1L)\n",
+      "\n",
+      "Note that tiled sensitivity (even under full mode) is a tile-local\n",
+      "approximation to landscape-level sensitivity; for strict correctness,\n",
+      "run sensitivity untiled when the landscape fits in a single graph.",
+      call. = FALSE
+    )
+  }
+
+  if (identical(backend, "conscape_dev")) {
+    return(run_conscape_dev_backend(
+      conscape_prep = conscape_prep,
+      out_dir = out_dir,
+      target_qualities = hab_target,
+      source_qualities = hab_src,
+      affinities = mov_prob,
+      clear_dir = clear_dir,
+      landmark = landmark,
+      theta = theta,
+      distance_scale = exp_d,
+      jl_home = jl_home,
+      parallel = parallel,
+      workers = workers,
+      progress = progress,
+      metrics = metrics,
+      connectivity_function = connectivity_function,
+      cost_function = cost_function,
+      sensitivity = sensitivity,
+      centersize = centersize,
+      buffer = buffer,
+      window_shape = window_shape,
+      dev_mode = dev_mode,
+      batch_grain = batch_grain,
+      batch_ext = batch_ext,
+      dev_project = dev_project,
+      install_dev_conscape = install_dev_conscape,
+      dev_conscape_rev = dev_conscape_rev,
+      dev_conscape_url = dev_conscape_url,
+      blas_threads = blas_threads,
+      stop_julia = stop_julia
+    ))
+  }
 
   if (isTRUE(stop_julia)) {
     stop_conscape_julia()
@@ -564,7 +799,7 @@ run_conscape <- function(conscape_prep = NULL,
                                                 src_dir, mov_dir, target_dir, out_dir,
                                                 hab_target, hab_src, mov_prob,
                                                 landmark, theta, exp_d, NA_val,
-                                                max_retries, progress,
+                                                max_retries, progress, blas_threads,
                                                 metrics, connectivity_function, cost_function,
                                                 sensitivity_wrt, sensitivity_method,
                                                 sensitivity_landscape_measure, sensitivity_unitless,
@@ -592,7 +827,7 @@ run_conscape <- function(conscape_prep = NULL,
                                                 src_dir, mov_dir, target_dir, out_dir,
                                                 hab_target, hab_src, mov_prob,
                                                 landmark, theta, exp_d, NA_val,
-                                                max_retries, progress,
+                                                max_retries, progress, blas_threads,
                                                 metrics, connectivity_function, cost_function,
                                                 sensitivity_wrt, sensitivity_method,
                                                 sensitivity_landscape_measure, sensitivity_unitless,
@@ -602,23 +837,6 @@ run_conscape <- function(conscape_prep = NULL,
       }
     }
 
-
-    ## Check for success
-    btwn_files <- length(list.files(normalizePath(file.path(out_dir, "btwn")),
-                                    pattern = "\\.asc$"))
-    fcon_files <- length(list.files(normalizePath(file.path(out_dir, "fcon")),
-                                    pattern = "\\.asc$"))
-
-
-    if(isTRUE((length(hab_target) != btwn_files) | (length(hab_target) != fcon_files))){
-      # attempt <- attempt + 1
-      # cat(paste0("\n\nParallel execution failed! Trying again...attempt #", attempt))
-      warning("\n\nParallel execution failed for some or all tiles!\nInspect results carefully.\n")
-
-      # DEBUG -------------------------------------------------------------------
-      # browser()
-
-    } ## End while loop
 
   } else {  ## End parallel
     # Serial ----------------------------------------------------------------
@@ -691,13 +909,49 @@ run_conscape <- function(conscape_prep = NULL,
     if(exists("pb")) close(pb)
   } ## End parallel ifelse
 
+  expected_outputs <- if (isTRUE(single_rast)) 1L else length(hab_target)
+  output_validation <- validate_conscape_outputs(
+    out_dir = out_dir,
+    output_specs = output_specs,
+    expected_tiles = expected_outputs
+  )
+  if (any(!output_validation$ok)) {
+    missing_layers <- paste(output_validation$layer[!output_validation$ok], collapse = ", ")
+    if (isTRUE(parallel)) {
+      warning(
+        "\n\nParallel execution failed for some or all requested output tiles: ",
+        missing_layers,
+        "\nInspect results carefully.\n",
+        call. = FALSE
+      )
+    } else {
+      warning(
+        "ConScape execution did not create all requested output tiles: ",
+        missing_layers,
+        call. = FALSE
+      )
+    }
+  }
+
+  batch_diagnostics <- read_conscape_batch_diagnostics(out_dir)
+  run_diagnostics <- list(
+    backend = backend,
+    parallel = isTRUE(parallel),
+    parallel_R = isTRUE(parallel_R),
+    distributed = isTRUE(distributed),
+    workers = as.integer(workers),
+    blas_threads = blas_threads,
+    output_validation = output_validation,
+    batch = batch_diagnostics
+  )
+
   output_dirs <- lapply(output_specs, function(spec) {
     normalizePath(file.path(out_dir, spec$dir), mustWork = FALSE)
   })
   names(output_dirs) <- vapply(output_specs, `[[`, character(1), "layer")
 
   make_result_shell <- function() {
-    shell <- list(outdirs = output_dirs)
+    shell <- list(outdirs = output_dirs, diagnostics = run_diagnostics)
     if ("btwn" %in% names(output_dirs)) {
       shell$outdir_btwn <- output_dirs$btwn
     }
@@ -721,12 +975,31 @@ run_conscape <- function(conscape_prep = NULL,
   }
 
   if(isTRUE(mosaic) & isFALSE(single_rast)){
+    # Mosaic reduction is now picked per output spec via pick_mosaic_method().
+    # Background:
+    #   - "additive" outputs (fcon, btwn, btwn_qweighted, criticality): per-tile
+    #     values are partial sums over the disjoint per-tile center targets.
+    #     Under center mode they sum across tiles to reconstruct untiled
+    #     ("sum"); under legacy full mode they are biased per-tile estimates
+    #     that get smoothed by mean mosaic ("mosaic").
+    #   - "averageable" outputs (sensitivity / elasticity_*): per-tile values
+    #     are tile-local landscape-summary derivatives, NOT pairwise sums.
+    #     They are always mean-mosaicked ("mosaic") regardless of target_mode.
+    target_mode_for_mosaic <- if (!is.null(conscape_prep) &&
+                                  inherits(conscape_prep, "ConScapeRtools_prep")) {
+      conscape_prep$target_mode
+    } else {
+      NULL
+    }
+
     rasters <- lapply(output_specs, function(spec) {
+      spec_method <- pick_mosaic_method(spec, target_mode_for_mosaic)
       mosaic_conscape(out_dir = file.path(out_dir, spec$dir),
                       tile_trim = tile_trim,
-                      method = 'mosaic',
+                      method = spec_method,
                       mask = target_mask,
-                      crs = terra::crs(target_mask))
+                      crs = terra::crs(target_mask),
+                      chunk_size = mosaic_chunk_size)
     })
     names(rasters) <- vapply(output_specs, `[[`, character(1), "layer")
 
@@ -737,8 +1010,16 @@ run_conscape <- function(conscape_prep = NULL,
         x
       })
     }
+    # Record the per-spec methods that were used so audits can see the
+    # dispatch decision for every layer (sum vs mosaic). This replaces the
+    # old single mosaic_method scalar.
+    run_diagnostics$mosaic_method <- vapply(output_specs, function(spec) {
+      pick_mosaic_method(spec, target_mode_for_mosaic)
+    }, character(1))
+    names(run_diagnostics$mosaic_method) <- vapply(output_specs, `[[`,
+                                                    character(1), "layer")
 
-    out <- c(rasters, list(outdirs = output_dirs))
+    out <- c(rasters, list(outdirs = output_dirs, diagnostics = run_diagnostics))
     if ("btwn" %in% names(output_dirs)) out$outdir_btwn <- output_dirs$btwn
     if ("fcon" %in% names(output_dirs)) out$outdir_fcon <- output_dirs$fcon
     class(out) <- "ConScapeResults"
@@ -772,6 +1053,7 @@ run_conscape <- function(conscape_prep = NULL,
 
       out <- terra::rast(rasters)
       names(out) <- names(rasters)
+      attr(out, "ConScapeRtools_diagnostics") <- run_diagnostics
     }
   }
 

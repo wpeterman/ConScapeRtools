@@ -22,11 +22,24 @@ run_conscape(
   distributed = FALSE,
   progress = TRUE,
   parallel_R = FALSE,
+  backend = c("classic", "conscape_dev"),
   tile_trim = 0,
   cost_function = "minuslog",
   connectivity_function = "expected_cost",
   metrics = c("betweenness_kweighted", "connected_habitat"),
   sensitivity = NULL,
+  centersize = NULL,
+  buffer = NULL,
+  window_shape = c("square", "circle"),
+  dev_mode = c("windowed", "batch"),
+  batch_grain = NULL,
+  batch_ext = ".tif",
+  dev_project = NULL,
+  install_dev_conscape = FALSE,
+  dev_conscape_rev = "alg_efficiency",
+  dev_conscape_url = "https://github.com/ConScape/ConScape.jl",
+  blas_threads = 1L,
+  mosaic_chunk_size = 64L,
   stop_julia = TRUE,
   hab_target = NULL,
   hab_src = NULL,
@@ -46,13 +59,13 @@ subdirectories (e.g., \code{"btwn"}, \code{"fcon"}) are created inside \code{out
 
 \item{target_qualities}{Either (i) a path to a directory containing
 target-quality tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as
-ConScape's \code{target_qualities} layer — cells that can \emph{receive}
+ConScape's \code{target_qualities} layer, cells that can \emph{receive}
 connectivity. The legacy name \code{hab_target} is accepted as a
 backwards-compatible alias.}
 
 \item{source_qualities}{Either (i) a path to a directory containing
 source-quality tiles (\verb{*.asc}) or (ii) a single \code{SpatRaster} used as
-ConScape's \code{source_qualities} layer — cells that \emph{generate} connectivity.
+ConScape's \code{source_qualities} layer, cells that \emph{generate} connectivity.
 The legacy name \code{hab_src} is accepted as a backwards-compatible alias.}
 
 \item{affinities}{Either (i) a path to a directory containing
@@ -115,6 +128,11 @@ parallel runs may be less detailed.}
 using R (\code{future}/\code{future.apply}). If \code{FALSE} (default), parallelism
 is handled entirely within Julia.}
 
+\item{backend}{Execution backend. \code{"classic"} uses the stable bundled Julia
+wrappers. \code{"conscape_dev"} is experimental and requires a ConScape
+development installation exposing \code{Problem}, \code{WindowedProblem}, and
+\code{solve}; \code{dev_mode = "batch"} additionally requires \code{BatchProblem}.}
+
 \item{tile_trim}{Width of the overlapping border (in map units) to
 trim from each tile when mosaicking. When \code{conscape_prep} is supplied,
 this value is taken from that object and passed automatically to
@@ -147,6 +165,49 @@ accepted. Defaults to \code{c("betweenness_kweighted", "connected_habitat")}.}
 affinity-cost elasticities; pass a character vector to specify \code{wrt}
 values directly. See \code{\link[=conscape_sensitivity]{conscape_sensitivity()}} for full options.}
 
+\item{centersize}{Center window size in cells for the experimental
+\code{"conscape_dev"} backend.}
+
+\item{buffer}{Buffer width in cells for the experimental \code{"conscape_dev"}
+backend.}
+
+\item{window_shape}{Window shape for the experimental \code{"conscape_dev"}
+backend. The current ConScape dev API supports \code{"square"} windows.}
+
+\item{dev_mode}{Experimental ConScape dev execution mode. \code{"windowed"} runs
+\code{WindowedProblem} directly and returns a mosaicked raster stack. \code{"batch"}
+wraps the problem in \code{BatchProblem}, writes intermediate batch rasters, and
+mosaics them with ConScape after all batches complete.}
+
+\item{batch_grain}{Optional target thinning value passed to the experimental
+ConScape \code{BatchProblem}. Leave \code{NULL} to preserve target qualities.}
+
+\item{batch_ext}{Raster extension for experimental \code{BatchProblem}
+intermediates. Defaults to \code{".tif"}.}
+
+\item{dev_project}{Optional Julia project directory containing the ConScape
+development backend dependencies. When supplied with
+\code{backend = "conscape_dev"}, the project is activated via \code{JULIA_PROJECT}
+before Julia starts.}
+
+\item{install_dev_conscape}{Logical. If \code{TRUE} and
+\code{backend = "conscape_dev"}, create or update \code{dev_project} by installing
+ConScape from \code{dev_conscape_url} at \code{dev_conscape_rev} before running.
+This is opt-in because it downloads a development Git dependency.}
+
+\item{dev_conscape_rev}{Git branch, tag, or commit used when
+\code{install_dev_conscape = TRUE}. Defaults to \code{"alg_efficiency"}.}
+
+\item{dev_conscape_url}{Git URL used when \code{install_dev_conscape = TRUE}.}
+
+\item{blas_threads}{Integer number of BLAS threads to allow inside each
+Julia tile worker. The default, \code{1}, avoids oversubscribing CPU cores when
+ConScape is already parallelized across tiles.}
+
+\item{mosaic_chunk_size}{Maximum number of output tiles to hold in memory
+during each mosaic batch. Smaller values reduce peak memory at the cost of
+more temporary files.}
+
 \item{stop_julia}{Logical. If \code{TRUE} (default), close the Julia session when
 \code{run_conscape()} exits. Set to \code{FALSE} to keep Julia open for faster
 repeated ConScape calls with the same Julia path and process settings. Use
@@ -162,7 +223,7 @@ repeated ConScape calls with the same Julia path and process settings. Use
 }
 \value{
 When tiles are used and \code{mosaic = TRUE}, returns an object of class
-\code{"ConScapeResults"} — a named list containing:
+\code{"ConScapeResults"}, a named list containing:
 \itemize{
 \item \code{btwn} – \code{SpatRaster} of k-weighted betweenness (\code{betweenness_kweighted}),
 when requested.
@@ -222,13 +283,38 @@ Analytical sensitivity requires a ConScape installation that provides
 \code{ConScape.sensitivity}; when that function is unavailable the Julia runner
 stops with an explicit message.
 
-Tiled sensitivity uses the same tiling and mosaicking machinery as the
-default metric outputs. It is a tile-local approximation to full-landscape
-sensitivity, so choose a \code{tile_trim} large enough that paths crossing tile
-edges have negligible influence on interior retained cells. For sensitivity
-runs, create any \code{\link[=conscape_prep]{conscape_prep()}} object with \code{landmark = 1L} so that
-coarse-graining does not alter target qualities (the ConScape sensitivity
-API currently requires target quality to equal source quality).
+Tiled sensitivity uses the same tiling machinery as the default metric
+outputs but with two important constraints:
+\enumerate{
+\item The \code{\link[=conscape_prep]{conscape_prep()}} object \strong{must} be built with
+\code{target_mode = "full"}. The corrected \code{target_mode = "center"}
+(the new default for fcon / btwn) sets per-tile target qualities
+to a strict subset of source qualities, which violates the
+\code{target_equal_source = TRUE} precondition of ConScape's analytical
+sensitivity inside every tile. \code{run_conscape()} refuses
+\code{conscape_prep$target_mode == "center"} with sensitivity requested
+and tells you to recreate the prep with \code{target_mode = "full"}.
+\item Build the prep with \code{landmark = 1L} so that ConScape's
+\code{coarse_graining()} leaves target qualities equal to source
+qualities.
+}
+
+Even with both constraints satisfied, tiled sensitivity is a
+tile-local approximation to landscape-level sensitivity: each tile
+computes the derivative of its own per-tile landscape summary, not
+the global one, and the mosaic step averages overlapping per-tile
+estimates. The approximation converges to the untiled sensitivity
+as \code{tile_trim} (buffer) grows -- see
+\code{tests/testthat/test-sensitivity-convergence.R}. For strict
+correctness, run sensitivity untiled when the landscape fits in a
+single graph.
+
+\code{run_conscape()} mosaics sensitivity surfaces with \code{method = "mosaic"}
+(mean) regardless of \code{target_mode}, because sensitivity outputs are
+tile-local landscape-summary derivatives rather than pairwise sums.
+The mosaic dispatch is per output layer, so fcon / btwn can use
+sum mosaic while sensitivity uses mean mosaic in the same run when
+\code{target_mode = "full"} is in effect.
 }
 \examples{
 \dontrun{
@@ -297,7 +383,7 @@ cs_dist <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
                         distributed    = TRUE)
 plot(cs_dist)
 
-## Untiled run — only suitable for small to moderate rasters
+## Untiled run, only suitable for small to moderate rasters
 cs_single <- run_conscape(out_dir          = file.path(prep$asc_dir, "results"),
                           target_qualities = habitat,
                           source_qualities = habitat,
@@ -310,6 +396,60 @@ cs_single <- run_conscape(out_dir          = file.path(prep$asc_dir, "results"),
 plot(cs_serial$fcon - cs_single$fcon, main = "Tiled minus untiled")
 layerCor(c(cs_single$fcon, cs_serial$fcon), fun = "cor")
 layerCor(c(cs_single$btwn, cs_serial$btwn), fun = "cor")
+
+## Experimental ConScape dev backend using package data.
+## This creates or reuses a dedicated Julia project with ConScape's
+## development backend API.
+habitat_demo <- terra::crop(
+  habitat,
+  terra::ext(
+    terra::xmin(habitat),
+    terra::xmin(habitat) + 40 * terra::res(habitat)[1],
+    terra::ymax(habitat) - 40 * terra::res(habitat)[2],
+    terra::ymax(habitat)
+  ),
+  snap = "near"
+)
+affinity_demo <- terra::crop(affinity, terra::ext(habitat_demo), snap = "near")
+
+dev_project <- conscape_dev_backend_setup(
+  jl_home = jl_home,
+  rev = "alg_efficiency"
+)
+
+cs_dev <- run_conscape(
+  target_qualities = habitat_demo,
+  source_qualities = habitat_demo,
+  affinities = affinity_demo,
+  out_dir = file.path(tempdir(), "conscape_dev_windowed"),
+  jl_home = jl_home,
+  backend = "conscape_dev",
+  dev_mode = "windowed",
+  centersize = 10,
+  buffer = 10,
+  dev_project = dev_project,
+  landmark = 1L,
+  theta = 0.15,
+  distance_scale = 150,
+  metrics = c("btwn", "fcon")
+)
+
+cs_dev_batch <- run_conscape(
+  target_qualities = habitat_demo,
+  source_qualities = habitat_demo,
+  affinities = affinity_demo,
+  out_dir = file.path(tempdir(), "conscape_dev_batch"),
+  jl_home = jl_home,
+  backend = "conscape_dev",
+  dev_mode = "batch",
+  centersize = 10,
+  buffer = 10,
+  dev_project = dev_project,
+  landmark = 1L,
+  theta = 0.15,
+  distance_scale = 150,
+  metrics = c("btwn", "fcon")
+)
 }
 }
 \seealso{

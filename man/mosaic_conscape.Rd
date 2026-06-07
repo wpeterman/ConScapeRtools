@@ -8,8 +8,9 @@ mosaic_conscape(
   out_dir,
   mask = NULL,
   tile_trim,
-  method = c("mosaic", "merge"),
-  crs = NULL
+  method = c("sum", "mosaic", "merge"),
+  crs = NULL,
+  chunk_size = 64L
 )
 }
 \arguments{
@@ -31,13 +32,23 @@ returned by \code{\link[=conscape_prep]{conscape_prep()}}, or an equivalent valu
 creating tiles manually.}
 
 \item{method}{Character string indicating how to combine overlapping
-tiles. \code{"mosaic"} (default) averages values where tiles overlap, while
-\code{"merge"} fills gaps using the first non-\code{NA} tile encountered.}
+tiles. \code{"sum"} adds tile values where they overlap, treating \code{NA} as 0;
+this is the mathematically correct reduction for ConScape outputs when
+each cell appears as a \emph{target} in exactly one tile (i.e., when
+\code{conscape_prep()} was called with \code{target_mode = "center"}). \code{"mosaic"}
+averages values where tiles overlap; this is a smoothing heuristic that
+should only be used with \code{target_mode = "full"} tiles. \code{"merge"} fills
+gaps using the first non-\code{NA} tile encountered. The default is \code{"sum"}
+because the current \code{conscape_prep()} default is \code{target_mode = "center"}.}
 
 \item{crs}{Optional coordinate reference system to assign to the
 merged raster. Can be a proj4string, EPSG code (e.g. \code{"EPSG:4326"}),
 or a CRS taken from a \code{SpatRaster}. If \code{NULL} (default), the CRS of
 the first tile is retained.}
+
+\item{chunk_size}{Maximum number of tile rasters to read and combine at
+once. If there are more tiles than \code{chunk_size}, temporary intermediate
+mosaics are written and then combined in a final pass.}
 }
 \value{
 A \code{SpatRaster} representing the mosaicked ConScape surface, with
@@ -59,13 +70,29 @@ away entire tiles, the trim width is capped at at most half the tile
 width/height in cells. If \code{tile_trim} is too large relative to tile
 dimensions, no trimming is applied to that tile.
 
-After trimming, tiles are combined into a single \code{SpatRaster} using
-either \code{\link[terra:mosaic]{terra::mosaic()}} (\verb{method = "mosaic", fun = "mean"}) or
-\code{\link[terra:merge]{terra::merge()}} (\code{method = "merge"}). If a \code{mask} is supplied, the
-function checks for compatible CRS, then crops and/or resamples the
-mosaicked raster to match the mask's extent and resolution (using
-nearest-neighbour resampling if needed) before applying the mask via
-cell-wise multiplication.
+After trimming, tiles are combined into a single \code{SpatRaster} according to
+\code{method}. Choice of \code{method} reflects how the per-tile ConScape problem was
+posed:
+\itemize{
+\item \code{"sum"} adds tile values cell-wise, treating \code{NA} as 0. This is the
+correct reduction when each cell appears as a \emph{target} in exactly one
+tile (the \code{target_mode = "center"} case in \code{\link[=conscape_prep]{conscape_prep()}}). Each
+tile contributes \verb{q_src(i) * Σ_\{j in tile center\} q_tgt(j) * proximity(i,j)}
+and similar partial sums for betweenness; summing over tiles recovers the
+full source-to-target sum up to paths that exit the tile buffer.
+\item \code{"mosaic"} averages tile values where they overlap (\code{terra::mosaic} with
+\code{fun = "mean"}). This is a smoothing heuristic appropriate only for
+\code{target_mode = "full"} tiles. Because each tile undercounts targets that
+live in other tiles, the average is biased; use this only when reproducing
+the legacy ConScapeRtools workflow.
+\item \code{"merge"} (\code{terra::merge}) fills cells with the first non-\code{NA} tile value
+encountered. Useful for diagnostics and for non-overlapping tiles.
+}
+
+If a \code{mask} is supplied, the function checks for compatible CRS, then crops
+and/or resamples the mosaicked raster to match the mask's extent and
+resolution (using nearest-neighbour resampling if needed) before applying
+the mask via cell-wise multiplication.
 
 This function is typically called internally by \code{\link[=run_conscape]{run_conscape()}} when
 \code{mosaic = TRUE}, but it can also be used directly to post-process

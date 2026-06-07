@@ -33,6 +33,67 @@ stop_conscape_julia <- function() {
   invisible(NULL)
 }
 
+conscape_julia_exe <- function(jl_home) {
+  candidates <- c(
+    file.path(jl_home, "julia.exe"),
+    file.path(jl_home, "julia"),
+    jl_home
+  )
+  candidates[file.exists(candidates)][1]
+}
+
+default_conscape_dev_project <- function() {
+  file.path(tools::R_user_dir("ConScapeRtools", which = "cache"),
+            "julia", "conscape_dev")
+}
+
+run_julia_command <- function(command, args = character(), stdout = TRUE, stderr = TRUE) {
+  system2(command, args = args, stdout = stdout, stderr = stderr)
+}
+
+prepare_conscape_dev_project <- function(jl_home,
+                                         dev_project,
+                                         install_dev_conscape,
+                                         dev_conscape_rev,
+                                         dev_conscape_url) {
+  if (isFALSE(install_dev_conscape) && is.null(dev_project)) {
+    return(NULL)
+  }
+
+  project <- if (is.null(dev_project)) default_conscape_dev_project() else dev_project
+  if (isTRUE(install_dev_conscape)) {
+    project <- conscape_dev_backend_setup(
+      jl_home = jl_home,
+      project = project,
+      rev = dev_conscape_rev,
+      url = dev_conscape_url,
+      quiet = TRUE
+    )
+  } else if (!dir.exists(project)) {
+    stop(
+      "dev_project does not exist. Run conscape_dev_backend_setup() first, ",
+      "or set install_dev_conscape = TRUE.",
+      call. = FALSE
+    )
+  } else {
+    project <- normalizePath(project, winslash = "/", mustWork = TRUE)
+  }
+
+  current_project <- Sys.getenv("JULIA_PROJECT", unset = "")
+  current_project <- if (nzchar(current_project)) {
+    normalizePath(current_project, winslash = "/", mustWork = FALSE)
+  } else {
+    ""
+  }
+  if (!identical(current_project, project)) {
+    if (conscape_julia_status()) {
+      stop_conscape_julia()
+    }
+    Sys.setenv(JULIA_PROJECT = project)
+  }
+  project
+}
+
 #' Manage the Julia session used by ConScapeRtools
 #'
 #' @description
@@ -49,11 +110,19 @@ stop_conscape_julia <- function() {
 #'   distributed-worker settings. Default is `FALSE`.
 #' @param quiet Logical. If `TRUE`, suppress routine setup messages. Default is
 #'   `FALSE`.
+#' @param project Directory for a dedicated Julia project environment.
+#'   Defaults to a package cache directory.
+#' @param rev Git branch, tag, or commit for the ConScape development
+#'   dependency. Defaults to `"alg_efficiency"`.
+#' @param url Git URL for ConScape.jl.
+#' @param force Logical. If `TRUE`, remove any existing ConScape dependency
+#'   from `project` before adding the requested development revision.
 #'
 #' @return
 #' `conscape_julia_start()` and `conscape_julia_stop()` return `invisible(NULL)`.
 #' `conscape_julia_status()` returns a single logical value indicating whether
 #' JuliaConnectoR currently reports an active Julia session.
+#' `conscape_dev_backend_setup()` returns the normalized Julia project path.
 #'
 #' @details
 #' Reusing a Julia session is usually faster for repeated calls, but Julia
@@ -131,6 +200,96 @@ conscape_julia_status <- function() {
   isTRUE(!is.null(communicator) &&
            inherits(con, "connection") &&
            isOpen(con))
+}
+
+#' @rdname conscape-julia
+#' @export
+conscape_dev_backend_setup <- function(jl_home,
+                                       project = NULL,
+                                       rev = "alg_efficiency",
+                                       url = "https://github.com/ConScape/ConScape.jl",
+                                       force = FALSE,
+                                       quiet = FALSE) {
+  if (!is.character(jl_home) || length(jl_home) != 1L || is.na(jl_home) ||
+      !nzchar(jl_home)) {
+    stop("jl_home must be a single non-empty character string.", call. = FALSE)
+  }
+  if (is.null(project)) {
+    project <- default_conscape_dev_project()
+  }
+  if (!is.character(project) || length(project) != 1L || is.na(project) ||
+      !nzchar(project)) {
+    stop("project must be NULL or a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.character(rev) || length(rev) != 1L || is.na(rev) || !nzchar(rev)) {
+    stop("rev must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.character(url) || length(url) != 1L || is.na(url) || !nzchar(url)) {
+    stop("url must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.logical(force) || length(force) != 1L || is.na(force)) {
+    stop("force must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(quiet) || length(quiet) != 1L || is.na(quiet)) {
+    stop("quiet must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  julia <- conscape_julia_exe(jl_home)
+  if (is.na(julia) || !nzchar(julia)) {
+    stop("Check that the path to the Julia binary directory is correct", call. = FALSE)
+  }
+
+  dir.create(project, recursive = TRUE, showWarnings = FALSE)
+  project <- normalizePath(project, winslash = "/", mustWork = TRUE)
+
+  setup_script <- tempfile("conscape_dev_setup_", fileext = ".jl")
+  writeLines(c(
+    "using Pkg",
+    "project = ARGS[1]",
+    "url = ARGS[2]",
+    "rev = ARGS[3]",
+    "force = ARGS[4] == \"true\"",
+    "Pkg.activate(project; shared=false)",
+    "if force",
+    "    try",
+    "        Pkg.rm(\"ConScape\")",
+    "    catch",
+    "    end",
+    "end",
+    "Pkg.add(Pkg.PackageSpec(url=url, rev=rev))",
+    "Pkg.add(\"ArchGDAL\")",
+    "Pkg.add(\"Rasters\")",
+    "Pkg.instantiate()",
+    "Pkg.precompile()",
+    "using ConScape",
+    "required = [:Problem, :WindowedProblem, :BatchProblem, :solve, :assess]",
+    "missing = [String(s) for s in required if !isdefined(ConScape, s)]",
+    "isempty(missing) || error(\"Installed ConScape is missing dev API symbols: \" * join(missing, \", \"))",
+    "using ArchGDAL",
+    "using Rasters",
+    "println(\"ConScape dev backend project: \" * project)"
+  ), setup_script, useBytes = TRUE)
+  on.exit(unlink(setup_script, force = TRUE), add = TRUE)
+
+  out <- run_julia_command(
+    julia,
+    args = c("--startup-file=no", setup_script, project, url, rev,
+             if (isTRUE(force)) "true" else "false"),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  status <- attr(out, "status")
+  if (!is.null(status) && !identical(status, 0L)) {
+    stop(
+      "Failed to prepare the ConScape development Julia project:\n",
+      paste(out, collapse = "\n"),
+      call. = FALSE
+    )
+  }
+  if (isFALSE(quiet)) {
+    message(paste(out, collapse = "\n"))
+  }
+  project
 }
 
 julia_warn_or_error_expr <- function(expr) {

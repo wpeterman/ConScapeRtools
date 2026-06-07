@@ -1,3 +1,113 @@
+ConScapeRtools 0.4.22
+---------
+* CRAN compliance pass. `R CMD check --as-cran` returns 0 errors,
+  0 warnings, 0 notes on R 4.6.0 / Windows. Fixed a test that referenced
+  the vignette by its source path (`vignettes/...`) and therefore
+  failed when the installed package replaced that with `doc/`; the test
+  now uses `skip_if_not()` so it exercises the source when available
+  and silently skips against an installed binary.
+* `.Rbuildignore`: added `^vignettes/conscape_sensitivity$` (leftover
+  run output), `^_tmp_.*\.R$` (temporary author scripts), and
+  `^inst/examples/validate_workflows_.*\.rds$` (saved validation
+  results) so they do not enter the .tar.gz.
+
+ConScapeRtools 0.4.21
+---------
+* Corrected the `target_mode = "center"` workflow so it actually restricts the
+  per-tile RSP absorbing target set to the tile center (previously this mode
+  only changed diagnostics; the on-disk target raster matched `"full"` mode).
+  Each tile now solves `Z = (I - W) \ I_target` over center-only target
+  columns, which is the same per-window math that ConScape's dev
+  `WindowedProblem` uses, executed against the stable bundled Julia API.
+* Added `method = "sum"` to `mosaic_conscape()`. `run_conscape()` selects it
+  automatically whenever `conscape_prep$target_mode == "center"`, replacing
+  the legacy mean reduction whose bias was inherent to overlapping
+  full-target tiles. Pass `target_mode = "full"` to `conscape_prep()` to
+  recover the previous biased mean-mosaic behavior.
+* Changed the default `target_mode` (under `target_mode = "auto"`) from
+  `"full"` to `"center"` for all tile_d/tile_trim and centersize/buffer
+  workflows. Center-target geometry is derived from the corresponding map-
+  unit arguments.
+* Updated `conscape_efficiency_assessment()` so `estimated_source_target_cells`
+  reflects the backend's actual work per prep object: center-mode preps now
+  correctly report fewer target columns of `Z`, which matches the per-tile
+  ConScape problem size after the fix.
+* Added `tests/testthat/test-tiled-untiled-convergence.R`, a buffer sweep
+  that reports max_abs, RMSE, and layer correlation of each tile mode
+  against an untiled reference. Documents when full_mean wins (small
+  landscape relative to decay scale) and when center_sum wins (large
+  landscape, buffer large relative to decay scale).
+* Documented in `vignettes/ConScapeRtools_Guide.Rmd` and
+  `vignettes/Windowed_and_Batch_Problems.Rmd` that the stable backend now
+  produces the same per-window math as the dev `WindowedProblem` and is the
+  recommended path for most users.
+* Added `inst/examples/validate_workflows.R`, a self-contained harness that
+  runs untiled, classic tiled, center-buffer, legacy full-target, and
+  (optionally) dev WindowedProblem / BatchProblem on the same demo crop and
+  reports max_abs, RMSE, correlation, and a relative-tolerance identity
+  check against the untiled reference. The numerical output is embedded in
+  the `vignettes/Windowed_and_Batch_Problems.Rmd` "Identity Validation"
+  section so users can see the proof without running Julia themselves.
+* The harness now also reports wall-clock timing for each workflow with
+  `speedup_vs_untiled` and a `status` column, captures and reports the
+  upstream error message when a dev-backend run fails, and saves the
+  results to `inst/examples/validate_workflows_summary.rds` and
+  `inst/examples/validate_workflows_timings.rds` for downstream auditing.
+* Documented in `vignettes/Windowed_and_Batch_Problems.Rmd` "Current
+  Experimental Notes" that the ConScape.jl `alg_efficiency` HEAD currently
+  returns `Missing` from `ConScape.solve(..., mosaic_return = true)` in
+  some configurations, breaking the dev bridge with a `MethodError` at
+  `inst/extdata/conscape_dev_windowed.jl:187`. The stable backend is
+  unaffected. The validation harness reports the failure with
+  `status = "failed"` so it is visible in any audit run.
+* `run_conscape()` now refuses sensitivity requests when the supplied
+  `conscape_prep` was built with `target_mode = "center"`. Center-mode
+  tiles use `target = center cells` and `source = full buffered window`,
+  which violates `ConScape.sensitivity`'s `target_equal_source = TRUE`
+  precondition inside every tile and makes the sum-mosaic reduction
+  inappropriate for per-cell sensitivity surfaces. The error fires
+  before Julia starts and points the user to the workaround
+  (`target_mode = "full"`, with `landmark = 1L`). Tiled sensitivity
+  even under full mode is documented as a tile-local approximation;
+  untiled remains the strictly-correct path when the landscape fits.
+* `run_conscape()` now dispatches the mosaic reduction PER OUTPUT LAYER
+  instead of using one method for the whole run. Additive outputs
+  (`fcon`, `btwn`, `btwn_qweighted`, `criticality`) use `"sum"` under
+  center mode and `"mosaic"` (mean) under legacy full mode; sensitivity
+  / elasticity outputs always use `"mosaic"` (mean) because they are
+  tile-local landscape-summary derivatives, not pairwise sums.
+  `conscape_metric_specs()` and `conscape_output_specs()` carry a new
+  `mosaic_kind` field (`"additive"` vs `"averageable"`) consumed by
+  `pick_mosaic_method()`. `run_diagnostics$mosaic_method` is now a
+  named character vector with one entry per output layer.
+* Added `tests/testthat/test-sensitivity-convergence.R`. Includes a
+  pure-R unit test that confirms the center+sensitivity rejection
+  fires before Julia is touched, plus a Julia-backed integration test
+  (gated by `RUN_CONSCAPERTOOLS_INTEGRATION=true` and
+  `RUN_CONSCAPERTOOLS_SENSITIVITY=true`) that sweeps `buffer` for
+  `elasticity_quality` and `elasticity_affinity_cost_linked` against
+  an untiled sensitivity reference and asserts that relative
+  buffer-truncation error is non-increasing in buffer and that
+  tile-local sensitivity correlates with untiled.
+* Rewrote and renamed `vignettes/Windowed_and_Batch_Problems.Rmd` to
+  `vignettes/Tiled_ConScape_Validation_and_Performance.Rmd`. The new
+  vignette focuses on the working tiled workflow (the dev windowed /
+  batch backends are currently broken upstream and have been demoted
+  to a single "Experimental" section near the end). Structure: Abstract,
+  Learning Goals, Workflow Map, Core Idea (with mathematical
+  justification of the center-target sum-mosaic reduction), Parameters,
+  Example Data, calibration via `tile_design()`, `window_design()`
+  translation, a reduced demo crop, an Identity Validation section
+  with TWO numerical configurations (a realistic-buffer run showing
+  ~3% relative error and a wide-buffer run showing floating-point
+  identity), wall-clock timing tables for both configurations,
+  Decision Tree, Troubleshooting, Practical Rules, and an Experimental
+  section documenting the upstream dev-backend `MethodError`.
+* The vignette's worked example now uses `max_d = 1200` calibration,
+  producing `tile_d = 5400 m` (20 cells) and `tile_trim = 1350 m`
+  (5 cells) -- values that flow unmodified from `tile_design()` into
+  every subsequent step, with no hardcoded demo overrides.
+
 ConScapeRtools 0.4.20
 ---------
 * Fixed Julia 1.12 `run_conscape()` logging helper dispatch for serial and threaded analyses

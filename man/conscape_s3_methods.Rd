@@ -4,6 +4,9 @@
 \alias{conscape_s3_methods}
 \alias{print.ConScapeRtools_design}
 \alias{summary.ConScapeRtools_design}
+\alias{print.ConScapeRtools_window_design}
+\alias{summary.ConScapeRtools_window_design}
+\alias{print.summary_ConScapeRtools_window_design}
 \alias{print.summary_ConScapeRtools_design}
 \alias{plot.ConScapeRtools_design}
 \alias{print.ConScapeRtools_prep}
@@ -21,6 +24,12 @@
 \method{print}{ConScapeRtools_design}(x, ...)
 
 \method{summary}{ConScapeRtools_design}(object, ...)
+
+\method{print}{ConScapeRtools_window_design}(x, ...)
+
+\method{summary}{ConScapeRtools_window_design}(object, ...)
+
+\method{print}{summary_ConScapeRtools_window_design}(x, ...)
 
 \method{print}{summary_ConScapeRtools_design}(x, ...)
 
@@ -60,6 +69,6 @@ a compact data frame or list describing the object.
 \description{
 Print and summarize the main object types returned by ConScapeRtools:
 design objects from \code{\link[=tile_design]{tile_design()}}, prep objects from \code{\link[=conscape_prep]{conscape_prep()}},
-result objects from \code{\link[=run_conscape]{run_conscape()}}, and sensitivity specifications from
-\code{\link[=conscape_sensitivity]{conscape_sensitivity()}}.
+window design objects from \code{\link[=window_design]{window_design()}}, result objects from
+\code{\link[=run_conscape]{run_conscape()}}, and sensitivity specifications from \code{\link[=conscape_sensitivity]{conscape_sensitivity()}}.
 }

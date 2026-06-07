@@ -5,6 +5,7 @@
 \alias{conscape_julia_start}
 \alias{conscape_julia_stop}
 \alias{conscape_julia_status}
+\alias{conscape_dev_backend_setup}
 \title{Manage the Julia session used by ConScapeRtools}
 \usage{
 conscape_julia_start(
@@ -17,6 +18,15 @@ conscape_julia_start(
 conscape_julia_stop()
 
 conscape_julia_status()
+
+conscape_dev_backend_setup(
+  jl_home,
+  project = NULL,
+  rev = "alg_efficiency",
+  url = "https://github.com/ConScape/ConScape.jl",
+  force = FALSE,
+  quiet = FALSE
+)
 }
 \arguments{
 \item{jl_home}{Path to the \code{bin} directory where the Julia executable
@@ -31,11 +41,23 @@ distributed-worker settings. Default is \code{FALSE}.}
 
 \item{quiet}{Logical. If \code{TRUE}, suppress routine setup messages. Default is
 \code{FALSE}.}
+
+\item{project}{Directory for a dedicated Julia project environment.
+Defaults to a package cache directory.}
+
+\item{rev}{Git branch, tag, or commit for the ConScape development
+dependency. Defaults to \code{"alg_efficiency"}.}
+
+\item{url}{Git URL for ConScape.jl.}
+
+\item{force}{Logical. If \code{TRUE}, remove any existing ConScape dependency
+from \code{project} before adding the requested development revision.}
 }
 \value{
 \code{conscape_julia_start()} and \code{conscape_julia_stop()} return \code{invisible(NULL)}.
 \code{conscape_julia_status()} returns a single logical value indicating whether
 JuliaConnectoR currently reports an active Julia session.
+\code{conscape_dev_backend_setup()} returns the normalized Julia project path.
 }
 \description{
 Start, reuse, inspect, or stop the Julia session used by ConScapeRtools.
