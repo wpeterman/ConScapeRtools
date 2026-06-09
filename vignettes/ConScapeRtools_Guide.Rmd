@@ -471,21 +471,30 @@ Before running a large analysis:
    `theta`, `tile_d`, `tile_trim`, `landmark`, and diagnostics. Check
    `td$diagnostics$overlap_area_factor` and
    `td$diagnostics$proximity_at_effective_trim` before launching a large run.
-3. Choose `theta` based on the movement model: small values (near 0) allow more
+3. Before launching, run `window_design_scenarios(r, design = td)` to
+   see how per-window peak RAM, window count, and total workload would
+   change at alternative `centersize` values. Pass `target_ram_gb` and
+   `workers` to flag the largest `centersize` that fits your machine's
+   memory budget; adjusting `centersize` does not change the
+   mathematical answer, only the per-window memory footprint and
+   throughput. See the "Tile sizing: RAM, throughput, and tradeoffs"
+   subsection of `vignette("Tiled_ConScape_Validation_and_Performance",
+   package = "ConScapeRtools")`.
+4. Choose `theta` based on the movement model: small values (near 0) allow more
    random movement; large values approach deterministic least-cost paths.
-4. Leave `target_mode` at its default. `"auto"` resolves to `"center"` for any
+5. Leave `target_mode` at its default. `"auto"` resolves to `"center"` for any
    tiled run, which restricts each tile's RSP absorbing target set to the tile
    center and combines outputs with a sum mosaic. This converges to the untiled
    solution as the buffer grows. Pass `target_mode = "full"` only when
    reproducing older results that depended on the legacy mean-mosaic estimator.
-5. Use `landmark > 1L` for faster default metric runs when coarse-grained target
+6. Use `landmark > 1L` for faster default metric runs when coarse-grained target
    qualities are acceptable.
-6. Use `landmark = 1L` for sensitivity workflows to keep target and source
+7. Use `landmark = 1L` for sensitivity workflows to keep target and source
    qualities identical.
-7. Start with the default `metrics` (`connected_habitat` and
+8. Start with the default `metrics` (`connected_habitat` and
    `betweenness_kweighted`) before adding additional metrics or sensitivity.
-8. Add sensitivity outputs only after the base workflow is verified and stable.
-9. Compare tiled and untiled runs on a small landscape crop before scaling up.
-   The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)
-   demonstrates the expected error behavior of each tile mode as a function of
-   buffer width and serves as a reproducible diagnostic template.
+9. Add sensitivity outputs only after the base workflow is verified and stable.
+10. Compare tiled and untiled runs on a small landscape crop before scaling up.
+    The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)
+    demonstrates the expected error behavior of each tile mode as a function of
+    buffer width and serves as a reproducible diagnostic template.

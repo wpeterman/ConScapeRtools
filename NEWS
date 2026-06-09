@@ -1,3 +1,24 @@
+ConScapeRtools 0.4.23
+---------
+* Added `window_design_scenarios()`: a helper that sweeps candidate
+  `centersize` values across a calibrated tile or window design and
+  reports per-window peak RAM, total RAM at N workers, expected
+  window count, and `workload_proxy` for each scenario. Optional
+  `target_ram_gb` flags the largest `centersize` that fits the
+  budget, since adjusting `centersize` does not change the
+  mathematical answer (only the per-window memory footprint and
+  dispatch overhead). Returns a classed
+  `"ConScapeRtools_scenarios"` data frame with a print method that
+  highlights the recommended scenario when one is flagged.
+* Added a "Tile sizing: RAM, throughput, and tradeoffs" subsection
+  to `vignettes/Tiled_ConScape_Validation_and_Performance.Rmd` with
+  the RAM/window/workload formulas, a worked
+  `window_design_scenarios()` example, and a "How to read the
+  output" block. Step 3 of that vignette now uses the helper rather
+  than ad-hoc `window_design()` candidate code.
+* Added a `window_design_scenarios()` step to the Practical Checklist
+  in `vignettes/ConScapeRtools_Guide.Rmd`.
+
 ConScapeRtools 0.4.22
 ---------
 * CRAN compliance pass. `R CMD check --as-cran` returns 0 errors,
