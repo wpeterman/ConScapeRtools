@@ -6,6 +6,7 @@
 \alias{conscape_julia_stop}
 \alias{conscape_julia_status}
 \alias{conscape_dev_backend_setup}
+\alias{conscape_sensitivity_setup}
 \title{Manage the Julia session used by ConScapeRtools}
 \usage{
 conscape_julia_start(
@@ -27,6 +28,14 @@ conscape_dev_backend_setup(
   force = FALSE,
   quiet = FALSE
 )
+
+conscape_sensitivity_setup(
+  jl_home,
+  rev = "sensitivity",
+  url = "https://github.com/ConScape/ConScape.jl",
+  force = FALSE,
+  quiet = FALSE
+)
 }
 \arguments{
 \item{jl_home}{Path to the \code{bin} directory where the Julia executable
@@ -43,21 +52,27 @@ distributed-worker settings. Default is \code{FALSE}.}
 \code{FALSE}.}
 
 \item{project}{Directory for a dedicated Julia project environment.
-Defaults to a package cache directory.}
+Defaults to a package cache directory. Used by
+\code{conscape_dev_backend_setup()} only.}
 
-\item{rev}{Git branch, tag, or commit for the ConScape development
-dependency. Defaults to \code{"alg_efficiency"}.}
+\item{rev}{Git branch, tag, or commit for the ConScape dependency.
+\code{conscape_dev_backend_setup()} defaults to \code{"alg_efficiency"};
+\code{conscape_sensitivity_setup()} defaults to \code{"sensitivity"}.}
 
 \item{url}{Git URL for ConScape.jl.}
 
 \item{force}{Logical. If \code{TRUE}, remove any existing ConScape dependency
-from \code{project} before adding the requested development revision.}
+before adding the requested revision. For \code{conscape_sensitivity_setup()}
+this replaces a registered-release ConScape with the branch build (use
+when an older ConScape is pinned and \code{Pkg.add} will not move it).}
 }
 \value{
 \code{conscape_julia_start()} and \code{conscape_julia_stop()} return \code{invisible(NULL)}.
 \code{conscape_julia_status()} returns a single logical value indicating whether
 JuliaConnectoR currently reports an active Julia session.
 \code{conscape_dev_backend_setup()} returns the normalized Julia project path.
+\code{conscape_sensitivity_setup()} returns, invisibly, the installed ConScape
+version string (e.g. \code{"0.3.0"}).
 }
 \description{
 Start, reuse, inspect, or stop the Julia session used by ConScapeRtools.
@@ -69,4 +84,16 @@ Reusing a Julia session is usually faster for repeated calls, but Julia
 process settings such as \code{JULIA_NUM_THREADS} are fixed when Julia starts.
 Restart Julia after changing those settings or after an error that may have
 left Julia state uncertain.
+
+\code{conscape_sensitivity_setup()} installs a ConScape build that provides
+\code{ConScape.sensitivity} and \code{ConScape.sensitivity_simulation} (and the
+\code{criticality} and \code{betweenness_qweighted} metrics) into the \strong{default}
+Julia environment, the same environment \code{\link[=conscape_julia_start]{conscape_julia_start()}} and
+\code{\link[=run_conscape]{run_conscape()}} use. These functions live on the ConScape \code{sensitivity}
+branch and are not part of the default registered ConScape release, so a
+plain \code{Pkg.add("ConScape")} (what the package installs by default) does not
+provide them. Call this helper once per machine before requesting
+sensitivity outputs or the \code{criticality} / \code{betweenness_qweighted} metrics.
+It is an explicit, opt-in install: ConScapeRtools never installs or swaps
+Julia packages as a side effect of a normal \code{\link[=run_conscape]{run_conscape()}} call.
 }

@@ -284,6 +284,19 @@ cs_more <- run_conscape(
 )
 ```
 
+`criticality` is by far the most expensive metric: it re-solves the
+randomized-shortest-path problem with each habitat cell removed in turn, so its
+cost scales with the number of cells in each tile. On a large or effectively
+untiled landscape it can run for many minutes per tile and may look like it is
+"stuck at 0%" while the first tile solves. Test it first on a small cropped
+extent, choose tile parameters that actually break the landscape into multiple
+tiles (see `vignette("Tiled_ConScape_Validation_and_Performance", package =
+"ConScapeRtools")`), and avoid interrupting a run mid-tile: aborting a blocked
+Julia call can leave the `JuliaConnectoR` session in a broken state, after which
+later calls may fail with `UndefVarError: conscape not defined`. If that
+happens, restart R (or call `conscape_julia_stop()`) to clear the session before
+retrying.
+
 # Sensitivity Analysis
 
 Sensitivity analysis asks how much a landscape-level connectivity summary would
@@ -323,6 +336,7 @@ prep_sens <- conscape_prep(
   r_mov = affinity,
   target_threshold = 0,
   landmark = 1L,
+  target_mode = "full",   # required for sensitivity (see below)
   clear_dir = TRUE
 )
 
@@ -341,21 +355,51 @@ plot(cs_sens, layers = c("elasticity_quality",
                          "elasticity_affinity_cost_linked"))
 ```
 
-There are two important practical constraints.
+There are three important practical constraints.
 
-First, the current ConScape sensitivity implementation assumes source and target
+First, sensitivity requires a ConScape installation that provides
+`ConScape.sensitivity` (analytical) or `ConScape.sensitivity_simulation`. These
+live on the ConScape `sensitivity` branch and are *not* in the default
+registered ConScape package, so a plain `Pkg.add("ConScape")` (what
+ConScapeRtools installs by default) does not provide them. The same branch also
+supplies the `criticality` and `betweenness_qweighted` metrics. Install it once
+per machine with the opt-in helper:
+
+```{r sensitivity-setup, eval=FALSE}
+conscape_sensitivity_setup(jl_home)
+# use force = TRUE if an older ConScape is pinned and will not move:
+# conscape_sensitivity_setup(jl_home, force = TRUE)
+```
+
+If the functions are missing when you request sensitivity, `run_conscape()`
+stops with a message telling you to run `conscape_sensitivity_setup(jl_home)`.
+ConScapeRtools never installs or swaps Julia packages as a side effect of a
+normal run; this install is always explicit.
+
+Second, sensitivity runs **must** use `target_mode = "full"` in
+`conscape_prep()`. The default `target_mode = "center"` (correct for `btwn`
+and `fcon`) restricts each tile's target set to its center cells, which violates
+ConScape's `target_equal_source = TRUE` precondition that sensitivity depends on.
+`run_conscape()` refuses a center-mode prep with a sensitivity request and tells
+you to recreate the prep with `target_mode = "full"`. Under full mode the per-cell
+sensitivity surfaces are mean-mosaicked (they are tile-local landscape-summary
+derivatives, not pairwise sums), while any `btwn`/`fcon` requested in the same
+run still uses the correct reduction for its layer.
+
+Third, the current ConScape sensitivity implementation assumes source and target
 qualities are equal. Because `landmark > 1L` coarse-grains target qualities,
 `run_conscape()` requires `landmark = 1L` by default when sensitivity is
 requested. When using `conscape_prep`, this means preparing the sensitivity
 tiles with `landmark = 1L`. This keeps the target-quality surface aligned with
 the source-quality surface.
 
-Second, tiled sensitivity is a tile-local approximation. It uses the same tile
-overlap and mosaicking strategy as `btwn` and `fcon`, but sensitivity to
-movement affinities and costs can be more boundary-sensitive because connector
-cells and edges near tile borders may influence interior paths. Use conservative
-tile overlap, inspect edge artifacts, and prefer `landscape_measure = "sum"` for
-tiled sensitivity workflows.
+Finally, tiled sensitivity is a tile-local approximation. It uses the same tile
+overlap strategy as `btwn` and `fcon`, but sensitivity to movement affinities and
+costs can be more boundary-sensitive because connector cells and edges near tile
+borders may influence interior paths. Use conservative tile overlap, inspect edge
+artifacts, and prefer `landscape_measure = "sum"` for tiled sensitivity
+workflows. For strict correctness, run sensitivity untiled when the landscape
+fits in a single graph.
 
 # Tiled Sensitivity Recommendations
 
@@ -379,6 +423,7 @@ prep_sens <- conscape_prep(
   r_mov            = affinity,
   target_threshold = 0,
   landmark         = 1L,
+  target_mode      = "full",   # required for sensitivity
   clear_dir        = TRUE
 )
 

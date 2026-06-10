@@ -49,7 +49,9 @@ An object of class \code{"ConScapeSensitivitySpec"}.
 Creates a sensitivity specification for \code{\link[=run_conscape]{run_conscape()}}. Analytical
 sensitivity is available when the installed Julia ConScape package provides
 \code{ConScape.sensitivity}, currently on the ConScape \code{sensitivity} branch or a
-future release containing that function.
+future release containing that function. Install that build once per machine
+with \code{\link[=conscape_sensitivity_setup]{conscape_sensitivity_setup()}}; the default registered ConScape package
+does not include these functions.
 }
 \details{
 Sensitivity analysis asks how a landscape-level connectivity summary changes

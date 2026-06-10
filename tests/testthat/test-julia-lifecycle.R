@@ -190,3 +190,80 @@ test_that("conscape_dev_backend_setup reports Julia setup failures", {
     "Failed to prepare"
   )
 })
+
+test_that("conscape_sensitivity_setup installs the sensitivity branch and parses the version", {
+  julia_bin <- file.path(tempdir(), "fake-julia-bin-sens")
+  dir.create(julia_bin, recursive = TRUE, showWarnings = FALSE)
+  julia_exe <- file.path(julia_bin, "julia.exe")
+  writeLines("", julia_exe)
+
+  calls <- list()
+  testthat::local_mocked_bindings(
+    run_julia_command = function(command, args, stdout = TRUE, stderr = TRUE) {
+      calls[[length(calls) + 1L]] <<- list(command = command, args = args)
+      c("Resolving package versions...",
+        "ConScape sensitivity version: 0.3.0")
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  version <- conscape_sensitivity_setup(jl_home = julia_bin, quiet = TRUE)
+
+  expect_identical(version, "0.3.0")
+  expect_equal(calls[[1]]$command, julia_exe)
+  expect_true("--startup-file=no" %in% calls[[1]]$args)
+  expect_true("sensitivity" %in% calls[[1]]$args)
+  expect_true("https://github.com/ConScape/ConScape.jl" %in% calls[[1]]$args)
+  # force defaults to FALSE -> passes "false" as the final positional arg
+  expect_true("false" %in% calls[[1]]$args)
+  expect_false("true" %in% calls[[1]]$args)
+})
+
+test_that("conscape_sensitivity_setup passes force = TRUE through to Julia", {
+  julia_bin <- file.path(tempdir(), "fake-julia-bin-sens-force")
+  dir.create(julia_bin, recursive = TRUE, showWarnings = FALSE)
+  writeLines("", file.path(julia_bin, "julia.exe"))
+
+  calls <- list()
+  testthat::local_mocked_bindings(
+    run_julia_command = function(command, args, stdout = TRUE, stderr = TRUE) {
+      calls[[length(calls) + 1L]] <<- list(args = args)
+      "ConScape sensitivity version: 0.3.0"
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  conscape_sensitivity_setup(jl_home = julia_bin, force = TRUE, quiet = TRUE)
+  expect_true("true" %in% calls[[1]]$args)
+})
+
+test_that("conscape_sensitivity_setup reports Julia install failures", {
+  julia_bin <- file.path(tempdir(), "fake-julia-bin-sens-fail")
+  dir.create(julia_bin, recursive = TRUE, showWarnings = FALSE)
+  writeLines("", file.path(julia_bin, "julia.exe"))
+
+  testthat::local_mocked_bindings(
+    run_julia_command = function(...) {
+      out <- "Installed ConScape is missing sensitivity API symbols: sensitivity"
+      attr(out, "status") <- 1L
+      out
+    },
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_error(
+    conscape_sensitivity_setup(jl_home = julia_bin, quiet = TRUE),
+    "Failed to install the ConScape sensitivity build"
+  )
+})
+
+test_that("conscape_sensitivity_setup validates its arguments", {
+  expect_error(conscape_sensitivity_setup(jl_home = ""),
+               "jl_home must be a single non-empty")
+  expect_error(conscape_sensitivity_setup(jl_home = "x", rev = ""),
+               "rev must be a single non-empty")
+  expect_error(conscape_sensitivity_setup(jl_home = "x", url = NA_character_),
+               "url must be a single non-empty")
+  expect_error(conscape_sensitivity_setup(jl_home = "x", force = "yes"),
+               "force must be TRUE or FALSE")
+})

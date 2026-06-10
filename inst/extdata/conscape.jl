@@ -182,9 +182,9 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                             throw(ErrorException("Sensitivity requires land_mark = 1 so target qualities remain equal to source qualities."))
                         end
                         if sensitivity_method == "analytical" && !isdefined(ConScape, :sensitivity)
-                            throw(ErrorException("ConScape.sensitivity is not available. Install the ConScape sensitivity branch or a release that includes it."))
+                            throw(ErrorException("ConScape.sensitivity is not available in the installed ConScape. Run conscape_sensitivity_setup(jl_home) from R to install the ConScape sensitivity branch, then retry."))
                         elseif sensitivity_method == "simulation" && !isdefined(ConScape, :sensitivity_simulation)
-                            throw(ErrorException("ConScape.sensitivity_simulation is not available. Install the ConScape sensitivity branch or a release that includes it."))
+                            throw(ErrorException("ConScape.sensitivity_simulation is not available in the installed ConScape. Run conscape_sensitivity_setup(jl_home) from R to install the ConScape sensitivity branch, then retry."))
                         end
                     end
 

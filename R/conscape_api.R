@@ -88,7 +88,9 @@ conscape_api_slots <- function() {
 #' Creates a sensitivity specification for [run_conscape()]. Analytical
 #' sensitivity is available when the installed Julia ConScape package provides
 #' `ConScape.sensitivity`, currently on the ConScape `sensitivity` branch or a
-#' future release containing that function.
+#' future release containing that function. Install that build once per machine
+#' with [conscape_sensitivity_setup()]; the default registered ConScape package
+#' does not include these functions.
 #'
 #' @details
 #' Sensitivity analysis asks how a landscape-level connectivity summary changes

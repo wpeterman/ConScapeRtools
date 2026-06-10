@@ -270,56 +270,25 @@ wd$diagnostics$overlap_area_factor
 wd$diagnostics$workload_proxy
 ```
 
-`expected_windows` is how many tiles your design will solve.
-`overlap_area_factor` is `(centersize + 2*buffer)^2 / centersize^2`,
-a measure of buffer overhead per retained center cell; values near 2
-are efficient, larger values mean most per-tile work is repeated
-context. `workload_proxy` is `expected_windows * source_window_cells
-* center_cells`, a unitless count that tracks total wall-clock work.
+`expected_windows` is how many tiles your design will solve. `overlap_area_factor` is `(centersize + 2*buffer)^2 / centersize^2`, a measure of buffer overhead per retained center cell; values near 2 are efficient, larger values mean most per-tile work is repeated context. `workload_proxy` is `expected_windows * source_window_cells * center_cells`, a unitless count that tracks total wall-clock work.
 
 ## Tile sizing: RAM, throughput, and tradeoffs
 
-`centersize` is a pure compute knob. Adjusting it does not change the
-mathematical answer (the same per-cell connectivity quantity comes
-out of the mosaic regardless of centersize), and it does not change
-buffer-truncation error (that is governed by `buffer` and
-`distance_scale`). What it does change:
+`centersize` is a pure compute knob. Adjusting it does not change the mathematical answer (the same per-cell connectivity quantity comes out of the mosaic regardless of centersize), and it does not change buffer-truncation error (that is governed by `buffer` and `distance_scale`). What it does change:
 
-* **Per-window peak RAM** scales as
-  `8 * (centersize + 2*buffer)^2 * (centersize / landmark)^2` bytes
-  (8 bytes per double, dominant contribution from the
-  `Z = (I - W) \ I_target` block). Halving `centersize` drops that
-  by roughly a factor of four.
-* **Window count** scales inversely with `centersize^2`. Smaller
-  centers mean more windows and more fixed dispatch overhead per
-  window.
-* **Total work** (`workload_proxy`) =
-  `landscape_area * (centersize + 2*buffer)^2`. Smaller `centersize`
-  *reduces* `workload_proxy`, asymptoting at
-  `landscape_area * (2*buffer)^2` for very small centers. The savings
-  come at the price of factoring `(I - W)` more times.
+- **Per-window peak RAM** scales as `8 * (centersize + 2*buffer)^2 * (centersize / landmark)^2` bytes (8 bytes per double, dominant contribution from the `Z = (I - W) \ I_target` block). Halving `centersize` drops that by roughly a factor of four.
+- **Window count** scales inversely with `centersize^2`. Smaller centers mean more windows and more fixed dispatch overhead per window.
+- **Total work** (`workload_proxy`) = `landscape_area * (centersize + 2*buffer)^2`. Smaller `centersize` *reduces* `workload_proxy`, asymptoting at `landscape_area * (2*buffer)^2` for very small centers. The savings come at the price of factoring `(I - W)` more times.
 
-> **One caveat with `landmark > 1L`**: ConScape's `coarse_graining()`
-> places one target per `landmark` cells *within each tile*, so
-> changing `centersize` shifts the absolute positions of those
-> landmark targets. The mosaicked surface has small per-cell jitter
-> as a result; scale, sign, and interpretation are unaffected. For
-> strict reproducibility across centersize choices, build the prep
-> with `landmark = 1L`.
+> **One caveat with `landmark > 1L`**: ConScape's `coarse_graining()` places one target per `landmark` cells *within each tile*, so changing `centersize` shifts the absolute positions of those landmark targets. The mosaicked surface has small per-cell jitter as a result; scale, sign, and interpretation are unaffected. For strict reproducibility across centersize choices, build the prep with `landmark = 1L`.
 
-`window_design_scenarios()` makes the tradeoff concrete. Pass your
-calibrated design and it returns a one-row-per-candidate table of
-per-window RAM, window count, and workload proxy:
+`window_design_scenarios()` makes the tradeoff concrete. Pass your calibrated design and it returns a one-row-per-candidate table of per-window RAM, window count, and workload proxy:
 
 ```{r scenarios-default}
 window_design_scenarios(r = habitat, design = wd)
 ```
 
-The default sweep halves `wd$centersize` geometrically and snaps each
-candidate to a multiple of `landmark`. You can pass an explicit
-vector of candidates and a target RAM budget; the helper flags the
-**largest** `centersize` that fits the budget (large centers minimize
-dispatch overhead):
+The default sweep halves `wd$centersize` geometrically and snaps each candidate to a multiple of `landmark`. You can pass an explicit vector of candidates and a target RAM budget; the helper flags the **largest** `centersize` that fits the budget (large centers minimize dispatch overhead):
 
 ```{r scenarios-target-ram}
 window_design_scenarios(
@@ -333,34 +302,18 @@ window_design_scenarios(
 
 **How to read the output:**
 
-* `centersize`, `buffer`, `landmark`: the design parameters for that
-  row, in cells.
-* `source_window_cells` = `(centersize + 2 * buffer)^2`, the per-window
-  graph size that ConScape factorizes.
-* `center_cells` = `centersize^2`, retained as RSP targets before
-  coarse graining.
-* `target_cells_after_landmark` = `center_cells / landmark^2`, the
-  number of `Z` columns ConScape solves per window.
-* `expected_windows`: approximate tile count on the supplied raster.
-* `ram_per_window_gb`: worst-case envelope for a single window's
-  peak memory.
-* `total_ram_gb` = `workers * ram_per_window_gb`, system-wide peak
-  when running `workers` solves in parallel.
-* `overlap_area_factor` = `source_window_cells / center_cells`. Near 2
-  is efficient.
-* `workload_proxy`: total cells-times-targets-times-windows; tracks
-  wall-clock work.
-* `recommended`: present only when `target_ram_gb` was supplied; flags
-  the largest centersize fitting the budget.
+- `centersize`, `buffer`, `landmark`: the design parameters for that row, in cells.
+- `source_window_cells` = `(centersize + 2 * buffer)^2`, the per-window graph size that ConScape factorizes.
+- `center_cells` = `centersize^2`, retained as RSP targets before coarse graining.
+- `target_cells_after_landmark` = `center_cells / landmark^2`, the number of `Z` columns ConScape solves per window.
+- `expected_windows`: approximate tile count on the supplied raster.
+- `ram_per_window_gb`: worst-case envelope for a single window's peak memory.
+- `total_ram_gb` = `workers * ram_per_window_gb`, system-wide peak when running `workers` solves in parallel.
+- `overlap_area_factor` = `source_window_cells / center_cells`. Near 2 is efficient.
+- `workload_proxy`: total cells-times-targets-times-windows; tracks wall-clock work.
+- `recommended`: present only when `target_ram_gb` was supplied; flags the largest centersize fitting the budget.
 
-The goal is not to minimize any single number. The goal is to pick
-the largest `centersize` whose `total_ram_gb` fits comfortably on
-your machine, accept the resulting `expected_windows` count as
-sequencing overhead, and let the helper rule out designs where the
-buffer dominates the center or each window exceeds available memory.
-At the calibrated `(centersize = 20, buffer = 5)` on this raster the
-helper's first row corresponds to the design you would get from
-`tile_design()` directly.
+The goal is not to minimize any single number. The goal is to pick the largest `centersize` whose `total_ram_gb` fits comfortably on your machine, accept the resulting `expected_windows` count as sequencing overhead, and let the helper rule out designs where the buffer dominates the center or each window exceeds available memory. At the calibrated `(centersize = 20, buffer = 5)` on this raster the helper's first row corresponds to the design you would get from `tile_design()` directly.
 
 # Step 4: Prepare A Reduced Demo Landscape
 

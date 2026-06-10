@@ -1,3 +1,31 @@
+ConScapeRtools 0.4.24
+---------
+* Added `conscape_sensitivity_setup(jl_home)`: an opt-in helper that
+  installs a ConScape build providing `ConScape.sensitivity`,
+  `ConScape.sensitivity_simulation`, and the `criticality` /
+  `betweenness_qweighted` metrics into the default Julia environment.
+  These functions live on the ConScape `sensitivity` branch and are not
+  part of the default registered ConScape release, so a plain
+  `Pkg.add("ConScape")` (the package default) does not provide them.
+  The helper is explicit and opt-in; ConScapeRtools never installs or
+  swaps Julia packages as a side effect of a normal `run_conscape()`
+  call. Use `force = TRUE` to replace an older pinned ConScape.
+* The Julia-side "ConScape.sensitivity is not available" errors now name
+  `conscape_sensitivity_setup(jl_home)` as the fix.
+* Fixed the sensitivity examples in `vignettes/ConScapeRtools_Guide.Rmd`,
+  which were missing the `target_mode = "full"` argument now required
+  for sensitivity prep (added in 0.4.22). Expanded the sensitivity
+  constraints prose to cover the ConScape sensitivity build requirement,
+  the `target_mode = "full"` requirement and rationale, `landmark = 1L`,
+  and the install helper.
+* Documented in the metrics section of `vignettes/ConScapeRtools_Guide.Rmd`
+  that `criticality` is the most expensive metric (it re-solves the RSP
+  problem per removed cell) and can appear "stuck at 0%" on large or
+  effectively untiled landscapes, that interrupting a blocked Julia call
+  can corrupt the JuliaConnectoR session (yielding a misleading
+  `UndefVarError: conscape not defined`), and that the remedy is to
+  restart R or call `conscape_julia_stop()`.
+
 ConScapeRtools 0.4.23
 ---------
 * Added `window_design_scenarios()`: a helper that sweeps candidate

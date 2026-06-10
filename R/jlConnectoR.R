@@ -111,18 +111,24 @@ prepare_conscape_dev_project <- function(jl_home,
 #' @param quiet Logical. If `TRUE`, suppress routine setup messages. Default is
 #'   `FALSE`.
 #' @param project Directory for a dedicated Julia project environment.
-#'   Defaults to a package cache directory.
-#' @param rev Git branch, tag, or commit for the ConScape development
-#'   dependency. Defaults to `"alg_efficiency"`.
+#'   Defaults to a package cache directory. Used by
+#'   `conscape_dev_backend_setup()` only.
+#' @param rev Git branch, tag, or commit for the ConScape dependency.
+#'   `conscape_dev_backend_setup()` defaults to `"alg_efficiency"`;
+#'   `conscape_sensitivity_setup()` defaults to `"sensitivity"`.
 #' @param url Git URL for ConScape.jl.
 #' @param force Logical. If `TRUE`, remove any existing ConScape dependency
-#'   from `project` before adding the requested development revision.
+#'   before adding the requested revision. For `conscape_sensitivity_setup()`
+#'   this replaces a registered-release ConScape with the branch build (use
+#'   when an older ConScape is pinned and `Pkg.add` will not move it).
 #'
 #' @return
 #' `conscape_julia_start()` and `conscape_julia_stop()` return `invisible(NULL)`.
 #' `conscape_julia_status()` returns a single logical value indicating whether
 #' JuliaConnectoR currently reports an active Julia session.
 #' `conscape_dev_backend_setup()` returns the normalized Julia project path.
+#' `conscape_sensitivity_setup()` returns, invisibly, the installed ConScape
+#' version string (e.g. `"0.3.0"`).
 #'
 #' @details
 #' Reusing a Julia session is usually faster for repeated calls, but Julia
@@ -130,8 +136,21 @@ prepare_conscape_dev_project <- function(jl_home,
 #' Restart Julia after changing those settings or after an error that may have
 #' left Julia state uncertain.
 #'
+#' `conscape_sensitivity_setup()` installs a ConScape build that provides
+#' `ConScape.sensitivity` and `ConScape.sensitivity_simulation` (and the
+#' `criticality` and `betweenness_qweighted` metrics) into the **default**
+#' Julia environment, the same environment [conscape_julia_start()] and
+#' [run_conscape()] use. These functions live on the ConScape `sensitivity`
+#' branch and are not part of the default registered ConScape release, so a
+#' plain `Pkg.add("ConScape")` (what the package installs by default) does not
+#' provide them. Call this helper once per machine before requesting
+#' sensitivity outputs or the `criticality` / `betweenness_qweighted` metrics.
+#' It is an explicit, opt-in install: ConScapeRtools never installs or swaps
+#' Julia packages as a side effect of a normal [run_conscape()] call.
+#'
 #' @name conscape-julia
 #' @aliases conscape_julia_start conscape_julia_stop conscape_julia_status
+#'   conscape_dev_backend_setup conscape_sensitivity_setup
 NULL
 
 #' @rdname conscape-julia
@@ -290,6 +309,89 @@ conscape_dev_backend_setup <- function(jl_home,
     message(paste(out, collapse = "\n"))
   }
   project
+}
+
+#' @rdname conscape-julia
+#' @export
+conscape_sensitivity_setup <- function(jl_home,
+                                       rev = "sensitivity",
+                                       url = "https://github.com/ConScape/ConScape.jl",
+                                       force = FALSE,
+                                       quiet = FALSE) {
+  if (!is.character(jl_home) || length(jl_home) != 1L || is.na(jl_home) ||
+      !nzchar(jl_home)) {
+    stop("jl_home must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.character(rev) || length(rev) != 1L || is.na(rev) || !nzchar(rev)) {
+    stop("rev must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.character(url) || length(url) != 1L || is.na(url) || !nzchar(url)) {
+    stop("url must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.logical(force) || length(force) != 1L || is.na(force)) {
+    stop("force must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(quiet) || length(quiet) != 1L || is.na(quiet)) {
+    stop("quiet must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  julia <- conscape_julia_exe(jl_home)
+  if (is.na(julia) || !nzchar(julia)) {
+    stop("Check that the path to the Julia binary directory is correct", call. = FALSE)
+  }
+
+  # Install into the DEFAULT Julia environment (no Pkg.activate) so the
+  # stable run_conscape() path, which does `using ConScape`, picks it up.
+  # Shelling out to a fresh Julia process avoids mutating any live
+  # JuliaConnectoR session's package state mid-run.
+  setup_script <- tempfile("conscape_sensitivity_setup_", fileext = ".jl")
+  writeLines(c(
+    "using Pkg",
+    "url = ARGS[1]",
+    "rev = ARGS[2]",
+    "force = ARGS[3] == \"true\"",
+    "if force",
+    "    try",
+    "        Pkg.rm(\"ConScape\")",
+    "    catch",
+    "    end",
+    "end",
+    "Pkg.add(Pkg.PackageSpec(url=url, rev=rev))",
+    "Pkg.precompile()",
+    "using ConScape",
+    "required = [:sensitivity, :sensitivity_simulation]",
+    "missing = [String(s) for s in required if !isdefined(ConScape, s)]",
+    "isempty(missing) || error(\"Installed ConScape is missing sensitivity API symbols: \" * join(missing, \", \"))",
+    "println(\"ConScape sensitivity version: \" * string(pkgversion(ConScape)))"
+  ), setup_script, useBytes = TRUE)
+  on.exit(unlink(setup_script, force = TRUE), add = TRUE)
+
+  out <- run_julia_command(
+    julia,
+    args = c("--startup-file=no", setup_script, url, rev,
+             if (isTRUE(force)) "true" else "false"),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  status <- attr(out, "status")
+  if (!is.null(status) && !identical(status, 0L)) {
+    stop(
+      "Failed to install the ConScape sensitivity build:\n",
+      paste(out, collapse = "\n"),
+      call. = FALSE
+    )
+  }
+  if (isFALSE(quiet)) {
+    message(paste(out, collapse = "\n"))
+  }
+
+  version_line <- grep("^ConScape sensitivity version: ", out, value = TRUE)
+  version <- if (length(version_line)) {
+    sub("^ConScape sensitivity version: ", "", version_line[[1]])
+  } else {
+    NA_character_
+  }
+  invisible(version)
 }
 
 julia_warn_or_error_expr <- function(expr) {
