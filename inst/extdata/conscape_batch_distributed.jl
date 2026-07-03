@@ -104,8 +104,8 @@ end
 end
 
 function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
-                                    r_targets::Vector{String}, r_sources::Vector{String},
-                                    r_res::Vector{String}, land_mark, theta, exp_d, NA_val,
+                                    r_targets, r_sources,
+                                    r_res, land_mark, theta, exp_d, NA_val,
                                     max_retries::Int = 4, progress::Bool = true,
                                     blas_threads::Int = 1,
                                     metrics = ["betweenness_kweighted", "connected_habitat"],
@@ -124,6 +124,19 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
     for worker in workers()
         remotecall_wait(_set_blas_threads, worker, blas_threads)
     end
+
+    # r_targets/r_sources/r_res arrive via JuliaConnectoR from R character
+    # vectors. R does not distinguish a length-1 vector from a scalar, so
+    # JuliaConnectoR auto-unboxes a single-tile design's filename list into a
+    # bare Julia String instead of a Vector{String}. A strict
+    # ::Vector{String} signature then rejects that call with a MethodError
+    # for any landscape small enough to produce exactly one tile. Normalize
+    # explicitly with _as_string_vector (defined in conscape.jl, included
+    # via @everywhere before this file) so both scalar and vector inputs
+    # work uniformly.
+    r_targets = _as_string_vector(r_targets)
+    r_sources = _as_string_vector(r_sources)
+    r_res     = _as_string_vector(r_res)
 
     # Align filenames across target/source/movement by basename.
     # This prevents accidental mixing of tiles when some files have been deleted.

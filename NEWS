@@ -1,3 +1,33 @@
+ConScapeRtools 0.4.25
+---------
+* Fixed a MethodError that caused `run_conscape(parallel = TRUE, parallel_R =
+  FALSE)` (the "julia_threads" and "julia_distributed" strategies) to fail
+  100% of the time whenever the tile design collapsed to exactly one tile
+  (e.g., a landscape smaller than the calibrated minimum tile width, or any
+  design explicitly producing a single tile). Diagnosed from a manuscript
+  benchmark run: `conscape_batch()`/`conscape_batch_distributed()` in
+  `inst/extdata/conscape_batch.jl` / `conscape_batch_distributed.jl`
+  declared `r_targets::Vector{String}` (and `r_sources`, `r_res`). R does
+  not distinguish a length-1 character vector from a scalar, so
+  JuliaConnectoR auto-unboxes a single-tile design's one-element filename
+  list into a bare Julia `String`, which the strict `Vector{String}`
+  signature rejected. `serial` and `future_R` never hit this because they
+  invoke the per-tile `conscape()` Julia function once per tile with
+  scalar arguments, matching its scalar signature; only the two
+  Julia-native batch strategies pass the whole tile list at once.
+* Relaxed both signatures and normalize with `_as_string_vector()`, the
+  same helper already used elsewhere in the Julia bridge for this class of
+  R-to-Julia scalar/vector ambiguity (`metrics`, `sensitivity_wrt`).
+  Verified directly against Julia (methods dispatch and an explicit
+  scalar-vs-vector round-trip) and, in `tests/testthat/test-single-tile-batch.R`,
+  with end-to-end integration tests that run both strategies on a real
+  single-tile design (gated behind `RUN_CONSCAPERTOOLS_INTEGRATION=true`).
+  A static, always-on regression check confirms the fix cannot silently
+  regress.
+* This bug is independent of the 0.4.21-0.4.24 tiling/sensitivity work and
+  had zero prior test coverage; `julia_threads`/`julia_distributed` were
+  previously untested by any part of the test suite.
+
 ConScapeRtools 0.4.24
 ---------
 * Added `conscape_sensitivity_setup(jl_home)`: an opt-in helper that
