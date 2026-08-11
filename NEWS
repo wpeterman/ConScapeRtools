@@ -1,3 +1,11 @@
+ConScapeRtools 0.4.26
+---------
+* Fixed `conscape_efficiency_assessment()` for unnamed prep inputs. Positional
+  inputs now receive generated scenario labels such as `"prep_1"`.
+* Standardized tiled `run_conscape()` results on the canonical `outdirs` list.
+  Use `result$outdirs$btwn` and `result$outdirs$fcon`; the duplicate
+  `outdir_btwn` and `outdir_fcon` elements were removed.
+
 ConScapeRtools 0.4.25
 ---------
 * Fixed a MethodError that caused `run_conscape(parallel = TRUE, parallel_R =

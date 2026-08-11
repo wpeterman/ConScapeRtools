@@ -232,12 +232,15 @@ requested.
 \item Additional metric or sensitivity \code{SpatRaster} layers named by their output
 identifier (e.g., \code{"btwn_qweighted"}, \code{"elasticity_quality"}).
 \item \code{outdirs} – named list mapping each output layer to its tile-level
-directory.
-\item \code{outdir_btwn} and \code{outdir_fcon} – backwards-compatible named paths for
+directory. For example, use \code{outdirs$btwn} and \code{outdirs$fcon} to access
 the default betweenness and connected-habitat tile directories.
+\item \code{diagnostics} – list recording the backend and parallel settings, output
+validation results, batch diagnostics, and mosaicking methods used.
 }
 
-When run on a single untiled \code{SpatRaster}, returns a multi-layer
+When tiled inputs are used with \code{mosaic = FALSE}, the result contains
+\code{outdirs} and \code{diagnostics} without mosaicked raster elements. When run on a
+single untiled \code{SpatRaster}, returns a multi-layer
 \code{SpatRaster} with one layer per requested metric and/or sensitivity output,
 named by their output identifiers (e.g., \code{"btwn"}, \code{"fcon"},
 \code{"elasticity_quality"}).

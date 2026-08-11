@@ -8,7 +8,8 @@ conscape_efficiency_assessment(..., reference = 1L)
 }
 \arguments{
 \item{...}{One or more \code{"ConScapeRtools_prep"} objects. Named arguments are
-used as scenario labels.}
+used as scenario labels. Unnamed inputs receive labels such as \code{"prep_1"}
+and \code{"prep_2"} in the order supplied.}
 
 \item{reference}{Integer or character identifying the reference scenario for
 reduction columns. Defaults to the first supplied prep object.}

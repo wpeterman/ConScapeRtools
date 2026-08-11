@@ -6,7 +6,8 @@
 #' launching a costly Julia run.
 #'
 #' @param ... One or more `"ConScapeRtools_prep"` objects. Named arguments are
-#'   used as scenario labels.
+#'   used as scenario labels. Unnamed inputs receive labels such as `"prep_1"`
+#'   and `"prep_2"` in the order supplied.
 #' @param reference Integer or character identifying the reference scenario for
 #'   reduction columns. Defaults to the first supplied prep object.
 #'
@@ -69,7 +70,10 @@ conscape_efficiency_assessment <- function(..., reference = 1L) {
   }
 
   labels <- names(preps)
-  missing_labels <- !nzchar(labels)
+  if (is.null(labels)) {
+    labels <- rep("", length(preps))
+  }
+  missing_labels <- is.na(labels) | !nzchar(labels)
   labels[missing_labels] <- paste0("prep_", which(missing_labels))
 
   summaries <- Map(function(prep, label) {

@@ -216,11 +216,14 @@
 #' * Additional metric or sensitivity `SpatRaster` layers named by their output
 #'   identifier (e.g., `"btwn_qweighted"`, `"elasticity_quality"`).
 #' * `outdirs` – named list mapping each output layer to its tile-level
-#'   directory.
-#' * `outdir_btwn` and `outdir_fcon` – backwards-compatible named paths for
+#'   directory. For example, use `outdirs$btwn` and `outdirs$fcon` to access
 #'   the default betweenness and connected-habitat tile directories.
+#' * `diagnostics` – list recording the backend and parallel settings, output
+#'   validation results, batch diagnostics, and mosaicking methods used.
 #'
-#' When run on a single untiled `SpatRaster`, returns a multi-layer
+#' When tiled inputs are used with `mosaic = FALSE`, the result contains
+#' `outdirs` and `diagnostics` without mosaicked raster elements. When run on a
+#' single untiled `SpatRaster`, returns a multi-layer
 #' `SpatRaster` with one layer per requested metric and/or sensitivity output,
 #' named by their output identifiers (e.g., `"btwn"`, `"fcon"`,
 #' `"elasticity_quality"`).
@@ -952,12 +955,6 @@ run_conscape <- function(conscape_prep = NULL,
 
   make_result_shell <- function() {
     shell <- list(outdirs = output_dirs, diagnostics = run_diagnostics)
-    if ("btwn" %in% names(output_dirs)) {
-      shell$outdir_btwn <- output_dirs$btwn
-    }
-    if ("fcon" %in% names(output_dirs)) {
-      shell$outdir_fcon <- output_dirs$fcon
-    }
     class(shell) <- "ConScapeResults"
     shell
   }
@@ -1020,8 +1017,6 @@ run_conscape <- function(conscape_prep = NULL,
                                                     character(1), "layer")
 
     out <- c(rasters, list(outdirs = output_dirs, diagnostics = run_diagnostics))
-    if ("btwn" %in% names(output_dirs)) out$outdir_btwn <- output_dirs$btwn
-    if ("fcon" %in% names(output_dirs)) out$outdir_fcon <- output_dirs$fcon
     class(out) <- "ConScapeResults"
   } else {
     out <- make_result_shell()

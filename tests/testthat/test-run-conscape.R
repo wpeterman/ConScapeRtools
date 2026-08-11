@@ -235,8 +235,9 @@ test_that("run_conscape can run mocked tiled serial workflow and mosaic results"
   expect_s4_class(out$btwn, "SpatRaster")
   expect_s4_class(out$fcon, "SpatRaster")
   expect_equal(dim(out$btwn), dim(r))
-  expect_true(dir.exists(out$outdir_btwn))
-  expect_true(dir.exists(out$outdir_fcon))
+  expect_true(dir.exists(out$outdirs$btwn))
+  expect_true(dir.exists(out$outdirs$fcon))
+  expect_false(any(c("outdir_btwn", "outdir_fcon") %in% names(out)))
 })
 
 test_that("run_conscape handles a prepared single-tile workflow", {
@@ -315,6 +316,8 @@ test_that("run_conscape warns when mocked threaded execution misses outputs", {
   expect_s3_class(out, "ConScapeResults")
   expect_true("diagnostics" %in% names(out))
   expect_true("output_validation" %in% names(out$diagnostics))
+  expect_named(out$outdirs, c("btwn", "fcon"), ignore.order = TRUE)
+  expect_false(any(c("outdir_btwn", "outdir_fcon") %in% names(out)))
 })
 
 test_that("run_conscape validates requested parallel outputs instead of defaults", {

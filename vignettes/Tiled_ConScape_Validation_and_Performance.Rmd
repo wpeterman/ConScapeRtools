@@ -599,7 +599,7 @@ Likely causes, in order of frequency:
 
 **Symptom: `mosaic_conscape()` returns NA everywhere when `method = "sum"`.**
 
-`method = "sum"` treats per-tile NA as 0. If every tile is fully NA (e.g., the per-tile ConScape run failed silently), the sum is 0 and the final mask sets it to NA. Inspect the per-tile `*.asc` files in `cs_res$outdir_btwn` and `cs_res$outdir_fcon`.
+`method = "sum"` treats per-tile NA as 0. If every tile is fully NA (e.g., the per-tile ConScape run failed silently), the sum is 0 and the final mask sets it to NA. Inspect the per-tile `*.asc` files in `cs_res$outdirs$btwn` and `cs_res$outdirs$fcon`.
 
 **Symptom: tiled `btwn` magnitudes look too low.**
 

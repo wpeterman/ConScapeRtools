@@ -158,6 +158,11 @@ test_that("center-target prep distinguishes output cells from backend target cel
   expect_equal(assessment$target_cell_reduction[2], 0)
   expect_gt(assessment$output_target_cell_reduction[2], 0)
   expect_gt(assessment$output_source_target_work_reduction[2], 0)
+
+  unnamed <- conscape_efficiency_assessment(classic)
+  expect_s3_class(unnamed, "ConScapeEfficiencyAssessment")
+  expect_equal(unnamed$scenario, "prep_1")
+  expect_equal(unnamed$source_target_work_reduction, 0)
 })
 
 test_that("conscape_prep rejects incompatible raster extent", {

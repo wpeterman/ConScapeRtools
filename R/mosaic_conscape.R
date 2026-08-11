@@ -115,12 +115,12 @@
 #'
 #' ## Manually reassemble tile outputs (done automatically when mosaic = TRUE)
 #' mask <- terra::rast(file.path(prep$asc_dir, "mask", "mask.asc"))
-#' cs_btwn <- mosaic_conscape(out_dir   = cs_res$outdir_btwn,
+#' cs_btwn <- mosaic_conscape(out_dir   = cs_res$outdirs$btwn,
 #'                            mask      = mask,
 #'                            tile_trim = prep$tile_trim,
 #'                            method    = "mosaic",
 #'                            crs       = terra::crs(habitat))
-#' cs_fcon <- mosaic_conscape(out_dir   = cs_res$outdir_fcon,
+#' cs_fcon <- mosaic_conscape(out_dir   = cs_res$outdirs$fcon,
 #'                            mask      = mask,
 #'                            tile_trim = prep$tile_trim,
 #'                            crs       = terra::crs(habitat))
