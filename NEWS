@@ -1,3 +1,17 @@
+ConScapeRtools 0.4.27
+---------
+* Updated `mosaic_conscape()` and the tiled-workflow documentation for the
+  canonical `run_conscape()` return structure. Manual mosaicking now uses
+  `result$outdirs` with each layer's recorded
+  `result$diagnostics$mosaic_method`.
+* Clarified and enforced mosaicking behavior: additive center-target outputs
+  retain buffered overlap and sum contributions, while full-target additive
+  outputs and sensitivity or elasticity surfaces use trimmed mean mosaics.
+* Revised examples and vignettes to keep disposable tile and run directories
+  separate from directories containing saved data or model objects.
+* Expanded regression coverage for trimming, chunked reductions, manual
+  mosaicking, per-output method selection, and integer chunk-size validation.
+
 ConScapeRtools 0.4.26
 ---------
 * Fixed `conscape_efficiency_assessment()` for unnamed prep inputs. Positional

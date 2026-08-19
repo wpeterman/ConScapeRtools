@@ -237,7 +237,65 @@ test_that("run_conscape can run mocked tiled serial workflow and mosaic results"
   expect_equal(dim(out$btwn), dim(r))
   expect_true(dir.exists(out$outdirs$btwn))
   expect_true(dir.exists(out$outdirs$fcon))
+  expect_equal(out$diagnostics$mosaic_method, c(btwn = "sum", fcon = "sum"))
+
+  mask <- terra::rast(file.path(prep$asc_dir, "mask", "mask.asc"))
+  manual_btwn <- mosaic_conscape(
+    out_dir = out$outdirs$btwn,
+    mask = mask,
+    tile_trim = prep$tile_trim,
+    method = out$diagnostics$mosaic_method[["btwn"]],
+    crs = terra::crs(r)
+  )
+  expect_equal(terra::values(manual_btwn, mat = FALSE),
+               terra::values(out$btwn, mat = FALSE))
   expect_false(any(c("outdir_btwn", "outdir_fcon") %in% names(out)))
+})
+
+test_that("mosaic methods follow output type and prep target mode", {
+  additive <- ConScapeRtools:::conscape_output_specs(c("btwn", "fcon"))
+  sensitivity <- ConScapeRtools:::conscape_output_specs(
+    "btwn",
+    conscape_sensitivity(wrt = "Q", unitless = FALSE)
+  )
+  elasticity <- ConScapeRtools:::conscape_output_specs(
+    "btwn",
+    conscape_sensitivity(wrt = "Q", unitless = TRUE)
+  )
+
+  expect_equal(
+    vapply(additive, ConScapeRtools:::pick_mosaic_method,
+           character(1), target_mode = "center"),
+    c(betweenness_kweighted = "sum", connected_habitat = "sum")
+  )
+  expect_equal(
+    vapply(additive, ConScapeRtools:::pick_mosaic_method,
+           character(1), target_mode = "full"),
+    c(betweenness_kweighted = "mosaic", connected_habitat = "mosaic")
+  )
+  expect_equal(
+    ConScapeRtools:::pick_mosaic_method(sensitivity$sensitivity_quality, "full"),
+    "mosaic"
+  )
+  expect_equal(
+    ConScapeRtools:::pick_mosaic_method(elasticity$elasticity_quality, "center"),
+    "mosaic"
+  )
+})
+
+test_that("run_conscape rejects noninteger mosaic chunk sizes", {
+  r <- make_test_raster(n = 3, vals = 1)
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-bad-mosaic-chunk"),
+      hab_target = r,
+      hab_src = r,
+      mov_prob = r,
+      mosaic_chunk_size = 1.5,
+      jl_home = "C:/Julia/bin"
+    ),
+    "mosaic_chunk_size must be a positive integer"
+  )
 })
 
 test_that("run_conscape handles a prepared single-tile workflow", {
@@ -317,6 +375,10 @@ test_that("run_conscape warns when mocked threaded execution misses outputs", {
   expect_true("diagnostics" %in% names(out))
   expect_true("output_validation" %in% names(out$diagnostics))
   expect_named(out$outdirs, c("btwn", "fcon"), ignore.order = TRUE)
+  expect_equal(
+    out$diagnostics$mosaic_method,
+    c(btwn = "sum", fcon = "sum")
+  )
   expect_false(any(c("outdir_btwn", "outdir_fcon") %in% names(out)))
 })
 
@@ -371,6 +433,7 @@ test_that("run_conscape validates requested parallel outputs instead of defaults
   expect_true("criticality" %in% names(out$outdirs))
   expect_false("btwn" %in% names(out$outdirs))
   expect_true(all(out$diagnostics$output_validation$ok))
+  expect_equal(out$diagnostics$mosaic_method, c(criticality = "sum"))
 })
 
 test_that("run_conscape accepts ConScape-native slot aliases", {

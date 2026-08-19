@@ -87,8 +87,9 @@
 #' * `exp_d` – same as `distance_scale`; retained for backwards compatibility.
 #' * `tile_d` – suggested minimum interior tile width (map units) for
 #'   [conscape_prep()].
-#' * `tile_trim` – suggested minimum tile overlap / trim width (map units) for
-#'   [conscape_prep()] and [mosaic_conscape()].
+#' * `tile_trim` – suggested minimum tile overlap width (map units) for
+#'   [conscape_prep()] and [mosaic_conscape()]. Mean and merge reductions trim
+#'   this overlap, while sum reductions retain it.
 #' * `centersize` – equivalent center window size in cells for
 #'   `backend = "conscape_dev"`.
 #' * `buffer` – equivalent buffer width in cells for

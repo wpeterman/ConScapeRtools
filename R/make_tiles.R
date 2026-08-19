@@ -61,8 +61,9 @@
 #' The interior polygons returned here are typically passed internally to
 #' `tile_rast()` to construct extended tiles that include the overlap on
 #' all sides. Those extended tiles are then sent to ConScape, and
-#' [mosaic_conscape()] later trims and mosaics them using the same
-#' landmark-aligned overlap.
+#' [mosaic_conscape()] later combines them using the same landmark-aligned
+#' overlap. Sum reductions retain the overlap; mean and merge reductions trim
+#' it before combining tiles.
 #'
 #' @return
 #' A named list with components:

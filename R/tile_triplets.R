@@ -91,7 +91,7 @@ tile_rast_triplets <- function(r_target,
     # `target_mode = "full"` keeps the full buffered target raster, so each tile
     # solves a Z whose columns include every target cell in the buffered window.
     # Tiled outputs are then averaged across overlapping tiles by
-    # `mosaic_conscape(method = "mean")`. This is a smoothing heuristic; each
+    # `mosaic_conscape(method = "mosaic")`. This is a smoothing heuristic; each
     # tile's per-cell sum is biased low (it cannot see targets in other tiles),
     # so the mean is also biased.
     #

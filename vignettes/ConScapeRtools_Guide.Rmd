@@ -132,10 +132,16 @@ qualities, and movement affinities. All rasters must have the same extent and
 resolution.
 
 ```{r prep, eval=FALSE}
+analysis_dir <- "conscape_analysis"
+tile_dir <- file.path(analysis_dir, "tiles")
+run_dir <- file.path(analysis_dir, "run")
+object_dir <- file.path(analysis_dir, "saved_objects")
+dir.create(object_dir, recursive = TRUE, showWarnings = FALSE)
+
 prep <- conscape_prep(
   tile_d = td$tile_d,
   tile_trim = td$tile_trim,
-  asc_dir = "conscape_tiles",
+  asc_dir = tile_dir,
   r_target = habitat,
   r_src = habitat,
   r_mov = affinity,
@@ -147,6 +153,13 @@ prep <- conscape_prep(
 prep$input_slots
 prep$target_mode
 ```
+
+Treat `tile_dir` and `run_dir` as disposable working directories. With
+`clear_dir = TRUE`, `conscape_prep()` removes everything already inside
+`tile_dir`, and `run_conscape()` does the same inside `run_dir`. Keep source
+data, fitted models, saved R objects, and final exported rasters outside both
+directories. In this layout, `object_dir` is a separate sibling directory for
+durable analysis objects.
 
 The `landmark` argument is ConScape's coarse-graining window size. Larger
 values can make large runs faster because target qualities are aggregated to
@@ -243,7 +256,7 @@ The default `run_conscape()` call computes two connectivity surfaces:
 ```{r run-default, eval=FALSE}
 cs <- run_conscape(
   conscape_prep  = prep,
-  out_dir        = "conscape_results",
+  out_dir        = run_dir,
   theta          = td$theta,
   distance_scale = td$distance_scale,
   jl_home        = jl_home,
@@ -259,7 +272,7 @@ objects directly using the ConScape-aligned argument names.
 
 ```{r run-single, eval=FALSE}
 single <- run_conscape(
-  out_dir          = "single_results",
+  out_dir          = file.path(analysis_dir, "untiled_run"),
   target_qualities = habitat,
   source_qualities = habitat,
   affinities       = affinity,
@@ -275,7 +288,7 @@ Additional metrics can be requested with `metrics`.
 ```{r metrics, eval=FALSE}
 cs_more <- run_conscape(
   conscape_prep = prep,
-  out_dir = "conscape_more_metrics",
+  out_dir = file.path(analysis_dir, "additional_metrics_run"),
   theta = td$theta,
   distance_scale = td$distance_scale,
   metrics = c("connected_habitat", "betweenness_kweighted",
@@ -330,7 +343,7 @@ Use `unitless = FALSE` for raw unit-change sensitivities.
 prep_sens <- conscape_prep(
   tile_d = td$tile_d,
   tile_trim = td$tile_trim,
-  asc_dir = "conscape_sensitivity_tiles",
+  asc_dir = file.path(analysis_dir, "sensitivity_tiles"),
   r_target = habitat,
   r_src = habitat,
   r_mov = affinity,
@@ -342,7 +355,7 @@ prep_sens <- conscape_prep(
 
 cs_sens <- run_conscape(
   conscape_prep  = prep_sens,
-  out_dir        = "conscape_sensitivity",
+  out_dir        = file.path(analysis_dir, "sensitivity_run"),
   theta          = td$theta,
   distance_scale = td$distance_scale,
   metrics        = c("connected_habitat", "betweenness_kweighted"),
@@ -417,7 +430,7 @@ td <- tile_design(
 prep_sens <- conscape_prep(
   tile_d           = td$tile_d,
   tile_trim        = td$tile_trim,
-  asc_dir          = "conscape_sensitivity_tiles",
+  asc_dir          = file.path(analysis_dir, "sensitivity_setup_tiles"),
   r_target         = habitat,
   r_src            = habitat,
   r_mov            = affinity,
@@ -429,7 +442,7 @@ prep_sens <- conscape_prep(
 
 cs_sens <- run_conscape(
   conscape_prep         = prep_sens,
-  out_dir               = "conscape_sensitivity_results",
+  out_dir               = file.path(analysis_dir, "sensitivity_setup_run"),
   theta                 = td$theta,
   distance_scale        = td$distance_scale,
   landmark              = 1L,
@@ -452,7 +465,7 @@ computationally demanding.
 
 ```{r full-sensitivity, eval=FALSE}
 full_sens <- run_conscape(
-  out_dir          = "full_sensitivity_results",
+  out_dir          = file.path(analysis_dir, "untiled_sensitivity_run"),
   target_qualities = habitat,
   source_qualities = habitat,
   affinities       = affinity,
@@ -488,13 +501,16 @@ degradation, or management scenarios.
 # Other Functions
 
 `mosaic_conscape()` can be used directly when tile outputs already exist.
+Select the layer directory from the canonical `outdirs` map. The recorded
+per-layer method reproduces the same reduction that `run_conscape()` selected
+automatically.
 
 ```{r direct-mosaic, eval=FALSE}
 btwn <- mosaic_conscape(
-  out_dir = file.path("conscape_results", "btwn"),
+  out_dir = cs$outdirs$btwn,
   mask = terra::rast(file.path(prep$asc_dir, "mask", "mask.asc")),
   tile_trim = prep$tile_trim,
-  method = "merge"
+  method = cs$diagnostics$mosaic_method[["btwn"]]
 )
 ```
 
@@ -542,4 +558,7 @@ Before running a large analysis:
 10. Compare tiled and untiled runs on a small landscape crop before scaling up.
     The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)
     demonstrates the expected error behavior of each tile mode as a function of
-    buffer width and serves as a reproducible diagnostic template.
+     buffer width and serves as a reproducible diagnostic template.
+11. Keep tile and run directories disposable. Store source data, models, saved
+    R objects, and final exports in a separate directory that is not nested
+    inside either working directory.

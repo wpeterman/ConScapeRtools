@@ -12,6 +12,8 @@
 #'   supply `target_qualities`, `source_qualities`, and `affinities` directly.
 #' @param out_dir Directory where ConScape outputs will be written. Metric
 #'   subdirectories (e.g., `"btwn"`, `"fcon"`) are created inside `out_dir`.
+#'   Keep this directory separate from `conscape_prep$asc_dir` and from any
+#'   directory used to store durable R objects or source data.
 #' @param target_qualities Either (i) a path to a directory containing
 #'   target-quality tiles (`*.asc`) or (ii) a single `SpatRaster` used as
 #'   ConScape's `target_qualities` layer, cells that can *receive*
@@ -29,7 +31,8 @@
 #'   is accepted as a backwards-compatible alias.
 #' @param clear_dir Logical. If `TRUE` (default), any existing contents
 #'   of `out_dir` are removed before writing new results. If `FALSE` and
-#'   `out_dir` is not empty, the function stops with an error.
+#'   `out_dir` is not empty, the function stops with an error. Do not store
+#'   model objects, source data, or other files that must persist in `out_dir`.
 #' @param landmark Integer coarse-graining window size passed to ConScape's
 #'   `coarse_graining()` (default `10L`). Larger values aggregate target
 #'   qualities to fewer cells, reducing computation. When `conscape_prep` is
@@ -75,10 +78,11 @@
 #'   wrappers. `"conscape_dev"` is experimental and requires a ConScape
 #'   development installation exposing `Problem`, `WindowedProblem`, and
 #'   `solve`; `dev_mode = "batch"` additionally requires `BatchProblem`.
-#' @param tile_trim Width of the overlapping border (in map units) to
-#'   trim from each tile when mosaicking. When `conscape_prep` is supplied,
-#'   this value is taken from that object and passed automatically to
-#'   [mosaic_conscape()]. When running on a single `SpatRaster`, `tile_trim`
+#' @param tile_trim Width of the overlapping border in map units. When
+#'   `conscape_prep` is supplied, this value is taken from that object and
+#'   passed automatically to [mosaic_conscape()]. Mean and merge reductions
+#'   trim this border; sum reductions retain it because buffer cells contain
+#'   distinct contributions. When running on a single `SpatRaster`, `tile_trim`
 #'   controls how far the rasters are buffered on all sides before ConScape
 #'   runs; the output is then cropped to the original extent so that tiled
 #'   and untiled results are comparable.
@@ -127,7 +131,7 @@
 #' @param dev_conscape_rev Git branch, tag, or commit used when
 #'   `install_dev_conscape = TRUE`. Defaults to `"alg_efficiency"`.
 #' @param dev_conscape_url Git URL used when `install_dev_conscape = TRUE`.
-#' @param mosaic_chunk_size Maximum number of output tiles to hold in memory
+#' @param mosaic_chunk_size Positive integer giving the maximum number of output tiles to hold in memory
 #'   during each mosaic batch. Smaller values reduce peak memory at the cost of
 #'   more temporary files.
 #' @param stop_julia Logical. If `TRUE` (default), close the Julia session when
@@ -145,6 +149,9 @@
 #' `target_qualities`, `source_qualities`, and `affinities` tiles share the
 #' same tiling scheme, that coarse-graining landmarks are aligned across tiles,
 #' and that a habitat mask and `tile_trim` value are available for mosaicking.
+#' Keep the prep tile directory, run output directory, and durable object or
+#' data directory separate. Both [conscape_prep()] and `run_conscape()` can
+#' clear their respective working directories.
 #'
 #' When `conscape_prep` is `NULL`, the function can operate on:
 #' * Directories of `*.asc` tiles passed to `target_qualities`,
@@ -219,7 +226,9 @@
 #'   directory. For example, use `outdirs$btwn` and `outdirs$fcon` to access
 #'   the default betweenness and connected-habitat tile directories.
 #' * `diagnostics` – list recording the backend and parallel settings, output
-#'   validation results, batch diagnostics, and mosaicking methods used.
+#'   validation results, batch diagnostics, and the per-layer mosaic method.
+#'   The `mosaic_method` map is present even when `mosaic = FALSE`, so it can be
+#'   passed to [mosaic_conscape()] during manual post-processing.
 #'
 #' When tiled inputs are used with `mosaic = FALSE`, the result contains
 #' `outdirs` and `diagnostics` without mosaicked raster elements. When run on a
@@ -243,6 +252,11 @@
 #' affinity <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin" # Update to your Julia installation
+#' analysis_dir <- file.path(tempdir(), "conscape_analysis")
+#' tile_dir <- file.path(analysis_dir, "tiles")
+#' object_dir <- file.path(analysis_dir, "saved_objects")
+#' dir.create(object_dir, recursive = TRUE, showWarnings = FALSE)
+#' ## Never save durable objects inside tile_dir or a run output directory.
 #'
 #' ## Calibrate decay and tiling parameters
 #' td <- tile_design(r_mov    = affinity,
@@ -255,6 +269,7 @@
 #' ## Prepare tiled rasters
 #' prep <- conscape_prep(tile_d         = td$tile_d,
 #'                       tile_trim      = td$tile_trim,
+#'                       asc_dir        = tile_dir,
 #'                       r_target       = habitat,
 #'                       r_mov          = affinity,
 #'                       r_src          = habitat,
@@ -262,14 +277,14 @@
 #'                       landmark       = td$landmark)
 #'
 #' ## Serial run (tiled)
-#' cs_serial <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#' cs_serial <- run_conscape(out_dir        = file.path(analysis_dir, "serial_run"),
 #'                           conscape_prep  = prep,
 #'                           theta          = td$theta,
 #'                           distance_scale = td$distance_scale,
 #'                           jl_home        = jl_home)
 #'
 #' ## R-parallel run
-#' cs_r <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#' cs_r <- run_conscape(out_dir        = file.path(analysis_dir, "r_parallel_run"),
 #'                      conscape_prep  = prep,
 #'                      theta          = td$theta,
 #'                      distance_scale = td$distance_scale,
@@ -279,7 +294,7 @@
 #'                      parallel_R     = TRUE)
 #'
 #' ## Julia threaded parallel
-#' cs_thread <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#' cs_thread <- run_conscape(out_dir        = file.path(analysis_dir, "threaded_run"),
 #'                           conscape_prep  = prep,
 #'                           theta          = td$theta,
 #'                           distance_scale = td$distance_scale,
@@ -288,7 +303,7 @@
 #'                           workers        = 4)
 #'
 #' ## Julia distributed parallel
-#' cs_dist <- run_conscape(out_dir        = file.path(prep$asc_dir, "results"),
+#' cs_dist <- run_conscape(out_dir        = file.path(analysis_dir, "distributed_run"),
 #'                         conscape_prep  = prep,
 #'                         theta          = td$theta,
 #'                         distance_scale = td$distance_scale,
@@ -299,7 +314,7 @@
 #' plot(cs_dist)
 #'
 #' ## Untiled run, only suitable for small to moderate rasters
-#' cs_single <- run_conscape(out_dir          = file.path(prep$asc_dir, "results"),
+#' cs_single <- run_conscape(out_dir          = file.path(analysis_dir, "untiled_run"),
 #'                           target_qualities = habitat,
 #'                           source_qualities = habitat,
 #'                           affinities       = affinity,
@@ -455,7 +470,8 @@ run_conscape <- function(conscape_prep = NULL,
     stop("blas_threads must be a positive integer.", call. = FALSE)
   }
   if (!is.numeric(mosaic_chunk_size) || length(mosaic_chunk_size) != 1L ||
-      is.na(mosaic_chunk_size) || mosaic_chunk_size < 1) {
+      is.na(mosaic_chunk_size) || !is.finite(mosaic_chunk_size) ||
+      mosaic_chunk_size < 1 || mosaic_chunk_size != floor(mosaic_chunk_size)) {
     stop("mosaic_chunk_size must be a positive integer.", call. = FALSE)
   }
 
@@ -953,6 +969,22 @@ run_conscape <- function(conscape_prep = NULL,
   })
   names(output_dirs) <- vapply(output_specs, `[[`, character(1), "layer")
 
+  target_mode_for_mosaic <- if (!is.null(conscape_prep) &&
+                                inherits(conscape_prep, "ConScapeRtools_prep")) {
+    conscape_prep$target_mode
+  } else {
+    NULL
+  }
+  run_diagnostics$mosaic_method <- vapply(output_specs, function(spec) {
+    pick_mosaic_method(spec, target_mode_for_mosaic)
+  }, character(1))
+  names(run_diagnostics$mosaic_method) <- vapply(
+    output_specs,
+    `[[`,
+    character(1),
+    "layer"
+  )
+
   make_result_shell <- function() {
     shell <- list(outdirs = output_dirs, diagnostics = run_diagnostics)
     class(shell) <- "ConScapeResults"
@@ -982,13 +1014,6 @@ run_conscape <- function(conscape_prep = NULL,
     #   - "averageable" outputs (sensitivity / elasticity_*): per-tile values
     #     are tile-local landscape-summary derivatives, NOT pairwise sums.
     #     They are always mean-mosaicked ("mosaic") regardless of target_mode.
-    target_mode_for_mosaic <- if (!is.null(conscape_prep) &&
-                                  inherits(conscape_prep, "ConScapeRtools_prep")) {
-      conscape_prep$target_mode
-    } else {
-      NULL
-    }
-
     rasters <- lapply(output_specs, function(spec) {
       spec_method <- pick_mosaic_method(spec, target_mode_for_mosaic)
       mosaic_conscape(out_dir = file.path(out_dir, spec$dir),
@@ -1007,15 +1032,6 @@ run_conscape <- function(conscape_prep = NULL,
         x
       })
     }
-    # Record the per-spec methods that were used so audits can see the
-    # dispatch decision for every layer (sum vs mosaic). This replaces the
-    # old single mosaic_method scalar.
-    run_diagnostics$mosaic_method <- vapply(output_specs, function(spec) {
-      pick_mosaic_method(spec, target_mode_for_mosaic)
-    }, character(1))
-    names(run_diagnostics$mosaic_method) <- vapply(output_specs, `[[`,
-                                                    character(1), "layer")
-
     out <- c(rasters, list(outdirs = output_dirs, diagnostics = run_diagnostics))
     class(out) <- "ConScapeResults"
   } else {

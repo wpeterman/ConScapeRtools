@@ -56,7 +56,7 @@ After reading this vignette you should be able to:
 # Workflow Map
 
 | Workflow | Parameters | Function call | Backend | Status |
-|---------------|---------------|---------------|---------------|---------------|
+|----|----|----|----|----|
 | Untiled | none | `run_conscape(target_qualities = ..., ...)` on full raster | stable | reference |
 | Classic tiled | `tile_d`, `tile_trim` (map units) | `conscape_prep()` + `run_conscape()` | stable | recommended |
 | Center-buffer | `centersize`, `buffer` (cells) | `conscape_prep(window_units = "cells")` + `run_conscape()` | stable | recommended |
@@ -361,7 +361,7 @@ wd$diagnostics$workload_proxy
 ## What the harness compares
 
 | Workflow | Built from | RSP target set | Mosaic reduction |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | untiled (reference) | direct SpatRaster input | all cells | none |
 | classic_tiled | `conscape_prep(tile_d, tile_trim)` | tile center cells | sum |
 | center_buffer | `conscape_prep(centersize, buffer)` | tile center cells | sum |
@@ -431,7 +431,7 @@ This is the **floating-point identity** claim: when the buffer covers the releva
 Comparing the two tables answers the question "how does the error behave as I make the buffer wider":
 
 | buffer           | btwn max_abs | btwn rel | fcon max_abs | fcon rel | identical_fp |
-|------------|-----------:|-----------:|-----------:|-----------:|:----------:|
+|------------------|-------------:|---------:|-------------:|---------:|:------------:|
 | 5 (calibrated)   |        0.153 |     2.6% |       0.0095 |     0.4% |    FALSE     |
 | 20 (covers crop) |       4.6e-7 |     8e-8 |       1.1e-7 |     4e-8 |     TRUE     |
 
@@ -492,6 +492,11 @@ Both tables are produced by the same harness. On a system with a Julia install a
 # Step 5: Run On The Stable Backend
 
 The stable backend uses `conscape_prep()` followed by `run_conscape()`. Both parameterizations -- classic (map units) and center-buffer (cell units) -- work the same way and produce identical output.
+
+Use separate directories for prepared tiles, run outputs, and durable analysis
+objects. Both workflow functions default to clearing their own output
+directory, so never save source data, fitted models, R objects, or final exports
+inside a tile or run directory.
 
 **Classic parameterization:**
 
@@ -575,7 +580,7 @@ Use this flowchart to pick a workflow.
 4.  **Do you specifically need ConScape's restartable on-disk job scheduler (`BatchProblem`)?** Today the dev backend is broken upstream (see "Experimental: Dev Backend"). Do not use it for production work. The stable backend already implements the same per-window math.
 
 | Question | Workflow |
-|------------------------------------|------------------------------------|
+|----|----|
 | Fits in one graph? | Untiled `run_conscape(target_qualities = ..., ...)` |
 | Need stable, well-tested tiling? | `conscape_prep(tile_d, tile_trim)` + `run_conscape()` |
 | Same as above with cell units? | `conscape_prep(centersize, buffer, window_units = "cells")` |

@@ -53,6 +53,26 @@ test_that("mosaic_conscape can average overlapping tiles", {
   expect_equal(unique(terra::values(out, mat = FALSE)), 3)
 })
 
+test_that("mosaic_conscape retains margins only for additive sums", {
+  root <- file.path(tempdir(), "mosaic-trim-method-test")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  write_test_asc(make_test_raster(n = 5, vals = 2),
+                 file.path(root, "tile-a.asc"))
+  write_test_asc(make_test_raster(n = 5, vals = 4),
+                 file.path(root, "tile-b.asc"))
+
+  summed <- mosaic_conscape(root, tile_trim = 1, method = "sum")
+  averaged <- mosaic_conscape(root, tile_trim = 1, method = "mosaic")
+  merged <- mosaic_conscape(root, tile_trim = 1, method = "merge")
+
+  expect_equal(dim(summed), c(5, 5, 1))
+  expect_equal(unique(terra::values(summed, mat = FALSE)), 6)
+  expect_equal(dim(averaged), c(3, 3, 1))
+  expect_equal(unique(terra::values(averaged, mat = FALSE)), 3)
+  expect_equal(dim(merged), c(3, 3, 1))
+  expect_equal(unique(terra::values(merged, mat = FALSE)), 2)
+})
+
 test_that("mosaic_conscape can combine tiles in chunks", {
   root <- file.path(tempdir(), "mosaic-chunk-test")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
@@ -63,6 +83,29 @@ test_that("mosaic_conscape can combine tiles in chunks", {
 
   out <- mosaic_conscape(root, tile_trim = 0, method = "mosaic", chunk_size = 2)
   expect_equal(unique(terra::values(out, mat = FALSE)), 3)
+})
+
+test_that("chunked sum and merge match one-pass reductions", {
+  root <- file.path(tempdir(), "mosaic-chunk-reduction-test")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  for (i in 1:5) {
+    r <- make_test_raster(n = 5, vals = i)
+    if (i > 1) {
+      values <- terra::values(r, mat = FALSE)
+      values[1] <- NA_real_
+      terra::values(r) <- values
+    }
+    write_test_asc(r, file.path(root, paste0("tile-", i, ".asc")))
+  }
+
+  for (method in c("sum", "merge")) {
+    one_pass <- mosaic_conscape(root, tile_trim = 0, method = method,
+                                chunk_size = 64)
+    chunked <- mosaic_conscape(root, tile_trim = 0, method = method,
+                               chunk_size = 2)
+    expect_equal(terra::values(chunked, mat = FALSE),
+                 terra::values(one_pass, mat = FALSE))
+  }
 })
 
 test_that("mosaic_conscape rejects mismatched non-empty CRS values", {
@@ -81,11 +124,19 @@ test_that("mosaic_conscape rejects mismatched non-empty CRS values", {
 test_that("mosaic_conscape validates inputs", {
   expect_error(
     mosaic_conscape(file.path(tempdir(), "does-not-exist"), tile_trim = -1),
-    "tile_trim"
+    "out_dir must be an existing directory"
   )
 
   empty_dir <- file.path(tempdir(), "empty-mosaic-test")
   dir.create(empty_dir, recursive = TRUE, showWarnings = FALSE)
+  expect_error(
+    mosaic_conscape(empty_dir, tile_trim = NA_real_),
+    "tile_trim must be a single non-negative"
+  )
+  expect_error(
+    mosaic_conscape(empty_dir, tile_trim = 0, chunk_size = 1.5),
+    "chunk_size must be a single positive integer"
+  )
   expect_error(
     mosaic_conscape(empty_dir, tile_trim = 0),
     "No raster files"

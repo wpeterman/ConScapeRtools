@@ -14,10 +14,11 @@ mosaic_conscape(
 )
 }
 \arguments{
-\item{out_dir}{Directory where ConScape tile outputs (e.g., \code{"btwn"}
-or \code{"fcon"} subdirectories produced by \code{\link[=run_conscape]{run_conscape()}}) were
-written. All \verb{*.asc} and \verb{*.tif} files in this directory are
-treated as tiles belonging to a single surface.}
+\item{out_dir}{Directory containing one ConScape output layer. For results
+returned by \code{\link[=run_conscape]{run_conscape()}}, use a path from the canonical \code{outdirs} map,
+such as \code{result$outdirs$btwn} or \code{result$outdirs$fcon}. All \verb{*.asc} and
+\verb{*.tif} files directly in this directory are treated as tiles belonging to
+that surface.}
 
 \item{mask}{Optional binary \code{SpatRaster} indicating regions of the
 landscape that are considered valid (e.g., potential habitat).
@@ -25,21 +26,24 @@ Cells with 0 are set to 0 in the output, and cells with \code{NA} in the
 mask become \code{NA} in the output. If provided, it should typically be
 the same mask written by \code{\link[=conscape_prep]{conscape_prep()}}.}
 
-\item{tile_trim}{Width (in map units) of the overlapping margins to
-remove from each tile before mosaicking. This should match the
-\code{tile_trim} value stored in the \code{"ConScapeRtools_prep"} object
-returned by \code{\link[=conscape_prep]{conscape_prep()}}, or an equivalent value used when
-creating tiles manually.}
+\item{tile_trim}{Width (in map units) of the overlapping margins. This
+should match the \code{tile_trim} value stored in the
+\code{"ConScapeRtools_prep"} object returned by \code{\link[=conscape_prep]{conscape_prep()}}, or an
+equivalent value used when creating tiles manually. The margins are
+removed for \code{method = "mosaic"} and \code{method = "merge"}. They are retained
+for \code{method = "sum"} because overlapping buffer cells contain distinct
+contributions that must be added.}
 
 \item{method}{Character string indicating how to combine overlapping
 tiles. \code{"sum"} adds tile values where they overlap, treating \code{NA} as 0;
-this is the mathematically correct reduction for ConScape outputs when
-each cell appears as a \emph{target} in exactly one tile (i.e., when
-\code{conscape_prep()} was called with \code{target_mode = "center"}). \code{"mosaic"}
-averages values where tiles overlap; this is a smoothing heuristic that
-should only be used with \code{target_mode = "full"} tiles. \code{"merge"} fills
-gaps using the first non-\code{NA} tile encountered. The default is \code{"sum"}
-because the current \code{conscape_prep()} default is \code{target_mode = "center"}.}
+this is the mathematically correct reduction for additive connectivity
+metrics when \code{\link[=conscape_prep]{conscape_prep()}} used \code{target_mode = "center"}. \code{"mosaic"}
+averages values where tiles overlap. \code{\link[=run_conscape]{run_conscape()}} uses this mean for
+additive metrics under \code{target_mode = "full"} and for all sensitivity or
+elasticity surfaces. \code{"merge"} fills gaps using the first non-\code{NA} tile
+encountered and is mainly useful for diagnostics or non-overlapping
+tiles. The default is \code{"sum"} because the current \code{\link[=conscape_prep]{conscape_prep()}} default
+is \code{target_mode = "center"}.}
 
 \item{crs}{Optional coordinate reference system to assign to the
 merged raster. Can be a proj4string, EPSG code (e.g. \code{"EPSG:4326"}),
@@ -51,24 +55,23 @@ once. If there are more tiles than \code{chunk_size}, temporary intermediate
 mosaics are written and then combined in a final pass.}
 }
 \value{
-A \code{SpatRaster} representing the mosaicked ConScape surface, with
-overlapping tile margins removed, tiles combined according to
-\code{method}, an optional CRS set, and (if provided) masked to the input
-\code{mask}.
+A \code{SpatRaster} representing the combined ConScape surface. Overlapping
+margins are retained for \code{method = "sum"} and trimmed for the other methods.
+The optional CRS and mask are applied before the raster is returned.
 }
 \description{
 After running \code{\link[=run_conscape]{run_conscape()}} on tiled landscapes, this function
-reassembles the tile-level outputs into a single \code{SpatRaster}. Tiles
-are optionally trimmed to remove overlapping margins, combined either
-by merging or averaging, and then (optionally) masked to the original
-analysis area.
+reassembles one directory of tile-level outputs into a single \code{SpatRaster}.
+Depending on the reduction method, tiles are retained in full or trimmed to
+remove overlapping margins, then combined and optionally masked to the
+original analysis area.
 }
 \details{
-For each tile, \code{tile_trim} is converted to a number of rows and
-columns and trimmed symmetrically from all sides. To avoid trimming
-away entire tiles, the trim width is capped at at most half the tile
-width/height in cells. If \code{tile_trim} is too large relative to tile
-dimensions, no trimming is applied to that tile.
+For \code{method = "mosaic"} and \code{method = "merge"}, \code{tile_trim} is converted to
+rows and columns and applied symmetrically to all sides. To avoid removing
+an entire tile, the trim width is capped below half the tile width and
+height. For \code{method = "sum"}, the effective trim is zero so contributions
+from neighboring tile buffers are preserved.
 
 After trimming, tiles are combined into a single \code{SpatRaster} according to
 \code{method}. Choice of \code{method} reflects how the per-tile ConScape problem was
@@ -81,10 +84,11 @@ tile contributes \verb{q_src(i) * Σ_\{j in tile center\} q_tgt(j) * proximity(i
 and similar partial sums for betweenness; summing over tiles recovers the
 full source-to-target sum up to paths that exit the tile buffer.
 \item \code{"mosaic"} averages tile values where they overlap (\code{terra::mosaic} with
-\code{fun = "mean"}). This is a smoothing heuristic appropriate only for
-\code{target_mode = "full"} tiles. Because each tile undercounts targets that
-live in other tiles, the average is biased; use this only when reproducing
-the legacy ConScapeRtools workflow.
+\code{fun = "mean"}). For additive connectivity metrics, this is the legacy
+reduction for \code{target_mode = "full"}; each tile undercounts targets in
+other tiles, so the average is biased. Sensitivity and elasticity surfaces
+are tile-local estimates rather than partial sums, so \code{\link[=run_conscape]{run_conscape()}}
+also uses this mean reduction for those layers.
 \item \code{"merge"} (\code{terra::merge}) fills cells with the first non-\code{NA} tile value
 encountered. Useful for diagnostics and for non-overlapping tiles.
 }
@@ -94,9 +98,10 @@ and/or resamples the mosaicked raster to match the mask's extent and
 resolution (using nearest-neighbour resampling if needed) before applying
 the mask via cell-wise multiplication.
 
-This function is typically called internally by \code{\link[=run_conscape]{run_conscape()}} when
-\code{mosaic = TRUE}, but it can also be used directly to post-process
-ConScape tile outputs.
+This function is normally called internally by \code{\link[=run_conscape]{run_conscape()}} when
+\code{mosaic = TRUE}. For manual post-processing, call \code{\link[=run_conscape]{run_conscape()}} with
+\code{mosaic = FALSE}, select a layer directory from \code{result$outdirs}, and use
+the corresponding method recorded in \code{result$diagnostics$mosaic_method}.
 }
 \examples{
 \dontrun{
@@ -118,8 +123,13 @@ td <- tile_design(r_mov    = affinity,
                   jl_home  = jl_home,
                   landmark = 5L)
 
+analysis_dir <- file.path(tempdir(), "conscape_analysis")
+tile_dir <- file.path(analysis_dir, "tiles")
+run_dir <- file.path(analysis_dir, "run")
+
 prep <- conscape_prep(tile_d    = td$tile_d,
                       tile_trim = td$tile_trim,
+                      asc_dir   = tile_dir,
                       r_target  = habitat,
                       r_mov     = affinity,
                       r_src     = habitat,
@@ -127,21 +137,23 @@ prep <- conscape_prep(tile_d    = td$tile_d,
                       landmark  = td$landmark)
 
 cs_res <- run_conscape(conscape_prep  = prep,
-                       out_dir        = "conscape_out",
+                       out_dir        = run_dir,
                        theta          = td$theta,
                        distance_scale = td$distance_scale,
-                       jl_home        = jl_home)
+                       jl_home        = jl_home,
+                       mosaic         = FALSE)
 
-## Manually reassemble tile outputs (done automatically when mosaic = TRUE)
+## Manually reassemble one layer using run_conscape()'s recorded method.
 mask <- terra::rast(file.path(prep$asc_dir, "mask", "mask.asc"))
 cs_btwn <- mosaic_conscape(out_dir   = cs_res$outdirs$btwn,
                            mask      = mask,
                            tile_trim = prep$tile_trim,
-                           method    = "mosaic",
+                           method    = cs_res$diagnostics$mosaic_method[["btwn"]],
                            crs       = terra::crs(habitat))
 cs_fcon <- mosaic_conscape(out_dir   = cs_res$outdirs$fcon,
                            mask      = mask,
                            tile_trim = prep$tile_trim,
+                           method    = cs_res$diagnostics$mosaic_method[["fcon"]],
                            crs       = terra::crs(habitat))
 plot(c(cs_btwn, cs_fcon))
 }

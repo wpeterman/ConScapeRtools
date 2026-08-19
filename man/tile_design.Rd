@@ -83,8 +83,9 @@ accessible as \code{exp_d} for backwards compatibility.
 \item \code{exp_d} – same as \code{distance_scale}; retained for backwards compatibility.
 \item \code{tile_d} – suggested minimum interior tile width (map units) for
 \code{\link[=conscape_prep]{conscape_prep()}}.
-\item \code{tile_trim} – suggested minimum tile overlap / trim width (map units) for
-\code{\link[=conscape_prep]{conscape_prep()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
+\item \code{tile_trim} – suggested minimum tile overlap width (map units) for
+\code{\link[=conscape_prep]{conscape_prep()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}. Mean and merge reductions trim
+this overlap, while sum reductions retain it.
 \item \code{centersize} – equivalent center window size in cells for
 \code{backend = "conscape_dev"}.
 \item \code{buffer} – equivalent buffer width in cells for

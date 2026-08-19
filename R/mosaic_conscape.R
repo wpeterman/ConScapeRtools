@@ -2,34 +2,38 @@
 #'
 #' @description
 #' After running [run_conscape()] on tiled landscapes, this function
-#' reassembles the tile-level outputs into a single `SpatRaster`. Tiles
-#' are optionally trimmed to remove overlapping margins, combined either
-#' by merging or averaging, and then (optionally) masked to the original
-#' analysis area.
+#' reassembles one directory of tile-level outputs into a single `SpatRaster`.
+#' Depending on the reduction method, tiles are retained in full or trimmed to
+#' remove overlapping margins, then combined and optionally masked to the
+#' original analysis area.
 #'
-#' @param out_dir Directory where ConScape tile outputs (e.g., `"btwn"`
-#'   or `"fcon"` subdirectories produced by [run_conscape()]) were
-#'   written. All `*.asc` and `*.tif` files in this directory are
-#'   treated as tiles belonging to a single surface.
+#' @param out_dir Directory containing one ConScape output layer. For results
+#'   returned by [run_conscape()], use a path from the canonical `outdirs` map,
+#'   such as `result$outdirs$btwn` or `result$outdirs$fcon`. All `*.asc` and
+#'   `*.tif` files directly in this directory are treated as tiles belonging to
+#'   that surface.
 #' @param mask Optional binary `SpatRaster` indicating regions of the
 #'   landscape that are considered valid (e.g., potential habitat).
 #'   Cells with 0 are set to 0 in the output, and cells with `NA` in the
 #'   mask become `NA` in the output. If provided, it should typically be
 #'   the same mask written by [conscape_prep()].
-#' @param tile_trim Width (in map units) of the overlapping margins to
-#'   remove from each tile before mosaicking. This should match the
-#'   `tile_trim` value stored in the `"ConScapeRtools_prep"` object
-#'   returned by [conscape_prep()], or an equivalent value used when
-#'   creating tiles manually.
+#' @param tile_trim Width (in map units) of the overlapping margins. This
+#'   should match the `tile_trim` value stored in the
+#'   `"ConScapeRtools_prep"` object returned by [conscape_prep()], or an
+#'   equivalent value used when creating tiles manually. The margins are
+#'   removed for `method = "mosaic"` and `method = "merge"`. They are retained
+#'   for `method = "sum"` because overlapping buffer cells contain distinct
+#'   contributions that must be added.
 #' @param method Character string indicating how to combine overlapping
 #'   tiles. `"sum"` adds tile values where they overlap, treating `NA` as 0;
-#'   this is the mathematically correct reduction for ConScape outputs when
-#'   each cell appears as a *target* in exactly one tile (i.e., when
-#'   `conscape_prep()` was called with `target_mode = "center"`). `"mosaic"`
-#'   averages values where tiles overlap; this is a smoothing heuristic that
-#'   should only be used with `target_mode = "full"` tiles. `"merge"` fills
-#'   gaps using the first non-`NA` tile encountered. The default is `"sum"`
-#'   because the current `conscape_prep()` default is `target_mode = "center"`.
+#'   this is the mathematically correct reduction for additive connectivity
+#'   metrics when [conscape_prep()] used `target_mode = "center"`. `"mosaic"`
+#'   averages values where tiles overlap. [run_conscape()] uses this mean for
+#'   additive metrics under `target_mode = "full"` and for all sensitivity or
+#'   elasticity surfaces. `"merge"` fills gaps using the first non-`NA` tile
+#'   encountered and is mainly useful for diagnostics or non-overlapping
+#'   tiles. The default is `"sum"` because the current [conscape_prep()] default
+#'   is `target_mode = "center"`.
 #' @param crs Optional coordinate reference system to assign to the
 #'   merged raster. Can be a proj4string, EPSG code (e.g. `"EPSG:4326"`),
 #'   or a CRS taken from a `SpatRaster`. If `NULL` (default), the CRS of
@@ -39,11 +43,11 @@
 #'   mosaics are written and then combined in a final pass.
 #'
 #' @details
-#' For each tile, `tile_trim` is converted to a number of rows and
-#' columns and trimmed symmetrically from all sides. To avoid trimming
-#' away entire tiles, the trim width is capped at at most half the tile
-#' width/height in cells. If `tile_trim` is too large relative to tile
-#' dimensions, no trimming is applied to that tile.
+#' For `method = "mosaic"` and `method = "merge"`, `tile_trim` is converted to
+#' rows and columns and applied symmetrically to all sides. To avoid removing
+#' an entire tile, the trim width is capped below half the tile width and
+#' height. For `method = "sum"`, the effective trim is zero so contributions
+#' from neighboring tile buffers are preserved.
 #'
 #' After trimming, tiles are combined into a single `SpatRaster` according to
 #' `method`. Choice of `method` reflects how the per-tile ConScape problem was
@@ -56,10 +60,11 @@
 #'   and similar partial sums for betweenness; summing over tiles recovers the
 #'   full source-to-target sum up to paths that exit the tile buffer.
 #' * `"mosaic"` averages tile values where they overlap (`terra::mosaic` with
-#'   `fun = "mean"`). This is a smoothing heuristic appropriate only for
-#'   `target_mode = "full"` tiles. Because each tile undercounts targets that
-#'   live in other tiles, the average is biased; use this only when reproducing
-#'   the legacy ConScapeRtools workflow.
+#'   `fun = "mean"`). For additive connectivity metrics, this is the legacy
+#'   reduction for `target_mode = "full"`; each tile undercounts targets in
+#'   other tiles, so the average is biased. Sensitivity and elasticity surfaces
+#'   are tile-local estimates rather than partial sums, so [run_conscape()]
+#'   also uses this mean reduction for those layers.
 #' * `"merge"` (`terra::merge`) fills cells with the first non-`NA` tile value
 #'   encountered. Useful for diagnostics and for non-overlapping tiles.
 #'
@@ -68,15 +73,15 @@
 #' resolution (using nearest-neighbour resampling if needed) before applying
 #' the mask via cell-wise multiplication.
 #'
-#' This function is typically called internally by [run_conscape()] when
-#' `mosaic = TRUE`, but it can also be used directly to post-process
-#' ConScape tile outputs.
+#' This function is normally called internally by [run_conscape()] when
+#' `mosaic = TRUE`. For manual post-processing, call [run_conscape()] with
+#' `mosaic = FALSE`, select a layer directory from `result$outdirs`, and use
+#' the corresponding method recorded in `result$diagnostics$mosaic_method`.
 #'
 #' @return
-#' A `SpatRaster` representing the mosaicked ConScape surface, with
-#' overlapping tile margins removed, tiles combined according to
-#' `method`, an optional CRS set, and (if provided) masked to the input
-#' `mask`.
+#' A `SpatRaster` representing the combined ConScape surface. Overlapping
+#' margins are retained for `method = "sum"` and trimmed for the other methods.
+#' The optional CRS and mask are applied before the raster is returned.
 #'
 #' @export
 #' @examples
@@ -99,8 +104,13 @@
 #'                   jl_home  = jl_home,
 #'                   landmark = 5L)
 #'
+#' analysis_dir <- file.path(tempdir(), "conscape_analysis")
+#' tile_dir <- file.path(analysis_dir, "tiles")
+#' run_dir <- file.path(analysis_dir, "run")
+#'
 #' prep <- conscape_prep(tile_d    = td$tile_d,
 #'                       tile_trim = td$tile_trim,
+#'                       asc_dir   = tile_dir,
 #'                       r_target  = habitat,
 #'                       r_mov     = affinity,
 #'                       r_src     = habitat,
@@ -108,21 +118,23 @@
 #'                       landmark  = td$landmark)
 #'
 #' cs_res <- run_conscape(conscape_prep  = prep,
-#'                        out_dir        = "conscape_out",
+#'                        out_dir        = run_dir,
 #'                        theta          = td$theta,
 #'                        distance_scale = td$distance_scale,
-#'                        jl_home        = jl_home)
+#'                        jl_home        = jl_home,
+#'                        mosaic         = FALSE)
 #'
-#' ## Manually reassemble tile outputs (done automatically when mosaic = TRUE)
+#' ## Manually reassemble one layer using run_conscape()'s recorded method.
 #' mask <- terra::rast(file.path(prep$asc_dir, "mask", "mask.asc"))
 #' cs_btwn <- mosaic_conscape(out_dir   = cs_res$outdirs$btwn,
 #'                            mask      = mask,
 #'                            tile_trim = prep$tile_trim,
-#'                            method    = "mosaic",
+#'                            method    = cs_res$diagnostics$mosaic_method[["btwn"]],
 #'                            crs       = terra::crs(habitat))
 #' cs_fcon <- mosaic_conscape(out_dir   = cs_res$outdirs$fcon,
 #'                            mask      = mask,
 #'                            tile_trim = prep$tile_trim,
+#'                            method    = cs_res$diagnostics$mosaic_method[["fcon"]],
 #'                            crs       = terra::crs(habitat))
 #' plot(c(cs_btwn, cs_fcon))
 #' }
@@ -139,19 +151,27 @@ mosaic_conscape <- function(out_dir,
                             chunk_size = 64L) {
   method <- match.arg(method)
 
-  # Check tile_trim
-  if (!is.numeric(tile_trim) || length(tile_trim) != 1 || tile_trim < 0) {
-    stop("tile_trim must be a single non-negative numeric value")
+  # Validate the layer directory and reduction controls.
+  if (!is.character(out_dir) || length(out_dir) != 1L || is.na(out_dir) ||
+      !nzchar(out_dir) || !dir.exists(out_dir)) {
+    stop("out_dir must be an existing directory containing one output layer", call. = FALSE)
   }
-  if (!is.numeric(chunk_size) || length(chunk_size) != 1 ||
-      is.na(chunk_size) || chunk_size < 1) {
-    stop("chunk_size must be a single positive integer")
+  if (!is.numeric(tile_trim) || length(tile_trim) != 1L ||
+      is.na(tile_trim) || !is.finite(tile_trim) || tile_trim < 0) {
+    stop("tile_trim must be a single non-negative numeric value", call. = FALSE)
+  }
+  if (!is.numeric(chunk_size) || length(chunk_size) != 1L ||
+      is.na(chunk_size) || !is.finite(chunk_size) || chunk_size < 1 ||
+      chunk_size != floor(chunk_size)) {
+    stop("chunk_size must be a single positive integer", call. = FALSE)
   }
   chunk_size <- as.integer(chunk_size)
 
   # List all raster files
   tile_files <- list.files(out_dir, pattern = "\\.asc$|\\.tif$", full.names = TRUE)
-  if (length(tile_files) == 0) stop("No raster files found in out_dir")
+  if (length(tile_files) == 0) {
+    stop("No raster files found in out_dir", call. = FALSE)
+  }
 
   first_tile <- terra::rast(tile_files[1])
 

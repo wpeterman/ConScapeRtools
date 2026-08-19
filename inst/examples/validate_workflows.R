@@ -144,6 +144,10 @@ validate_workflows <- function(jl_home    = Sys.getenv("CONSCAPERTOOLS_JL_HOME")
   stopifnot(nzchar(jl_home))
   dir.create(work_dir, recursive = TRUE, showWarnings = FALSE)
 
+  # work_dir contains disposable prep and run subdirectories only. Save any
+  # durable data or R objects outside work_dir because individual workflows
+  # clear their own subdirectories when rerun.
+
   hab_file <- system.file("extdata", "suitability.asc", package = "ConScapeRtools")
   aff_file <- system.file("extdata", "affinity.asc",  package = "ConScapeRtools")
   habitat  <- crop_top_left(terra::rast(hab_file),  n_cells)

@@ -14,11 +14,14 @@
 #'   `buffer` are supplied.
 #' @param tile_trim Minimum overlap width between neighbouring tiles, in map
 #'   units. The actual overlap used may be increased so that the overlap in
-#'   cells is a multiple of `landmark`. This overlap is removed again in
-#'   [mosaic_conscape()]. Optional when `centersize` and `buffer` are supplied.
+#'   cells is a multiple of `landmark`. Mean and merge reductions remove this
+#'   overlap in [mosaic_conscape()], while sum reductions retain it to preserve
+#'   distinct buffer contributions. Optional when `centersize` and `buffer` are
+#'   supplied.
 #' @param asc_dir Directory where `.asc` tiles and ancillary files will be
 #'   written. If `NULL` (default), a new directory is created under the current
-#'   R session's temporary directory.
+#'   R session's temporary directory. Treat this as a disposable tile working
+#'   directory; do not store model objects, source data, or final results in it.
 #' @param r_target `SpatRaster` representing ConScape `target_qualities`. May
 #'   be the same object as `r_src`. Values below `target_threshold` are treated
 #'   as unsuitable and are masked out.
@@ -89,6 +92,10 @@
 #' This mask is used later to restrict the mosaicked ConScape outputs to the
 #' potentially occupiable landscape.
 #'
+#' Because `clear_dir = TRUE` removes everything inside `asc_dir`, keep run
+#' outputs and durable R or data objects in separate sibling directories, not
+#' inside the tile directory.
+#'
 #' Tiles are designed once internally using `make_tiles()` based on the thresholded target
 #' raster, and the same tile geometry is then applied internally to all layers via the
 #' `tile_rast()`. Tile sizes and overlaps are expressed in cell units and
@@ -126,6 +133,9 @@
 #' affinity <- terra::rast(a)
 #'
 #' jl_home <- "/path/to/julia/bin"
+#' analysis_dir <- file.path(tempdir(), "conscape_analysis")
+#' tile_dir <- file.path(analysis_dir, "tiles")
+#' run_dir <- file.path(analysis_dir, "run")
 #'
 #' ## Calibrate tile and decay parameters
 #' td <- tile_design(r_mov    = affinity,
@@ -138,6 +148,7 @@
 #' ## Prepare tiled rasters
 #' prep <- conscape_prep(tile_d    = td$tile_d,
 #'                       tile_trim = td$tile_trim,
+#'                       asc_dir   = tile_dir,
 #'                       r_target  = habitat,
 #'                       r_mov     = affinity,
 #'                       r_src     = habitat,
@@ -146,7 +157,7 @@
 #'
 #' ## Run ConScape on tiles
 #' cs_res <- run_conscape(conscape_prep  = prep,
-#'                        out_dir        = "conscape_out",
+#'                        out_dir        = run_dir,
 #'                        theta          = td$theta,
 #'                        distance_scale = td$distance_scale,
 #'                        jl_home        = jl_home)
