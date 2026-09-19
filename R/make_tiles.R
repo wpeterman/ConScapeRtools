@@ -45,14 +45,14 @@
 #'   and the cell size. No padding or overlap is added at this step; the
 #'   returned polygons describe only the interior region.
 #'
-#' Overlap for ConScape coarse-graining is summarised as follows:
+#' Overlap for ConScape coarse-graining is summarized as follows:
 #'
 #' * `min_cells` is the minimum required overlap in cells:
 #'   `floor(landmark / 2)` (half a coarse window on each side) and the
 #'   user-requested `tile_trim` converted to cells are both honoured by
 #'   taking their maximum.
 #' * The actual overlap in cells (`overlap_cells`) is then rounded up to
-#'   the nearest multiple of `landmark` so that landmark centres align
+#'   the nearest multiple of `landmark` so that landmark centers align
 #'   across tiles.
 #' * The effective overlap width in map units (`tile_trim` in the return
 #'   list) is `overlap_cells * resx`. This value can differ from the

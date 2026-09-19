@@ -99,7 +99,7 @@ counted.
 centers mean more windows and more fixed dispatch overhead per
 window.
 \item \strong{Total \code{workload_proxy}} = \code{landscape_area * (centersize + 2*buffer)^2}. As \code{centersize} shrinks, \code{workload_proxy} also
-shrinks, asymptoting at \code{landscape_area * (2*buffer)^2} for very
+shrinks, approaching \code{landscape_area * (2*buffer)^2} for very
 small centers. The savings come at the price of repeating per-tile
 \code{(I - W)} factorization more times.
 }

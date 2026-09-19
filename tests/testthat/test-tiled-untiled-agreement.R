@@ -47,7 +47,7 @@ surface_agreement_summary <- function(tiled, untiled, mode) {
 expect_tiled_matches_untiled <- function(tiled, untiled, mode) {
   summaries <- surface_agreement_summary(tiled, untiled, mode = mode)
   # In this degenerate-coverage test the tiled and untiled answers differ only
-  # by floating-point solver noise from ConScape's dense LU decomposition of
+  # by floating-point differences from separate tile solves and aggregation of
   # (I - W). Absolute bounds vary by metric magnitude (btwn ~ 1e4 in package
   # data, fcon ~ 1e1), so we use a *relative* tolerance against each
   # untiled-layer's max-abs value.

@@ -12,6 +12,6 @@ A shapefile delineating potential habitat patches.
 \examples{
 (f <- system.file("extdata", "patches.shp", package = "ConScapeRtools"))
 p <- terra::vect(f)
-plot(p)
+terra::plot(p)
 
 }

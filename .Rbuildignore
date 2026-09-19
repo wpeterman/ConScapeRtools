@@ -2,6 +2,7 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^\.gitignore$
+^\.github$
 ^\.Rhistory$
 ^examples$
 ^tiles_test$

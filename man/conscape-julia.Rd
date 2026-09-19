@@ -23,7 +23,7 @@ conscape_julia_status()
 conscape_dev_backend_setup(
   jl_home,
   project = NULL,
-  rev = "alg_efficiency",
+  rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
   url = "https://github.com/ConScape/ConScape.jl",
   force = FALSE,
   quiet = FALSE
@@ -56,7 +56,9 @@ Defaults to a package cache directory. Used by
 \code{conscape_dev_backend_setup()} only.}
 
 \item{rev}{Git branch, tag, or commit for the ConScape dependency.
-\code{conscape_dev_backend_setup()} defaults to \code{"alg_efficiency"};
+\code{conscape_dev_backend_setup()} defaults to the audited commit
+\code{"9aa05cc0b0c22b9d815d3051925010a2344eada0"} from the experimental
+\code{alg_efficiency} branch;
 \code{conscape_sensitivity_setup()} defaults to \code{"sensitivity"}.}
 
 \item{url}{Git URL for ConScape.jl.}
@@ -80,6 +82,9 @@ These helpers are useful when running several Julia-backed operations in the
 same R session and avoiding repeated Julia startup time.
 }
 \details{
+\code{conscape_julia_status()} reports sessions started through ConScapeRtools.
+It does not inspect or alter private state in \code{JuliaConnectoR}.
+
 Reusing a Julia session is usually faster for repeated calls, but Julia
 process settings such as \code{JULIA_NUM_THREADS} are fixed when Julia starts.
 Restart Julia after changing those settings or after an error that may have
@@ -91,9 +96,30 @@ left Julia state uncertain.
 Julia environment, the same environment \code{\link[=conscape_julia_start]{conscape_julia_start()}} and
 \code{\link[=run_conscape]{run_conscape()}} use. These functions live on the ConScape \code{sensitivity}
 branch and are not part of the default registered ConScape release, so a
-plain \code{Pkg.add("ConScape")} (what the package installs by default) does not
+plain \code{Pkg.add("ConScape")} does not
 provide them. Call this helper once per machine before requesting
 sensitivity outputs or the \code{criticality} / \code{betweenness_qweighted} metrics.
 It is an explicit, opt-in install: ConScapeRtools never installs or swaps
 Julia packages as a side effect of a normal \code{\link[=run_conscape]{run_conscape()}} call.
+}
+\examples{
+## This check does not start Julia.
+conscape_julia_status()
+
+\dontrun{
+jl_home <- "/path/to/julia/bin"
+
+## Verify an existing Julia and ConScape installation.
+conscape_julia_start(jl_home)
+conscape_julia_stop()
+
+## Installation is explicit and may access the internet.
+conscape_julia_start(jl_home, install_libraries = TRUE)
+conscape_julia_stop()
+
+## Experimental setup helpers also modify Julia environments explicitly.
+conscape_dev_backend_setup(jl_home)
+conscape_sensitivity_setup(jl_home)
+}
+
 }

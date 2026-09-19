@@ -298,6 +298,96 @@ test_that("run_conscape rejects noninteger mosaic chunk sizes", {
   )
 })
 
+test_that("run_conscape rejects fractional worker and solver counts", {
+  r <- make_test_raster(n = 3, vals = 1)
+  base_args <- list(
+    out_dir = file.path(tempdir(), "run-bad-integers"),
+    target_qualities = r,
+    source_qualities = r,
+    affinities = r,
+    jl_home = "C:/Julia/bin"
+  )
+
+  expect_error(do.call(run_conscape, c(base_args, list(workers = 1.5))), "workers")
+  expect_error(do.call(run_conscape, c(base_args, list(landmark = 1.5))), "landmark")
+  expect_error(do.call(run_conscape, c(base_args, list(blas_threads = 1.5))), "blas_threads")
+  expect_error(
+    do.call(run_conscape, c(base_args, list(
+      backend = "conscape_dev", centersize = 2.5, buffer = 1
+    ))),
+    "centersize"
+  )
+  expect_error(
+    do.call(run_conscape, c(base_args, list(
+      backend = "conscape_dev", centersize = 2, buffer = 1.5
+    ))),
+    "buffer"
+  )
+  expect_error(
+    do.call(run_conscape, c(base_args, list(
+      backend = "conscape_dev", centersize = 2, buffer = 1,
+      dev_mode = "batch", batch_grain = 1.5
+    ))),
+    "batch_grain"
+  )
+})
+
+test_that("run_conscape restores Julia environment variables after errors", {
+  mock_julia()
+  old <- Sys.getenv(
+    c("JULIA_BINDIR", "JULIA_NUM_THREADS", "JULIA_PROJECT"),
+    unset = NA_character_
+  )
+  target <- make_test_raster(n = 4)
+  source <- make_test_raster(n = 5)
+
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-env-restore"),
+      target_qualities = target,
+      source_qualities = source,
+      affinities = target,
+      parallel = TRUE,
+      workers = 2L,
+      stop_julia = TRUE,
+      jl_home = "C:/Julia/bin"
+    ),
+    "share extent"
+  )
+  expect_identical(
+    Sys.getenv(names(old), unset = NA_character_),
+    old
+  )
+})
+
+test_that("run_conscape restores the caller's future plan after errors", {
+  mock_julia()
+  old_plan <- future::plan()
+  on.exit(future::plan(old_plan), add = TRUE)
+  r <- make_test_raster(n = 4, vals = 1)
+
+  testthat::local_mocked_bindings(
+    future_lapply = function(...) stop("mock future failure", call. = FALSE),
+    .env = asNamespace("ConScapeRtools")
+  )
+
+  expect_error(
+    run_conscape(
+      out_dir = file.path(tempdir(), "run-future-plan-restore"),
+      target_qualities = r,
+      source_qualities = r,
+      affinities = r,
+      parallel = TRUE,
+      parallel_R = TRUE,
+      workers = 2L,
+      jl_home = "C:/Julia/bin"
+    ),
+    "mock future failure"
+  )
+  restored_plan <- future::plan()
+  expect_identical(class(restored_plan), class(old_plan))
+})
+
 test_that("run_conscape handles a prepared single-tile workflow", {
   mock_julia()
   r <- make_test_raster(n = 10, vals = 1)

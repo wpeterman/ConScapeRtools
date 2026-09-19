@@ -1,35 +1,27 @@
 ## Functions from `ConScapeR` package
 
-clear_juliaconnector_finalized_refs <- function() {
-  ns <- tryCatch(asNamespace("JuliaConnectoR"), error = function(e) NULL)
-  if (is.null(ns) || !exists("pkgLocal", envir = ns, inherits = FALSE)) {
-    return(invisible(FALSE))
-  }
+# Track sessions started through ConScapeRtools without reading or modifying
+# JuliaConnectoR's private namespace state.
+.conscape_state <- new.env(parent = emptyenv())
+.conscape_state$julia_started <- FALSE
 
-  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
-  if (!is.environment(pkg_local)) {
-    return(invisible(FALSE))
+restore_conscape_envvar <- function(name, value) {
+  if (is.na(value)) {
+    Sys.unsetenv(name)
+  } else {
+    do.call(Sys.setenv, stats::setNames(list(value), name))
   }
-
-  pkg_local$finalizedRefs <- NULL
-  invisible(TRUE)
+  invisible(NULL)
 }
 
 juliaCall_conscape <- function(...) {
-  clear_juliaconnector_finalized_refs()
-  tryCatch(
-    juliaCall(...),
-    error = function(e) {
-      clear_juliaconnector_finalized_refs()
-      stop(e)
-    }
-  )
+  juliaCall(...)
 }
 
 stop_conscape_julia <- function() {
   invisible(gc())
   try(stopJulia(), silent = TRUE)
-  clear_juliaconnector_finalized_refs()
+  .conscape_state$julia_started <- FALSE
   invisible(NULL)
 }
 
@@ -114,7 +106,9 @@ prepare_conscape_dev_project <- function(jl_home,
 #'   Defaults to a package cache directory. Used by
 #'   `conscape_dev_backend_setup()` only.
 #' @param rev Git branch, tag, or commit for the ConScape dependency.
-#'   `conscape_dev_backend_setup()` defaults to `"alg_efficiency"`;
+#'   `conscape_dev_backend_setup()` defaults to the audited commit
+#'   `"9aa05cc0b0c22b9d815d3051925010a2344eada0"` from the experimental
+#'   `alg_efficiency` branch;
 #'   `conscape_sensitivity_setup()` defaults to `"sensitivity"`.
 #' @param url Git URL for ConScape.jl.
 #' @param force Logical. If `TRUE`, remove any existing ConScape dependency
@@ -131,6 +125,9 @@ prepare_conscape_dev_project <- function(jl_home,
 #' version string (e.g. `"0.3.0"`).
 #'
 #' @details
+#' `conscape_julia_status()` reports sessions started through ConScapeRtools.
+#' It does not inspect or alter private state in `JuliaConnectoR`.
+#'
 #' Reusing a Julia session is usually faster for repeated calls, but Julia
 #' process settings such as `JULIA_NUM_THREADS` are fixed when Julia starts.
 #' Restart Julia after changing those settings or after an error that may have
@@ -142,15 +139,38 @@ prepare_conscape_dev_project <- function(jl_home,
 #' Julia environment, the same environment [conscape_julia_start()] and
 #' [run_conscape()] use. These functions live on the ConScape `sensitivity`
 #' branch and are not part of the default registered ConScape release, so a
-#' plain `Pkg.add("ConScape")` (what the package installs by default) does not
+#' plain `Pkg.add("ConScape")` does not
 #' provide them. Call this helper once per machine before requesting
 #' sensitivity outputs or the `criticality` / `betweenness_qweighted` metrics.
 #' It is an explicit, opt-in install: ConScapeRtools never installs or swaps
 #' Julia packages as a side effect of a normal [run_conscape()] call.
 #'
+#' @examples
+#' ## This check does not start Julia.
+#' conscape_julia_status()
+#'
+#' \dontrun{
+#' jl_home <- "/path/to/julia/bin"
+#'
+#' ## Verify an existing Julia and ConScape installation.
+#' conscape_julia_start(jl_home)
+#' conscape_julia_stop()
+#'
+#' ## Installation is explicit and may access the internet.
+#' conscape_julia_start(jl_home, install_libraries = TRUE)
+#' conscape_julia_stop()
+#'
+#' ## Experimental setup helpers also modify Julia environments explicitly.
+#' conscape_dev_backend_setup(jl_home)
+#' conscape_sensitivity_setup(jl_home)
+#' }
+#'
 #' @name conscape-julia
-#' @aliases conscape_julia_start conscape_julia_stop conscape_julia_status
-#'   conscape_dev_backend_setup conscape_sensitivity_setup
+#' @aliases conscape_julia_start
+#' @aliases conscape_julia_stop
+#' @aliases conscape_julia_status
+#' @aliases conscape_dev_backend_setup
+#' @aliases conscape_sensitivity_setup
 NULL
 
 #' @rdname conscape-julia
@@ -178,7 +198,8 @@ conscape_julia_start <- function(jl_home,
     stop_conscape_julia()
   }
 
-  clear_juliaconnector_finalized_refs()
+  old_bindir <- Sys.getenv("JULIA_BINDIR", unset = NA_character_)
+  on.exit(restore_conscape_envvar("JULIA_BINDIR", old_bindir), add = TRUE)
   Sys.setenv(JULIA_BINDIR = jl_home)
   if (!suppressMessages(juliaSetupOk())) {
     stop("Check that the path to the Julia binary directory is correct", call. = FALSE)
@@ -190,6 +211,8 @@ conscape_julia_start <- function(jl_home,
   } else {
     invisible(setup_call())
   }
+  .conscape_state$julia_started <- TRUE
+  invisible(NULL)
 }
 
 #' @rdname conscape-julia
@@ -201,31 +224,14 @@ conscape_julia_stop <- function() {
 #' @rdname conscape-julia
 #' @export
 conscape_julia_status <- function() {
-  clear_juliaconnector_finalized_refs()
-  ns <- tryCatch(asNamespace("JuliaConnectoR"), error = function(e) NULL)
-  if (is.null(ns) || !exists("pkgLocal", envir = ns, inherits = FALSE)) {
-    return(FALSE)
-  }
-
-  pkg_local <- get("pkgLocal", envir = ns, inherits = FALSE)
-  if (!is.environment(pkg_local) ||
-      !exists("con", envir = pkg_local, inherits = FALSE) ||
-      !exists("communicator", envir = pkg_local, inherits = FALSE)) {
-    return(FALSE)
-  }
-
-  con <- get("con", envir = pkg_local, inherits = FALSE)
-  communicator <- get("communicator", envir = pkg_local, inherits = FALSE)
-  isTRUE(!is.null(communicator) &&
-           inherits(con, "connection") &&
-           isOpen(con))
+  isTRUE(.conscape_state$julia_started)
 }
 
 #' @rdname conscape-julia
 #' @export
 conscape_dev_backend_setup <- function(jl_home,
                                        project = NULL,
-                                       rev = "alg_efficiency",
+                                       rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
                                        url = "https://github.com/ConScape/ConScape.jl",
                                        force = FALSE,
                                        quiet = FALSE) {
@@ -414,8 +420,9 @@ juliaLet_warn_or_error <- function(expr, ...) {
 #' This function starts a Julia session from R and imports the `ConScape` library
 #' to be used from R. It assumes that Julia is already installed in the system
 #' and the path to its executables is given as the `julia_path` argument.
-#' The first time the function is ran, it is best to set `install_libraries = TRUE`
-#' to install the `ConScape` library in Julia.
+#' Set `install_libraries = TRUE` explicitly to install or update `ConScape`.
+#' The default verifies that the required Julia libraries are present and stops
+#' without changing the Julia environment when they are missing.
 #'
 #' @param julia_path `[character]` \cr The directory for the Julia bin, e.g.
 #' "C:/Programs/Julia-1.9.3/bin".
@@ -429,22 +436,17 @@ juliaLet_warn_or_error <- function(expr, ...) {
 #' @importFrom JuliaConnectoR juliaLet
 #'
 ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
-
-  clear_juliaconnector_finalized_refs()
+  old_bindir <- Sys.getenv("JULIA_BINDIR", unset = NA_character_)
+  on.exit(restore_conscape_envvar("JULIA_BINDIR", old_bindir), add = TRUE)
   Sys.setenv(JULIA_BINDIR = julia_path)
 
-  # List of required packages
   required_pkgs <- c("ConScape", "SparseArrays", "Statistics")
 
-  # Run the check and install function
-  check_and_install_julia_pkgs(required_pkgs)
-
-  if (install_libraries){
-    Pkg <- juliaImport("Pkg")
-    juliaEval("Pkg.add(\"ConScape\")")
-    juliaEval("Pkg.add(\"SparseArrays\")")
-    juliaEval("Pkg.add(\"Statistics\")")
+  if (isTRUE(install_libraries)) {
+    juliaEval("using Pkg; Pkg.add(\"ConScape\")")
   }
+  check_julia_pkgs(required_pkgs)
+
   SA <- juliaImport("SparseArrays")
   CS <- juliaImport("ConScape")
   invisible(juliaEval("using Logging"))
@@ -693,13 +695,10 @@ sensitivity <- function(h,
 
 
 
-# Function to check and install packages
-check_and_install_julia_pkgs <- function(pkgs) {
-
-  # Check each package
-  for (pkg in pkgs) {
-    # Improved check that properly handles the catch clause
-    is_installed <- juliaEval(paste0(
+# Verify required Julia packages without modifying the Julia environment.
+check_julia_pkgs <- function(pkgs) {
+  available <- vapply(pkgs, function(pkg) {
+    isTRUE(juliaEval(paste0(
       'using Pkg; ',
       'try ',
       '    using ', pkg, '; ',
@@ -707,29 +706,18 @@ check_and_install_julia_pkgs <- function(pkgs) {
       'catch e ',
       '    false ',
       'end'
-    ))
+    )))
+  }, logical(1))
 
-    if (!is_installed) {
-      message("Installing Julia package: ", pkg)
-      tryCatch({
-        juliaEval(paste0('using Pkg; Pkg.add("', pkg, '")'))
-        message("Successfully installed: ", pkg)
-      }, error = function(e) {
-        warning("Failed to install package ", pkg, ": ", e$message)
-      })
-    } else {
-      message("Julia package ", pkg, " is already installed")
-    }
+  missing <- pkgs[!available]
+  if (length(missing)) {
+    stop(
+      "Required Julia package", if (length(missing) == 1L) " is" else "s are",
+      " not installed: ", paste(missing, collapse = ", "), ". ",
+      "Install ConScape explicitly with ",
+      "conscape_julia_start(jl_home, install_libraries = TRUE), then retry.",
+      call. = FALSE
+    )
   }
-
-  # Final verification that packages can be loaded
-  message("\nVerifying package loading:")
-  for (pkg in pkgs) {
-    tryCatch({
-      juliaEval(paste0('using ', pkg))
-      message("Successfully loaded: ", pkg)
-    }, error = function(e) {
-      warning("Failed to load package ", pkg, ": ", e$message)
-    })
-  }
+  invisible(TRUE)
 }

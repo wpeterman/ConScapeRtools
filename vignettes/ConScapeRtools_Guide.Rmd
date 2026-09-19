@@ -203,9 +203,12 @@ to the untiled solution as buffer grows, by two different mechanisms:
 
 * `"center"` + sum mosaic: each tile restricts targets to its center cells
   and sums per-cell contributions across overlapping tiles. The reconstruction
-  is exact up to paths that exit every relevant tile's buffer; that
-  truncation is bounded by proximity at the buffer edge, so error decays
-  approximately as `exp(-buffer / distance_scale)`.
+  omits source-target contributions that require context outside the relevant
+  tile buffer. Under exponential distance decay,
+  `exp(-buffer / distance_scale)` describes the proximity assigned at the
+  buffer edge. It is a calibration guide, not a bound on total raster error.
+  Total error also depends on source and target weights, the number and
+  arrangement of omitted targets, and paths through the affinity surface.
 
 * `"full"` + mean mosaic: each tile keeps full buffered targets and computes
   a per-cell fcon biased low because it cannot see targets in other tiles.
@@ -248,9 +251,9 @@ scalable choice.
 
 The default `run_conscape()` call computes two connectivity surfaces:
 
-- `btwn`: ConScape `betweenness_kweighted()` — how strongly each cell
+- `btwn`: ConScape `betweenness_kweighted()`, which describes how strongly each cell
   contributes to quality-weighted movement across the landscape.
-- `fcon`: ConScape `connected_habitat()` — how much quality-weighted target
+- `fcon`: ConScape `connected_habitat()`, which describes how much quality-weighted target
   habitat is effectively reachable from each source cell.
 
 ```{r run-default, eval=FALSE}
@@ -373,8 +376,8 @@ There are three important practical constraints.
 First, sensitivity requires a ConScape installation that provides
 `ConScape.sensitivity` (analytical) or `ConScape.sensitivity_simulation`. These
 live on the ConScape `sensitivity` branch and are *not* in the default
-registered ConScape package, so a plain `Pkg.add("ConScape")` (what
-ConScapeRtools installs by default) does not provide them. The same branch also
+registered ConScape package, so a plain `Pkg.add("ConScape")` does not provide
+them. The same branch also
 supplies the `criticality` and `betweenness_qweighted` metrics. Install it once
 per machine with the opt-in helper:
 
@@ -387,7 +390,8 @@ conscape_sensitivity_setup(jl_home)
 If the functions are missing when you request sensitivity, `run_conscape()`
 stops with a message telling you to run `conscape_sensitivity_setup(jl_home)`.
 ConScapeRtools never installs or swaps Julia packages as a side effect of a
-normal run; this install is always explicit.
+normal run. Installation occurs only when you call a setup helper or set
+`install_libraries = TRUE` explicitly.
 
 Second, sensitivity runs **must** use `target_mode = "full"` in
 `conscape_prep()`. The default `target_mode = "center"` (correct for `btwn`
@@ -558,7 +562,7 @@ Before running a large analysis:
 10. Compare tiled and untiled runs on a small landscape crop before scaling up.
     The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)
     demonstrates the expected error behavior of each tile mode as a function of
-     buffer width and serves as a reproducible diagnostic template.
+    buffer width and provides a reproducible diagnostic template.
 11. Keep tile and run directories disposable. Store source data, models, saved
     R objects, and final exports in a separate directory that is not nested
     inside either working directory.

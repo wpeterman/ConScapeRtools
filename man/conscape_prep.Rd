@@ -28,7 +28,7 @@ up to the nearest multiple of \code{landmark} to ensure that coarse–graining
 windows in ConScape align across tiles. Optional when \code{centersize} and
 \code{buffer} are supplied.}
 
-\item{tile_trim}{Minimum overlap width between neighbouring tiles, in map
+\item{tile_trim}{Minimum overlap width between neighboring tiles, in map
 units. The actual overlap used may be increased so that the overlap in
 cells is a multiple of \code{landmark}. Mean and merge reductions remove this
 overlap in \code{\link[=mosaic_conscape]{mosaic_conscape()}}, while sum reductions retain it to preserve
@@ -158,6 +158,23 @@ which ensures that ConScape's coarse–grained "landmarks" fall on a common
 grid when tiles are reassembled.
 }
 \examples{
+target <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
+                      ymin = 0, ymax = 4)
+terra::values(target) <- 1
+affinity <- target
+prep_example <- conscape_prep(
+  tile_d = 2,
+  tile_trim = 0,
+  asc_dir = tempfile("conscape-tiles-"),
+  r_target = target,
+  r_mov = affinity,
+  r_src = target,
+  clear_dir = TRUE,
+  landmark = 1L,
+  progress = FALSE
+)
+prep_example
+
 \dontrun{
 library(ConScapeRtools)
 

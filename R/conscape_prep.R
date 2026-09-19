@@ -12,7 +12,7 @@
 #'   up to the nearest multiple of `landmark` to ensure that coarse–graining
 #'   windows in ConScape align across tiles. Optional when `centersize` and
 #'   `buffer` are supplied.
-#' @param tile_trim Minimum overlap width between neighbouring tiles, in map
+#' @param tile_trim Minimum overlap width between neighboring tiles, in map
 #'   units. The actual overlap used may be increased so that the overlap in
 #'   cells is a multiple of `landmark`. Mean and merge reductions remove this
 #'   overlap in [mosaic_conscape()], while sum reductions retain it to preserve
@@ -122,6 +122,23 @@
 #'
 #' @export
 #' @examples
+#' target <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
+#'                       ymin = 0, ymax = 4)
+#' terra::values(target) <- 1
+#' affinity <- target
+#' prep_example <- conscape_prep(
+#'   tile_d = 2,
+#'   tile_trim = 0,
+#'   asc_dir = tempfile("conscape-tiles-"),
+#'   r_target = target,
+#'   r_mov = affinity,
+#'   r_src = target,
+#'   clear_dir = TRUE,
+#'   landmark = 1L,
+#'   progress = FALSE
+#' )
+#' prep_example
+#'
 #' \dontrun{
 #' library(ConScapeRtools)
 #'
@@ -166,7 +183,7 @@
 #' @seealso [run_conscape()], [mosaic_conscape()]
 #' @author Bill Peterman
 
-#' @importFrom terra writeVector setGDALconfig
+#' @importFrom terra writeVector getGDALconfig setGDALconfig
 #' @importFrom utils txtProgressBar setTxtProgressBar
 
 conscape_prep <- function(tile_d = NULL,
@@ -184,8 +201,13 @@ conscape_prep <- function(tile_d = NULL,
                           window_units = c("cells", "map"),
                           target_mode = c("auto", "full", "center")) {
 
+  old_pam <- unname(terra::getGDALconfig("GDAL_PAM_ENABLED"))
+  if (!length(old_pam)) old_pam <- ""
+  on.exit(
+    terra::setGDALconfig("GDAL_PAM_ENABLED", old_pam),
+    add = TRUE
+  )
   terra::setGDALconfig("GDAL_PAM_ENABLED", "FALSE")
-  on.exit(terra::setGDALconfig("GDAL_PAM_ENABLED", "TRUE"), add = TRUE)
 
   window_units <- match.arg(window_units)
   target_mode <- match.arg(target_mode)
@@ -347,8 +369,6 @@ conscape_prep <- function(tile_d = NULL,
                      overwrite = TRUE)
 
   ## ----- return prep object -----
-  terra::setGDALconfig("GDAL_PAM_ENABLED", "TRUE")
-
   out <- list(
     cs_tiles  = tile_design$cs_tiles,
     tile_num  = tile_design$tile_num,

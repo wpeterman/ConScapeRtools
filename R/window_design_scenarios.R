@@ -52,7 +52,7 @@
 #'   window.
 #' * **Total `workload_proxy`** = `landscape_area * (centersize +
 #'   2*buffer)^2`. As `centersize` shrinks, `workload_proxy` also
-#'   shrinks, asymptoting at `landscape_area * (2*buffer)^2` for very
+#'   shrinks, approaching `landscape_area * (2*buffer)^2` for very
 #'   small centers. The savings come at the price of repeating per-tile
 #'   `(I - W)` factorization more times.
 #'

@@ -29,6 +29,16 @@ run_conscape_dev_backend <- function(conscape_prep,
                                      dev_conscape_url,
                                      blas_threads,
                                      stop_julia) {
+  old_julia_env <- Sys.getenv(
+    c("JULIA_BINDIR", "JULIA_NUM_THREADS", "JULIA_PROJECT"),
+    unset = NA_character_
+  )
+  on.exit({
+    for (name in names(old_julia_env)) {
+      restore_conscape_envvar(name, unname(old_julia_env[[name]]))
+    }
+  }, add = TRUE)
+
   if (!is.null(conscape_prep)) {
     stop(
       "backend = \"conscape_dev\" currently requires direct SpatRaster inputs. ",
@@ -49,11 +59,13 @@ run_conscape_dev_backend <- function(conscape_prep,
     stop("backend = \"conscape_dev\" requires centersize and buffer in cells.", call. = FALSE)
   }
   if (!is.numeric(centersize) || length(centersize) != 1L ||
-      is.na(centersize) || centersize < 1) {
+      is.na(centersize) || !is.finite(centersize) || centersize < 1 ||
+      centersize != floor(centersize)) {
     stop("centersize must be a positive integer cell count.", call. = FALSE)
   }
   if (!is.numeric(buffer) || length(buffer) != 1L ||
-      is.na(buffer) || buffer < 0) {
+      is.na(buffer) || !is.finite(buffer) || buffer < 0 ||
+      buffer != floor(buffer)) {
     stop("buffer must be a non-negative integer cell count.", call. = FALSE)
   }
   if (!identical(dev_mode, "windowed") && !identical(dev_mode, "batch")) {
@@ -61,7 +73,8 @@ run_conscape_dev_backend <- function(conscape_prep,
   }
   if (!is.null(batch_grain) &&
       (!is.numeric(batch_grain) || length(batch_grain) != 1L ||
-       is.na(batch_grain) || batch_grain < 1)) {
+       is.na(batch_grain) || !is.finite(batch_grain) || batch_grain < 1 ||
+       batch_grain != floor(batch_grain))) {
     stop("batch_grain must be NULL or a positive integer.", call. = FALSE)
   }
   if (!is.character(batch_ext) || length(batch_ext) != 1L ||

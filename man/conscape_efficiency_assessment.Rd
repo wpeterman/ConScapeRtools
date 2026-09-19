@@ -50,6 +50,23 @@ that are written to disk and consumed by the backend. For
 are equal.
 }
 \examples{
+r <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
+                 ymin = 0, ymax = 4)
+terra::values(r) <- 1
+prep_a <- conscape_prep(
+  tile_d = 2, tile_trim = 0,
+  asc_dir = tempfile("prep-a-"),
+  r_target = r, r_mov = r, r_src = r,
+  clear_dir = TRUE, landmark = 1L, progress = FALSE
+)
+prep_b <- conscape_prep(
+  centersize = 2, buffer = 1,
+  asc_dir = tempfile("prep-b-"),
+  r_target = r, r_mov = r, r_src = r,
+  clear_dir = TRUE, landmark = 1L, progress = FALSE
+)
+conscape_efficiency_assessment(classic = prep_a, centered = prep_b)
+
 \dontrun{
 classic <- conscape_prep(
   tile_d = 5000,

@@ -12,7 +12,7 @@ Map representing the habitat quality in each pixel in an area.
 \examples{
 (f <- system.file("extdata", "suitability.asc", package = "ConScapeRtools"))
 r <- terra::rast(f)
-plot(r)
+terra::plot(r)
 
 }
 \seealso{

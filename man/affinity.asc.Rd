@@ -13,7 +13,7 @@ each pixel in an area.
 \examples{
 (f <- system.file("extdata", "affinity.asc", package = "ConScapeRtools"))
 r <- terra::rast(f)
-plot(r)
+terra::plot(r)
 
 }
 \seealso{

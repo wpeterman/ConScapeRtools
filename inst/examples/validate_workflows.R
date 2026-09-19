@@ -27,9 +27,10 @@
 ## the full landscape (degenerate-coverage), the per-tile W matrix and Z
 ## columns are mathematically identical to the untiled solution, and the
 ## center-sum reduction sums disjoint center contributions back into the full
-## untiled fcon/btwn surfaces. Differences in this regime are floating-point
-## noise from ConScape's dense LU solver, bounded at ~1e-6 relative to the
-## untiled surface magnitude.
+## untiled fcon/btwn surfaces. Differences in this regime arise from solving
+## and aggregating separate tiles and are assessed at a relative tolerance of
+## 1e-6. This full-coverage comparison should not contain measurable
+## buffer-truncation error.
 ##
 ## When the buffered window does NOT cover the full landscape, tiled outputs
 ## CONVERGE to untiled as buffer grows but do not equal it exactly. That
@@ -47,7 +48,7 @@
 ##
 ## Re-using an existing ConScape dev project (skips setup timing):
 ##   dev_project <- conscape_dev_backend_setup(jl_home = jl_home,
-##                                             rev = "alg_efficiency")
+##                                             rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0")
 ##   results <- validate_workflows(include_dev = TRUE,
 ##                                 dev_project = dev_project)
 ## ============================================================================
@@ -139,7 +140,7 @@ validate_workflows <- function(jl_home    = Sys.getenv("CONSCAPERTOOLS_JL_HOME")
                                landmark   = 5L,
                                include_dev = FALSE,
                                dev_project = NULL,
-                               dev_conscape_rev = "alg_efficiency",
+                               dev_conscape_rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
                                work_dir   = tempfile("validate_workflows_")) {
   stopifnot(nzchar(jl_home))
   dir.create(work_dir, recursive = TRUE, showWarnings = FALSE)

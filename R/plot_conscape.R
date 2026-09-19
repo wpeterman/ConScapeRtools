@@ -12,11 +12,10 @@
 #' @return Invisibly returns `x` after plotting the selected rasters.
 #'
 #' @examples
-#' \dontrun{
-#' # Assuming 'cs_results' is a ConScapeResults object
+#' r <- terra::rast(nrows = 3, ncols = 3)
+#' terra::values(r) <- seq_len(terra::ncell(r))
+#' cs_results <- structure(list(fcon = r), class = "ConScapeResults")
 #' plot(cs_results)
-#' plot(cs_results, layers = c("fcon", "elasticity_quality"))
-#' }
 #'
 #' @importFrom terra plot
 #' @importFrom graphics par mtext title

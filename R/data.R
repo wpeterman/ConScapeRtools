@@ -11,7 +11,7 @@
 #' @examples
 #' (f <- system.file("extdata", "affinity.asc", package = "ConScapeRtools"))
 #' r <- terra::rast(f)
-#' plot(r)
+#' terra::plot(r)
 #'
 #' @name affinity.asc
 #' @seealso [ConScapeRtools::suitability.asc] \cr
@@ -28,7 +28,7 @@ NULL
 #' @examples
 #' (f <- system.file("extdata", "suitability.asc", package = "ConScapeRtools"))
 #' r <- terra::rast(f)
-#' plot(r)
+#' terra::plot(r)
 #'
 #' @name suitability.asc
 #' @seealso [ConScapeRtools::affinity.asc] \cr
@@ -44,7 +44,7 @@ NULL
 #' @examples
 #' (f <- system.file("extdata", "patches.shp", package = "ConScapeRtools"))
 #' p <- terra::vect(f)
-#' plot(p)
+#' terra::plot(p)
 #'
 #' @name patches.shp
 #'

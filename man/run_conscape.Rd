@@ -36,7 +36,7 @@ run_conscape(
   batch_ext = ".tif",
   dev_project = NULL,
   install_dev_conscape = FALSE,
-  dev_conscape_rev = "alg_efficiency",
+  dev_conscape_rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
   dev_conscape_url = "https://github.com/ConScape/ConScape.jl",
   blas_threads = 1L,
   mosaic_chunk_size = 64L,
@@ -200,7 +200,8 @@ ConScape from \code{dev_conscape_url} at \code{dev_conscape_rev} before running.
 This is opt-in because it downloads a development Git dependency.}
 
 \item{dev_conscape_rev}{Git branch, tag, or commit used when
-\code{install_dev_conscape = TRUE}. Defaults to \code{"alg_efficiency"}.}
+\code{install_dev_conscape = TRUE}. Defaults to the audited development commit
+\code{"9aa05cc0b0c22b9d815d3051925010a2344eada0"}.}
 
 \item{dev_conscape_url}{Git URL used when \code{install_dev_conscape = TRUE}.}
 
@@ -432,7 +433,7 @@ affinity_demo <- terra::crop(affinity, terra::ext(habitat_demo), snap = "near")
 
 dev_project <- conscape_dev_backend_setup(
   jl_home = jl_home,
-  rev = "alg_efficiency"
+  rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0"
 )
 
 cs_dev <- run_conscape(

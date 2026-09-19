@@ -39,7 +39,7 @@ wd <- window_design(
 # Reuse the returned path across sessions to avoid reinstalling each time.
 dev_project <- conscape_dev_backend_setup(
   jl_home = jl_home,
-  rev = "alg_efficiency",
+  rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
   quiet = FALSE
 )
 

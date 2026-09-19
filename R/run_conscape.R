@@ -129,7 +129,8 @@
 #'   ConScape from `dev_conscape_url` at `dev_conscape_rev` before running.
 #'   This is opt-in because it downloads a development Git dependency.
 #' @param dev_conscape_rev Git branch, tag, or commit used when
-#'   `install_dev_conscape = TRUE`. Defaults to `"alg_efficiency"`.
+#'   `install_dev_conscape = TRUE`. Defaults to the audited development commit
+#'   `"9aa05cc0b0c22b9d815d3051925010a2344eada0"`.
 #' @param dev_conscape_url Git URL used when `install_dev_conscape = TRUE`.
 #' @param mosaic_chunk_size Positive integer giving the maximum number of output tiles to hold in memory
 #'   during each mosaic batch. Smaller values reduce peak memory at the cost of
@@ -344,7 +345,7 @@
 #'
 #' dev_project <- conscape_dev_backend_setup(
 #'   jl_home = jl_home,
-#'   rev = "alg_efficiency"
+#'   rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0"
 #' )
 #'
 #' cs_dev <- run_conscape(
@@ -414,7 +415,7 @@ run_conscape <- function(conscape_prep = NULL,
                          batch_ext = ".tif",
                          dev_project = NULL,
                          install_dev_conscape = FALSE,
-                         dev_conscape_rev = "alg_efficiency",
+                         dev_conscape_rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0",
                          dev_conscape_url = "https://github.com/ConScape/ConScape.jl",
                          blas_threads = 1L,
                          mosaic_chunk_size = 64L,
@@ -423,6 +424,16 @@ run_conscape <- function(conscape_prep = NULL,
                          hab_src = NULL,
                          mov_prob = NULL,
                          exp_d = NULL){
+  old_julia_env <- Sys.getenv(
+    c("JULIA_BINDIR", "JULIA_NUM_THREADS", "JULIA_PROJECT"),
+    unset = NA_character_
+  )
+  on.exit({
+    for (name in names(old_julia_env)) {
+      restore_conscape_envvar(name, unname(old_julia_env[[name]]))
+    }
+  }, add = TRUE)
+
   ## --- resolve deprecated aliases ---
   if (!is.null(hab_target)) {
     if (!is.null(target_qualities)) {
@@ -459,15 +470,43 @@ run_conscape <- function(conscape_prep = NULL,
   if (!is.numeric(theta) || length(theta) != 1L || is.na(theta) || theta <= 0) {
     stop("theta must be a single positive numeric value.", call. = FALSE)
   }
-  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) || landmark < 1) {
+  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) ||
+      !is.finite(landmark) || landmark < 1 || landmark != floor(landmark)) {
     stop("landmark must be a positive integer.", call. = FALSE)
+  }
+  if (!is.numeric(workers) || length(workers) != 1L || is.na(workers) ||
+      !is.finite(workers) || workers < 1 || workers != floor(workers)) {
+    stop("workers must be a positive integer.", call. = FALSE)
   }
   if (!is.logical(stop_julia) || length(stop_julia) != 1L || is.na(stop_julia)) {
     stop("stop_julia must be TRUE or FALSE.", call. = FALSE)
   }
   if (!is.numeric(blas_threads) || length(blas_threads) != 1L ||
-      is.na(blas_threads) || blas_threads < 1) {
+      is.na(blas_threads) || !is.finite(blas_threads) || blas_threads < 1 ||
+      blas_threads != floor(blas_threads)) {
     stop("blas_threads must be a positive integer.", call. = FALSE)
+  }
+  logical_args <- list(
+    clear_dir = clear_dir,
+    mosaic = mosaic,
+    parallel = parallel,
+    distributed = distributed,
+    progress = progress,
+    parallel_R = parallel_R,
+    install_dev_conscape = install_dev_conscape,
+    stop_julia = stop_julia
+  )
+  invalid_logical <- vapply(
+    logical_args,
+    function(x) !is.logical(x) || length(x) != 1L || is.na(x),
+    logical(1)
+  )
+  if (any(invalid_logical)) {
+    stop(
+      names(logical_args)[which(invalid_logical)[1L]],
+      " must be TRUE or FALSE.",
+      call. = FALSE
+    )
   }
   if (!is.numeric(mosaic_chunk_size) || length(mosaic_chunk_size) != 1L ||
       is.na(mosaic_chunk_size) || !is.finite(mosaic_chunk_size) ||
@@ -476,6 +515,7 @@ run_conscape <- function(conscape_prep = NULL,
   }
 
   landmark <- as.integer(landmark)
+  workers <- as.integer(workers)
   blas_threads <- as.integer(blas_threads)
   mosaic_chunk_size <- as.integer(mosaic_chunk_size)
   backend <- match.arg(backend)
@@ -483,9 +523,11 @@ run_conscape <- function(conscape_prep = NULL,
   dev_mode <- match.arg(dev_mode)
   if (!is.null(batch_grain) &&
       (!is.numeric(batch_grain) || length(batch_grain) != 1L ||
-       is.na(batch_grain) || batch_grain < 1)) {
+       is.na(batch_grain) || !is.finite(batch_grain) || batch_grain < 1 ||
+       batch_grain != floor(batch_grain))) {
     stop("batch_grain must be NULL or a positive integer.", call. = FALSE)
   }
+  if (!is.null(batch_grain)) batch_grain <- as.integer(batch_grain)
   if (!is.character(batch_ext) || length(batch_ext) != 1L ||
       !nzchar(batch_ext)) {
     stop("batch_ext must be a non-empty character string.", call. = FALSE)
@@ -750,9 +792,9 @@ run_conscape <- function(conscape_prep = NULL,
     # **In R ------------------------------------------------------------------
 
     if(parallel_R){
-      plan(sequential)
-
-      plan(multisession, workers = workers)
+      old_future_plan <- future::plan()
+      on.exit(future::plan(old_future_plan), add = TRUE)
+      future::plan(future::multisession, workers = workers)
 
       suppressWarnings({
         cs_out <- future_lapply(1:length(hab_target), function(i) {
@@ -789,7 +831,6 @@ run_conscape <- function(conscape_prep = NULL,
         })
       })
       cs_out <- do.call(c, cs_out)
-      plan(sequential)
 
     } else{
       if(!juliaSetupOk() && isFALSE(distributed)){
@@ -1074,7 +1115,6 @@ run_conscape <- function(conscape_prep = NULL,
 } ## End function
 
 #' @importFrom utils setTxtProgressBar txtProgressBar
-#' @importFrom future plan sequential multisession
 #' @importFrom future.apply future_lapply
 NULL
 

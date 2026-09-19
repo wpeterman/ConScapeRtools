@@ -80,7 +80,8 @@ posed:
 \item \code{"sum"} adds tile values cell-wise, treating \code{NA} as 0. This is the
 correct reduction when each cell appears as a \emph{target} in exactly one
 tile (the \code{target_mode = "center"} case in \code{\link[=conscape_prep]{conscape_prep()}}). Each
-tile contributes \verb{q_src(i) * Σ_\{j in tile center\} q_tgt(j) * proximity(i,j)}
+each tile contributes the source quality times the sum of target quality
+and proximity over targets in that tile's center
 and similar partial sums for betweenness; summing over tiles recovers the
 full source-to-target sum up to paths that exit the tile buffer.
 \item \code{"mosaic"} averages tile values where they overlap (\code{terra::mosaic} with
@@ -95,7 +96,7 @@ encountered. Useful for diagnostics and for non-overlapping tiles.
 
 If a \code{mask} is supplied, the function checks for compatible CRS, then crops
 and/or resamples the mosaicked raster to match the mask's extent and
-resolution (using nearest-neighbour resampling if needed) before applying
+resolution (using nearest-neighbor resampling if needed) before applying
 the mask via cell-wise multiplication.
 
 This function is normally called internally by \code{\link[=run_conscape]{run_conscape()}} when
@@ -104,6 +105,14 @@ This function is normally called internally by \code{\link[=run_conscape]{run_co
 the corresponding method recorded in \code{result$diagnostics$mosaic_method}.
 }
 \examples{
+tile_dir <- tempfile("conscape-output-")
+dir.create(tile_dir)
+tile <- terra::rast(nrows = 3, ncols = 3)
+terra::values(tile) <- seq_len(terra::ncell(tile))
+terra::writeRaster(tile, file.path(tile_dir, "tile.asc"), overwrite = TRUE)
+combined <- mosaic_conscape(tile_dir, tile_trim = 0, method = "merge")
+combined
+
 \dontrun{
 library(ConScapeRtools)
 

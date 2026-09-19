@@ -1,22 +1,27 @@
 Package: ConScapeRtools
 Type: Package
 Title: Run ConScape with Large Landscapes from R
-Version: 0.4.27
+Version: 0.4.29
 Authors@R: person("Bill", "Peterman", email = "peterman.73@osu.edu",
     role = c("aut", "cre"))
-Description: Facilitates analysis of large landscapes with the Julia package ConScape from R.
+Description: Prepares, runs, validates, and mosaics randomized shortest-path
+    connectivity analyses using the Julia package 'ConScape'. Supports tiled
+    processing of landscapes that are too large for a single graph while
+    retaining explicit controls for buffer convergence and output reduction.
 License: MIT + file LICENSE
 Encoding: UTF-8
+Language: en-US
+SystemRequirements: Julia (>= 1.10), ConScape.jl (>= 0.3.0)
 Imports:
     crayon,
     JuliaConnectoR,
+    terra,
     utils,
     stats,
     future,
     future.apply
 Depends:
-    R (>= 4.3),
-    terra
+    R (>= 4.3)
 Suggests:
     testthat (>= 3.0.0),
     knitr,

@@ -1,3 +1,24 @@
+ConScapeRtools 0.4.29
+---------
+* Made Julia dependency handling explicit. Normal startup now verifies required
+  packages without installing them; installation occurs only when requested.
+* Removed all access to private `JuliaConnectoR` state and now track only Julia
+  sessions started through ConScapeRtools.
+* Restored caller state for GDAL configuration, `future` plans, and Julia
+  environment variables on both successful and failed runs.
+* Enforced finite whole-number validation for worker, landmark, thread, window,
+  buffer, and batch-size arguments.
+* Replaced the moving experimental ConScape branch default with the audited
+  commit `9aa05cc0b0c22b9d815d3051925010a2344eada0`.
+* Corrected buffer-error and solver-complexity claims in the vignettes and
+  clarified that edge proximity is a calibration guide, not a total-error
+  bound.
+* Added package-level documentation, CRAN-safe examples, direct experimental
+  backend tests, and regression tests for installation consent and state
+  restoration.
+* Added cross-platform continuous integration and updated CRAN release
+  metadata.
+
 ConScapeRtools 0.4.27
 ---------
 * Updated `mosaic_conscape()` and the tiled-workflow documentation for the

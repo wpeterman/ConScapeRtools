@@ -211,3 +211,26 @@ test_that("conscape_prep protects non-empty output directories", {
     "asc_dir is not empty"
   )
 })
+test_that("conscape_prep restores the GDAL PAM setting", {
+  old_pam <- unname(terra::getGDALconfig("GDAL_PAM_ENABLED"))
+  on.exit(terra::setGDALconfig("GDAL_PAM_ENABLED", old_pam), add = TRUE)
+  terra::setGDALconfig("GDAL_PAM_ENABLED", "CUSTOM_TEST_VALUE")
+
+  r <- make_test_raster(n = 4, vals = 1)
+  conscape_prep(
+    tile_d = 2,
+    tile_trim = 0,
+    asc_dir = file.path(tempdir(), "prep-gdal-restore"),
+    r_target = r,
+    r_mov = r,
+    r_src = r,
+    clear_dir = TRUE,
+    landmark = 1L,
+    progress = FALSE
+  )
+
+  expect_identical(
+    unname(terra::getGDALconfig("GDAL_PAM_ENABLED")),
+    "CUSTOM_TEST_VALUE"
+  )
+})

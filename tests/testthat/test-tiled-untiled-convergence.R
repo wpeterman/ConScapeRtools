@@ -26,8 +26,9 @@
 ##    i sums over all tiles T whose buffered window contains i. Together,
 ##    those tile contributions reconstruct fcon_untiled[i] up to the
 ##    truncation of paths that exit every relevant tile's buffer. The
-##    truncation is bounded by proximity at distance ~ buffer, so error
-##    decays roughly exponentially with buffer.
+##    edge proximity provides a calibration scale rather than a total-error
+##    bound, so empirical error
+##    decreases as the buffer grows; the rate is measured empirically.
 ##
 ##  * full_mean: each tile keeps full buffered targets and produces a per-cell
 ##    fcon biased low (it misses targets in other tiles). As buffer grows the
