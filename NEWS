@@ -1,5 +1,8 @@
-ConScapeRtools 0.4.29
+ConScapeRtools 0.4.30
 ---------
+* Updated the cross-platform check workflow to use the current checkout action
+  and the standard no-manual matrix check. The full PDF manual remains part of
+  the local Windows release validation.
 * Made Julia dependency handling explicit. Normal startup now verifies required
   packages without installing them; installation occurs only when requested.
 * Removed all access to private `JuliaConnectoR` state and now track only Julia

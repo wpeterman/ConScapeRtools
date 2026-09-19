@@ -1,7 +1,7 @@
 Package: ConScapeRtools
 Type: Package
 Title: Run ConScape with Large Landscapes from R
-Version: 0.4.29
+Version: 0.4.30
 Authors@R: person("Bill", "Peterman", email = "peterman.73@osu.edu",
     role = c("aut", "cre"))
 Description: Prepares, runs, validates, and mosaics randomized shortest-path
