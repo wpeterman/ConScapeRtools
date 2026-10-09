@@ -77,6 +77,51 @@ test_that("Julia command arguments preserve spaces and code quotes", {
   expect_identical(received, shQuote(args))
 })
 
+test_that("Julia commands isolate Linux library paths without changing caller state", {
+  old_path <- Sys.getenv("LD_LIBRARY_PATH", unset = NA_character_)
+  on.exit(ConScapeRtools:::restore_conscape_envvar("LD_LIBRARY_PATH", old_path))
+  Sys.setenv(LD_LIBRARY_PATH = "/R/library path:/other/library")
+  received <- NULL
+  testthat::local_mocked_bindings(
+    Sys.info = function() c(sysname = platform),
+    system2 = function(command, args, stdout, stderr, env) {
+      received <<- list(command = command, args = args, env = env,
+                        stdout = stdout, stderr = stderr)
+      c("Julia output", "second line")
+    }, .package = "base"
+  )
+  for (platform in c("Linux", "Windows", "Darwin")) {
+    out <- ConScapeRtools:::run_julia_command("Julia bin/julia", "script path.jl",
+                                            stdout = "output file", stderr = FALSE)
+    expect_identical(out, c("Julia output", "second line"))
+    expect_identical(received$command, "Julia bin/julia")
+    expect_identical(received$args, shQuote("script path.jl"))
+    expect_identical(received$env,
+                     if (platform == "Linux") "LD_LIBRARY_PATH=''" else character())
+    expect_identical(received$stdout, "output file")
+    expect_false(received$stderr)
+    expect_identical(Sys.getenv("LD_LIBRARY_PATH"), "/R/library path:/other/library")
+  }
+})
+
+test_that("Julia command failures preserve status and the caller environment", {
+  old_path <- Sys.getenv("LD_LIBRARY_PATH", unset = NA_character_)
+  on.exit(ConScapeRtools:::restore_conscape_envvar("LD_LIBRARY_PATH", old_path))
+  Sys.unsetenv("LD_LIBRARY_PATH")
+  testthat::local_mocked_bindings(
+    Sys.info = function() c(sysname = "Linux"),
+    system2 = function(...) structure("Julia error", status = 1L), .package = "base"
+  )
+  out <- ConScapeRtools:::run_julia_command("julia")
+  expect_identical(attr(out, "status"), 1L)
+  expect_true(is.na(Sys.getenv("LD_LIBRARY_PATH", unset = NA_character_)))
+  testthat::local_mocked_bindings(
+    system2 = function(...) stop("launch failed"), .package = "base"
+  )
+  expect_error(ConScapeRtools:::run_julia_command("julia"), "launch failed")
+  expect_true(is.na(Sys.getenv("LD_LIBRARY_PATH", unset = NA_character_)))
+})
+
 test_that("mosaics reject mixed geometry and multilayer tiles", {
   root <- tempfile("mixed-mosaic-")
   dir.create(root)

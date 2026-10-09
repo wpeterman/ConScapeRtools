@@ -1,6 +1,6 @@
 ## R CMD check results
 
-ConScapeRtools 0.4.32 was checked from its built source archive on Windows 11
+ConScapeRtools 0.4.33 was checked from its built source archive on Windows 11
 x64 with R 4.6.1 and `R CMD check --as-cran`: 0 errors, 0 warnings, 1 note.
 The note is the expected `New submission` note. The full check includes
 the PDF and HTML manuals, examples, tests, and vignette rebuilding.
@@ -11,6 +11,12 @@ merging the branch or preparing a submission. Real Julia integration tests run
 separately on the three R-release platforms.
 
 ## Release summary
+
+Version 0.4.33 isolates command-line Julia processes from R's Linux library
+search path, matching JuliaConnectoR's default session behavior. Regression
+tests cover Linux, Windows, and macOS launch arguments, caller-state
+preservation, and failure propagation. Standalone Julia audit scripts now use
+this launcher, avoiding the shared-library conflicts found in Linux CI.
 
 Version 0.4.32 declares GPL-2 for the combined package and credits the
 ConScape.jl contributors for the adapted numerical routines. The installed

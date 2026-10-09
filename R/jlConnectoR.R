@@ -40,8 +40,11 @@ default_conscape_dev_project <- function() {
 }
 
 run_julia_command <- function(command, args = character(), stdout = TRUE, stderr = TRUE) {
+  # R's Linux library search path can override Julia's bundled libraries.
+  # Match JuliaConnectoR's default, scoped to the child process only.
+  env <- if (Sys.info()[["sysname"]] == "Linux") "LD_LIBRARY_PATH=''" else character()
   # system2 quotes the executable, but callers must quote individual arguments.
-  system2(command, args = shQuote(args), stdout = stdout, stderr = stderr)
+  system2(command, args = shQuote(args), stdout = stdout, stderr = stderr, env = env)
 }
 
 prepare_conscape_dev_project <- function(jl_home,
@@ -147,6 +150,11 @@ prepare_conscape_dev_project <- function(jl_home,
 #' sensitivity outputs or the `criticality` / `betweenness_qweighted` metrics.
 #' It is an explicit, opt-in install: ConScapeRtools never installs or swaps
 #' Julia packages as a side effect of a normal [run_conscape()] call.
+#'
+#' On Linux, command-line setup helpers start Julia with an empty
+#' `LD_LIBRARY_PATH` so R's library paths cannot override Julia's bundled
+#' libraries. This matches the default used by `JuliaConnectoR` for normal
+#' sessions and does not change the calling R process's environment.
 #'
 #' @examples
 #' ## This check does not start Julia.

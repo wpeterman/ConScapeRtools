@@ -1,3 +1,11 @@
+ConScapeRtools 0.4.33
+---------
+* Isolated Linux command-line Julia processes from R's library search path to
+  prevent incompatible shared-library loading. The calling R environment is
+  unchanged. Standalone numerical and scheduler audits use the same launcher.
+* Added regression checks for platform-specific launch environments, argument
+  quoting, output forwarding, exit status, and caller-state preservation.
+
 ConScapeRtools 0.4.32
 ---------
 * Corrected the release license to GPL-2 for the adapted ConScape.jl numerical

@@ -103,6 +103,11 @@ provide them. Call this helper once per machine before requesting
 sensitivity outputs or the \code{criticality} / \code{betweenness_qweighted} metrics.
 It is an explicit, opt-in install: ConScapeRtools never installs or swaps
 Julia packages as a side effect of a normal \code{\link[=run_conscape]{run_conscape()}} call.
+
+On Linux, command-line setup helpers start Julia with an empty
+\code{LD_LIBRARY_PATH} so R's library paths cannot override Julia's bundled
+libraries. This matches the default used by \code{JuliaConnectoR} for normal
+sessions and does not change the calling R process's environment.
 }
 \examples{
 ## This check does not start Julia.

@@ -14,8 +14,9 @@ test_that("Julia kernels and distributed scheduling satisfy regression contracts
     skip("Julia audit drivers require a source checkout.")
   }
   for (script in c("audit_kernels.jl", "audit_scheduler.jl")) {
-    output <- system2(exe, c("--startup-file=no", shQuote(testthat::test_path("..", "julia", script)),
-                            shQuote(package_root)), stdout = TRUE, stderr = TRUE)
+    output <- ConScapeRtools:::run_julia_command(
+      exe, c("--startup-file=no", testthat::test_path("..", "julia", script), package_root)
+    )
     status <- attr(output, "status")
     expect_true(is.null(status) || identical(status, 0L), info = paste(output, collapse = "\n"))
   }
