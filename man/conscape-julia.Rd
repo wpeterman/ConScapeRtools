@@ -59,6 +59,8 @@ Defaults to a package cache directory. Used by
 \code{conscape_dev_backend_setup()} defaults to the audited commit
 \code{"9aa05cc0b0c22b9d815d3051925010a2344eada0"} from the experimental
 \code{alg_efficiency} branch;
+that execution backend is disabled in this release. Its setup helper is
+retained only for upstream investigation and does not enable execution.
 \code{conscape_sensitivity_setup()} defaults to \code{"sensitivity"}.}
 
 \item{url}{Git URL for ConScape.jl.}

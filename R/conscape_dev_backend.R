@@ -89,6 +89,18 @@ run_conscape_dev_backend <- function(conscape_prep,
     stop("backend = \"conscape_dev\" currently supports connectivity_function = \"expected_cost\".", call. = FALSE)
   }
 
+  validate_conscape_rasters(list(target_qualities, source_qualities, affinities))
+  validate_conscape_output_dir(out_dir, clear_dir,
+    conscape_input_sources(list(target_qualities, source_qualities, affinities)))
+  # Retain the implementation and arguments for upstream repair, but do not
+  # install Julia dependencies, clear outputs, or present this path as usable.
+  stop(
+    "backend = \"conscape_dev\" is disabled in this release because the audited ",
+    "upstream revision fails in solve(). Use backend = \"classic\" with ",
+    "conscape_prep(centersize = ..., buffer = ...) instead. ",
+    "See vignette('Tiled_ConScape_Validation_and_Performance').",
+    call. = FALSE
+  )
   if (dir.exists(out_dir)) {
     if (length(list.files(out_dir)) > 0L && isFALSE(clear_dir)) {
       stop("\nFiles currently exist in `out_dir`.\nEither manually delete them, or set `clear_dir = TRUE`")

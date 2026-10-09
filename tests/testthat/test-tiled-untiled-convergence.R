@@ -1,53 +1,10 @@
-## Tiled-vs-untiled convergence diagnostics
-##
-## The companion test in test-tiled-untiled-agreement.R uses a 40x40 demo with
-## buffer = 20 cells, which is *degenerate*: every tile's buffered window
-## already covers the entire raster, so the per-tile W matrix and per-target
-## Z columns are identical to untiled, and both tiled modes match the untiled
-## solution to floating-point tolerance. That's a useful smoke test for the
-## machinery but it does not exercise the actual buffer-truncation behavior
-## that drives tiled accuracy at production scale.
-##
-## This test runs a *non-degenerate* tiling on a strictly larger crop and
-## sweeps buffer width. It reports per-metric max_abs, mean_abs, RMSE, and
-## linear correlation of:
-##
-##  - legacy full-target tiled (mean mosaic) vs untiled
-##  - corrected center-target tiled (sum mosaic, this branch's fix)         vs untiled
-##  - optional: ConScape dev WindowedProblem (sum mosaic, dev backend)      vs untiled
-##
-## What you should see, and why:
-##
-## Both tiled modes converge to the untiled answer as buffer grows, by two
-## different mechanisms:
-##
-##  * center_sum: each tile restricts targets to its center cells (per-tile
-##    Z has K_center columns instead of K_buffered). Per-cell fcon for a cell
-##    i sums over all tiles T whose buffered window contains i. Together,
-##    those tile contributions reconstruct fcon_untiled[i] up to the
-##    truncation of paths that exit every relevant tile's buffer. The
-##    edge proximity provides a calibration scale rather than a total-error
-##    bound, so empirical error
-##    decreases as the buffer grows; the rate is measured empirically.
-##
-##  * full_mean: each tile keeps full buffered targets and produces a per-cell
-##    fcon biased low (it misses targets in other tiles). As buffer grows the
-##    per-tile view approaches the full untiled landscape, the bias shrinks
-##    to zero, and the mean of many near-correct surfaces is near untiled.
-##    The catch is per-tile compute: full mode solves Z over K_full columns
-##    in every tile, so its cost grows with the *landscape*, not with the
-##    *number of tiles times centersize*. It does not scale.
-##
-## At small buffer relative to the proximity decay scale, the two modes have
-## comparable error magnitudes. The right reason to prefer center_sum is its
-## compute scaling: only that mode lets each tile's solve cost remain bounded
-## as the landscape grows. The convergence regime where they both reach the
-## untiled solution numerically is the same regime where you could have just
-## run the untiled problem.
-##
-## The runtime is dominated by the untiled reference (one full N x N solve)
-## and the per-buffer tile runs. Keep n small (~80x80) so the test completes
-## in minutes on a developer laptop.
+## Tiled versus untiled agreement across several buffers on an 80x80 crop.
+## Center mode partitions targets and sums contributions; full mode retains
+## buffered targets and averages tile-local results. Both omit graph context
+## at finite buffers, so error direction and monotonicity are not guaranteed.
+## Each mode keeps per-window graph size bounded when the landscape grows at
+## fixed centersize/buffer. Center mode generally solves fewer target columns.
+## These endpoint checks complement the full-coverage and execution-mode tests.
 
 integration_jl_home <- function() {
   candidates <- c(
@@ -201,7 +158,7 @@ test_that("tiled center-sum and full-mean both converge to untiled as buffer gro
       progress       = FALSE
     )
 
-    # Legacy full-mean (biased estimator, still supported as opt-in)
+    # Legacy full-mean (tile-local approximation, supported as opt-in)
     full_prep <- conscape_prep(
       centersize    = centersize_c,
       buffer        = buf,

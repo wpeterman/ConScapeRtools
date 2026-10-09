@@ -22,8 +22,8 @@ tile_design(
 }
 \arguments{
 \item{r_mov}{\code{SpatRaster} representing movement affinities/permeability.
-Values should be in a projected coordinate reference system (map units in
-meters) and should be higher where movement is easier.}
+Use a projected coordinate reference system with linear units matching
+\code{max_d}. Values should be higher where movement is easier.}
 
 \item{r_source}{Optional \code{SpatRaster} representing source quality
 (default \code{NULL}). If only \code{r_target} is provided, it is used for both
@@ -49,8 +49,9 @@ the ConScape / ConScapeR environment.}
 \item{calibration_threshold}{Proximity target used to calibrate
 \code{distance_scale} at \code{max_d}. Default is \code{0.025}.}
 
-\item{trim_threshold}{Maximum proximity expected at the retained tile
-boundary after trimming. Smaller values create larger tile overlaps.
+\item{trim_threshold}{Maximum sampled proximity at or beyond the suggested
+buffer distance on the calibration landscape. Not a bound on total
+raster error. Smaller values create larger tile overlaps.
 Default is \code{0.01}.}
 
 \item{tile_width}{Optional target interior tile width in map units. Use this
@@ -77,7 +78,7 @@ repeated calls with the same Julia path and process settings. Use
 \value{
 A named list of class \code{"ConScapeRtools_design"} with elements:
 \itemize{
-\item \code{distance_scale} – calibrated exponential decay parameter (numerator of
+\item \code{distance_scale} – calibrated exponential decay parameter (denominator of
 \code{exp(-dist / distance_scale)}) to pass to \code{\link[=run_conscape]{run_conscape()}}. Also
 accessible as \code{exp_d} for backwards compatibility.
 \item \code{exp_d} – same as \code{distance_scale}; retained for backwards compatibility.
@@ -113,8 +114,11 @@ randomized shortest-path model from the center cell, and calibrates the decay
 so that proximity at \code{max_d} drops to \code{calibration_threshold}.
 }
 \details{
-The input \code{r_mov} must be in a projected CRS so that cell resolution and
-\code{max_d} are expressed in compatible distance units. Only the cell
+The input \code{r_mov} must use linear coordinates so cell resolution and
+\code{max_d} have compatible distance units. Geographic longitude/latitude
+rasters are rejected. A missing CRS is accepted only under the user's
+assumption that the coordinates already have the intended linear units.
+Only the cell
 resolution and maximum values of \code{r_mov}, \code{r_source}, and \code{r_target}
 are used: the function constructs a fully connected synthetic landscape
 whose size is chosen so that the center cell can reach at least \code{max_d},
@@ -124,12 +128,17 @@ connected while avoiding an expensive all-targets cost matrix.
 
 A ConScape \code{Grid} and \code{GridRSP} object are then created, and expected
 costs are computed from the center cell to all others. The decay parameter
-\code{distance_scale} is chosen by 1D optimization so that the exponential
-proximity at the cell closest to \code{max_d} drops to a specified threshold.
+\code{distance_scale} is calculated exactly as \code{-cost / log(calibration_threshold)}
+using the expected cost at the cell closest to \code{max_d}. It is not rounded
+or constrained to a fixed optimization interval.
 The synthetic calibration raster extends beyond \code{max_d} when needed so that
 the requested trim threshold can be evaluated directly on sampled cells.
 \code{distance_scale} remains in ConScape expected-cost units, while \code{tile_trim}
 is looked up as a map distance from the calibrated cost-to-proximity curve.
+The selected distance is beyond all sampled cells above \code{trim_threshold}.
+Calibration fails if no such distance is sampled. This finite, ideal-habitat
+calculation does not establish an error bound on a heterogeneous landscape;
+validate convergence by increasing the buffer on representative inputs.
 This value is then used to derive:
 \itemize{
 \item \code{tile_trim} from \code{trim_threshold} in map units, so tile-edge influence is explicit,

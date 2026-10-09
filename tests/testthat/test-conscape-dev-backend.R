@@ -1,12 +1,15 @@
-test_that("experimental backend writes inputs and returns documented diagnostics", {
+test_that("disabled experimental backend preserves outputs and never starts Julia", {
   r <- make_test_raster(n = 4, vals = 1)
-  out_dir <- file.path(tempdir(), "direct-dev-backend")
+  out_dir <- tempfile("disabled-dev-backend-")
+  dir.create(out_dir)
+  sentinel <- file.path(out_dir, "keep.txt")
+  writeLines("must survive", sentinel)
   old_env <- Sys.getenv(
     c("JULIA_BINDIR", "JULIA_NUM_THREADS", "JULIA_PROJECT"),
     unset = NA_character_
   )
 
-  out <- testthat::with_mocked_bindings(
+  expect_error(testthat::with_mocked_bindings(
     getFromNamespace("run_conscape_dev_backend", "ConScapeRtools")(
       conscape_prep = NULL,
       out_dir = out_dir,
@@ -38,8 +41,8 @@ test_that("experimental backend writes inputs and returns documented diagnostics
       blas_threads = 1L,
       stop_julia = TRUE
     ),
-    prepare_conscape_dev_project = function(...) "C:/Julia/dev-project",
-    conscape_julia_start = function(...) invisible(NULL),
+    prepare_conscape_dev_project = function(...) stop("must not install"),
+    conscape_julia_start = function(...) stop("must not start Julia"),
     stop_conscape_julia = function() invisible(NULL),
     juliaEval = function(...) invisible(NULL),
     juliaLet = function(expr, ...) {
@@ -55,20 +58,9 @@ test_that("experimental backend writes inputs and returns documented diagnostics
       invisible(NULL)
     },
     .package = "ConScapeRtools"
-  )
-
-  expect_s4_class(out, "SpatRaster")
-  diagnostics <- attr(out, "ConScapeRtools_diagnostics")
-  expect_identical(diagnostics$backend, "conscape_dev")
-  expect_identical(diagnostics$dev_mode, "windowed")
-  expect_identical(diagnostics$workers, 2L)
-  expect_identical(diagnostics$centersize, 2L)
-  expect_true(all(file.exists(diagnostics$output_files)))
-  expect_true(all(file.exists(file.path(
-    out_dir,
-    "dev_inputs",
-    c("target_qualities.tif", "source_qualities.tif", "affinities.tif")
-  ))))
+  ), "disabled in this release")
+  expect_identical(readLines(sentinel), "must survive")
+  expect_identical(list.files(out_dir), "keep.txt")
   expect_identical(
     Sys.getenv(names(old_env), unset = NA_character_),
     old_env

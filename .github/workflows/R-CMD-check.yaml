@@ -1,7 +1,8 @@
 "on":
   push:
-    branches: [main, master]
+    branches: [main, master, 'codex/**']
   pull_request:
+  workflow_dispatch:
 
 name: R-CMD-check
 
@@ -39,7 +40,10 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck
+          extra-packages: |
+            any::rcmdcheck
+            any::pkgload
+            any::testthat
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
@@ -48,3 +52,31 @@ jobs:
           error-on: '"warning"'
           check-dir: '"check"'
           upload-results: always
+
+      # CRAN checks deliberately skip Julia. Exercise the real registered
+      # backend separately on all three release platforms.
+      - uses: julia-actions/setup-julia@v3
+        if: matrix.config.r == 'release'
+        with:
+          version: '1.12'
+
+      - uses: julia-actions/cache@v3
+        if: matrix.config.r == 'release'
+        with:
+          delete-old-caches: 'false'
+
+      - name: Install registered ConScape for integration tests
+        if: matrix.config.r == 'release'
+        run: julia --startup-file=no -e 'using Pkg; Pkg.add(PackageSpec(name="ConScape", version="0.3.0")); Pkg.status()'
+        shell: bash
+
+      - name: Test real Julia workflows
+        if: matrix.config.r == 'release'
+        shell: Rscript {0}
+        env:
+          RUN_CONSCAPERTOOLS_INTEGRATION: 'true'
+          NOT_CRAN: 'true'
+        run: |
+          Sys.setenv(CONSCAPERTOOLS_JL_HOME = dirname(Sys.which("julia")))
+          pkgload::load_all()
+          testthat::test_local(stop_on_failure = TRUE)

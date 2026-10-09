@@ -90,8 +90,7 @@ Even with both preconditions satisfied, tiled sensitivity is a
 tile-local approximation to landscape-level sensitivity. Each tile
 computes the derivative of its own per-tile landscape summary, not
 the global one, and \code{\link[=run_conscape]{run_conscape()}} mean-mosaics overlapping
-per-tile estimates. The approximation converges to the untiled
-answer as buffer grows; see
+per-tile estimates. Assess how error changes as the buffer grows; see
 \code{tests/testthat/test-sensitivity-convergence.R} for a reproducible
 convergence sweep. Use \code{landscape_measure = "sum"} for the most
 defensible tiled estimator. \code{landscape_measure = "eigenanalysis"}

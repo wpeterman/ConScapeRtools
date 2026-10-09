@@ -1,0 +1,25 @@
+ConScape tile design summary
+           parameter        value
+      distance_scale 3.831466e+00
+               theta 1.000000e-01
+              tile_d 5.400000e+03
+           tile_trim 1.350000e+03
+          centersize 2.000000e+01
+              buffer 5.000000e+00
+            landmark 5.000000e+00
+      trim_threshold 5.000000e-02
+ expected_tile_count 8.800000e+01
+ overlap_area_factor 2.250000e+00
+   proximity_at_trim 2.250296e-02
+                                               description
+   Exponential distance-decay numerator for run_conscape()
+    Randomized shortest-path theta used during calibration
+                     Suggested minimum interior tile width
+      Suggested minimum tile overlap and mosaic trim width
+      Equivalent center width in cells for conscape_prep()
+      Equivalent buffer width in cells for conscape_prep()
+          Landmark value used to round tile width and trim
+          Requested maximum proximity at the trim distance
+               Expected number of interior tiles for r_mov
+ Extended tile area divided by retained interior tile area
+         Expected proximity at the effective trim distance

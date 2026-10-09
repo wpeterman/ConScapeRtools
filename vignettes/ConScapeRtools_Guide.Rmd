@@ -188,43 +188,48 @@ when ConScape solves the per-tile linear system
 - `"full"` keeps every cell of the buffered tile as a target. Each tile
   produces a full surface and overlapping tiles are averaged with
   `mosaic_conscape(method = "mosaic")` (the legacy default). The averaged
-  estimator is **biased**: each tile undercounts targets that fall in other
-  tiles. Use `"full"` only to reproduce results from earlier ConScapeRtools
-  versions; expect smoothing artifacts near tile borders.
+  surface is a tile-local approximation: each tile omits targets outside its
+  graph, and graph boundaries also change path probabilities. The error is
+  not guaranteed to be negative. Use `"full"` for legacy comparisons or
+  tile-local sensitivity and criticality, with explicit convergence checks.
 
 `run_conscape()` reads `prep$target_mode` and selects the matching mosaic
 reduction automatically, so the two defaults stay aligned without further
 configuration.
 
+These comparisons require the same target representation. With `landmark > 1L`,
+partial blocks and masked landmark locations can change the reachable target
+quality. The runner warns when that total changes and stops if it loses all
+reachable targets. Use `landmark = 1L` for uncoarsened reference comparisons.
+
 ### Convergence behavior in practice
 
-Both `"center"` (sum mosaic) and `"full"` (mean mosaic) tile modes converge
-to the untiled solution as buffer grows, by two different mechanisms:
+Both `"center"` (sum mosaic) and `"full"` (mean mosaic) can approach the
+untiled solution as buffers cover more of the graph. Check this on your data;
+neither the error direction nor monotonic improvement is guaranteed.
 
 * `"center"` + sum mosaic: each tile restricts targets to its center cells
   and sums per-cell contributions across overlapping tiles. The reconstruction
   omits source-target contributions that require context outside the relevant
   tile buffer. Under exponential distance decay,
-  `exp(-buffer / distance_scale)` describes the proximity assigned at the
-  buffer edge. It is a calibration guide, not a bound on total raster error.
+  `exp(-expected_cost / distance_scale)` describes proximity, where
+  `expected_cost` is a graph-derived cost, not the buffer width in map units.
+  The ideal-habitat calibration is a guide, not a bound on total raster error.
   Total error also depends on source and target weights, the number and
   arrangement of omitted targets, and paths through the affinity surface.
 
 * `"full"` + mean mosaic: each tile keeps full buffered targets and computes
-  a per-cell fcon biased low because it cannot see targets in other tiles.
+  a per-cell fcon from that local graph.
   As buffer grows toward the landscape size, each tile's view approaches the
-  full untiled landscape and the bias shrinks; the mean of many near-correct
+  full untiled landscape and the discrepancy shrinks; the mean of near-correct
   per-tile estimates approaches the untiled value.
 
-**Why `"center"` is still the default.** The two modes' per-cell errors are
-comparable at small buffer. The decisive difference is per-tile compute:
-each tile in `"center"` mode solves `Z = (I - W) \ I_target` over only its
-center-cell target columns, so per-tile cost stays bounded as the landscape
-grows. `"full"` mode requires every tile to solve `Z` over its full
-buffered target set, which becomes prohibitive on landscapes too large to
-fit in a single tile's buffered window. If a landscape *is* small enough
-that every tile's buffered window covers most of it, you should typically
-not be tiling at all.
+**Why `"center"` is the default.** It partitions the target columns instead
+of repeatedly solving all buffered targets. Both modes keep per-window graph
+size bounded as the landscape grows at fixed center and buffer widths, but
+center mode avoids overlapping target solves. Actual accuracy and runtime
+depend on the landscape. If an untiled graph fits comfortably in RAM, compare
+its runtime and results before choosing a tiled analysis.
 
 A reproducible convergence comparison on the package data lives at
 `tests/testthat/test-tiled-untiled-convergence.R`. With `centersize = 20`,
@@ -244,8 +249,9 @@ untiled reference, both modes, buffer values 5 to 40):
   full_mean     40    0.97     0.024
 ```
 
-Both modes converge to near-zero error at large buffer; `"center"` is the
-scalable choice.
+Both modes have much smaller errors at the largest buffer in this example.
+The remaining error is measurable; these results do not certify another
+landscape or parameter setting.
 
 # Running Connectivity Metrics
 
@@ -295,12 +301,17 @@ cs_more <- run_conscape(
   theta = td$theta,
   distance_scale = td$distance_scale,
   metrics = c("connected_habitat", "betweenness_kweighted",
-              "betweenness_qweighted", "criticality"),
+              "betweenness_qweighted"),
   jl_home = jl_home
 )
 ```
 
-`criticality` is by far the most expensive metric: it re-solves the
+For `criticality`, use direct raster inputs for a landscape-level result or
+create a separate prep with `target_mode = "full"` for tile-local estimates.
+Criticality is not an additive center-target contribution, so center-mode
+prep is rejected. Its connectivity function must be `"expected_cost"`.
+
+`criticality` is an expensive metric: it recalculates the
 randomized-shortest-path problem with each habitat cell removed in turn, so its
 cost scales with the number of cells in each tile. On a large or effectively
 untiled landscape it can run for many minutes per tile and may look like it is
@@ -537,27 +548,30 @@ Before running a large analysis:
    `td$diagnostics$overlap_area_factor` and
    `td$diagnostics$proximity_at_effective_trim` before launching a large run.
 3. Before launching, run `window_design_scenarios(r, design = td)` to
-   see how per-window peak RAM, window count, and total workload would
-   change at alternative `centersize` values. Pass `target_ram_gb` and
-   `workers` to flag the largest `centersize` that fits your machine's
-   memory budget; adjusting `centersize` does not change the
-   mathematical answer, only the per-window memory footprint and
-   throughput. See the "Tile sizing: RAM, throughput, and tradeoffs"
+   compare single-matrix storage, window count, and cell-pair workload at
+   alternative `centersize` values. `target_ram_gb` and `workers` screen
+   candidates by their matrix-storage proxy, not total process memory.
+   Benchmark a representative tile and check convergence after changing
+   centersize, since finite graph boundaries can change the approximation.
+   See the "Tile sizing: RAM, throughput, and tradeoffs"
    subsection of `vignette("Tiled_ConScape_Validation_and_Performance",
    package = "ConScapeRtools")`.
 4. Choose `theta` based on the movement model: small values (near 0) allow more
    random movement; large values approach deterministic least-cost paths.
 5. Leave `target_mode` at its default. `"auto"` resolves to `"center"` for any
    tiled run, which restricts each tile's RSP absorbing target set to the tile
-   center and combines outputs with a sum mosaic. This converges to the untiled
-   solution as the buffer grows. Pass `target_mode = "full"` only when
-   reproducing older results that depended on the legacy mean-mosaic estimator.
+   center and combines outputs with a sum mosaic. Validate its finite-buffer
+   approximation against an untiled reference. Use `target_mode = "full"` for
+   legacy comparisons or tile-local sensitivity and criticality.
 6. Use `landmark > 1L` for faster default metric runs when coarse-grained target
    qualities are acceptable.
 7. Use `landmark = 1L` for sensitivity workflows to keep target and source
    qualities identical.
 8. Start with the default `metrics` (`connected_habitat` and
    `betweenness_kweighted`) before adding additional metrics or sensitivity.
+   Their default expected-cost calculation reuses one sparse factorization
+   and solves at most 128 target columns at once. Other requests can still
+   require full source-by-target matrices, so benchmark memory separately.
 9. Add sensitivity outputs only after the base workflow is verified and stable.
 10. Compare tiled and untiled runs on a small landscape crop before scaling up.
     The convergence test (`tests/testthat/test-tiled-untiled-convergence.R`)

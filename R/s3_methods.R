@@ -104,8 +104,8 @@ summary.ConScapeRtools_design <- function(object, ...) {
       "Randomized shortest-path theta used during calibration",
       "Suggested minimum interior tile width",
       "Suggested minimum tile overlap and mosaic trim width",
-      "Equivalent center window size for WindowedProblem",
-      "Equivalent buffer width for WindowedProblem",
+      "Equivalent center width in cells for conscape_prep()",
+      "Equivalent buffer width in cells for conscape_prep()",
       "Landmark value used to round tile width and trim",
       "Requested maximum proximity at the trim distance",
       "Expected number of interior tiles for r_mov",
@@ -213,7 +213,7 @@ plot.ConScapeRtools_design <- function(x, ...) {
   )
   graphics::barplot(
     vals,
-    ylab = "Map units",
+    ylab = "Value (distance_scale: cost units; tile sizes: map units)",
     main = "ConScape Tile Design",
     ...
   )

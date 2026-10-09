@@ -27,7 +27,9 @@ retained as deprecated aliases for backwards compatibility.
 
 In ConScape terminology, habitat rasters supply source and target qualities,
 while the movement raster is an affinity/permeability surface that is
-converted into a sparse graph adjacency matrix. Movement costs are derived
+converted into a sparse graph adjacency matrix. The default expected-cost
+metrics use an equivalent target-block implementation instead of storing a
+full \code{GridRSP} object. Movement costs are derived
 from affinities via a named transformation (e.g., \code{"minuslog"}) or a custom
 Julia lambda string.
 }

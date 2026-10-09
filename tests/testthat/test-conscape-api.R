@@ -4,6 +4,8 @@ test_that("conscape_api_slots exposes the ConScape crosswalk", {
   expect_s3_class(slots, "data.frame")
   expect_true(all(c("slot", "run_conscape", "conscape_prep", "julia") %in% names(slots)))
   expect_true(all(c("target_qualities", "source_qualities", "affinities") %in% slots$slot))
+  expect_match(slots$julia[slots$slot == "theta"], "\u03b8 = ", fixed = TRUE)
+  expect_match(slots$julia[slots$slot == "theta"], "streamed expected-cost", fixed = TRUE)
 })
 
 test_that("conscape_sensitivity validates and names sensitivity requests", {

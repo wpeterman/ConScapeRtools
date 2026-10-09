@@ -50,14 +50,18 @@ merged raster. Can be a proj4string, EPSG code (e.g. \code{"EPSG:4326"}),
 or a CRS taken from a \code{SpatRaster}. If \code{NULL} (default), the CRS of
 the first tile is retained.}
 
-\item{chunk_size}{Maximum number of tile rasters to read and combine at
-once. If there are more tiles than \code{chunk_size}, temporary intermediate
-mosaics are written and then combined in a final pass.}
+\item{chunk_size}{Maximum number of raster sources per reduction batch.
+Intermediate batches are reduced recursively, using disk-backed,
+double-precision rasters. A value of 1 uses pairwise reduction (2 sources).
+Smaller batches limit memory pressure but increase temporary-file I/O.}
 }
 \value{
 A \code{SpatRaster} representing the combined ConScape surface. Overlapping
 margins are retained for \code{method = "sum"} and trimmed for the other methods.
 The optional CRS and mask are applied before the raster is returned.
+The result is backed by a temporary GeoTIFF for the current R session.
+Use \code{\link[terra:writeRaster]{terra::writeRaster()}} to save a durable result outside the tile and
+run working directories.
 }
 \description{
 After running \code{\link[=run_conscape]{run_conscape()}} on tiled landscapes, this function
@@ -80,16 +84,18 @@ posed:
 \item \code{"sum"} adds tile values cell-wise, treating \code{NA} as 0. This is the
 correct reduction when each cell appears as a \emph{target} in exactly one
 tile (the \code{target_mode = "center"} case in \code{\link[=conscape_prep]{conscape_prep()}}). Each
-each tile contributes the source quality times the sum of target quality
+tile contributes the source quality times the sum of target quality
 and proximity over targets in that tile's center
 and similar partial sums for betweenness; summing over tiles recovers the
 full source-to-target sum up to paths that exit the tile buffer.
 \item \code{"mosaic"} averages tile values where they overlap (\code{terra::mosaic} with
 \code{fun = "mean"}). For additive connectivity metrics, this is the legacy
-reduction for \code{target_mode = "full"}; each tile undercounts targets in
-other tiles, so the average is biased. Sensitivity and elasticity surfaces
+reduction for \code{target_mode = "full"}. Omitted targets and changed graph
+boundaries affect this approximation; its error need not be negative.
+Sensitivity and elasticity surfaces
 are tile-local estimates rather than partial sums, so \code{\link[=run_conscape]{run_conscape()}}
-also uses this mean reduction for those layers.
+also uses this mean reduction for those layers and for tile-local
+criticality. Criticality cannot use center-target sum reduction.
 \item \code{"merge"} (\code{terra::merge}) fills cells with the first non-\code{NA} tile value
 encountered. Useful for diagnostics and for non-overlapping tiles.
 }

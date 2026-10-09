@@ -1,0 +1,37 @@
+Recorded: 2026-10-08 20:56:18.37192
+Julia: 1.12.6; ConScape 0.3.0; tree 1534b7983fcf3f52d1e84e2d148625342842d614
+R version 4.6.1 (2026-06-24 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 26200)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=en_US.UTF-8  LC_CTYPE=en_US.UTF-8    LC_MONETARY=en_US.UTF-8
+[4] LC_NUMERIC=C            LC_TIME=en_US.UTF-8
+
+time zone: America/New_York
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+other attached packages:
+[1] terra_1.9-34          ConScapeRtools_0.4.31 testthat_3.3.2
+
+loaded via a namespace (and not attached):
+ [1] digest_0.6.39        desc_1.4.3           R6_2.6.1
+ [4] codetools_0.2-20     magrittr_2.0.5       parallel_4.6.1
+ [7] JuliaConnectoR_1.1.6 lifecycle_1.0.5      cli_3.6.6
+[10] parallelly_1.47.0    future_1.70.0        withr_3.0.3
+[13] pkgload_1.5.2        compiler_4.6.1       rprojroot_2.1.1
+[16] globals_0.19.1       tools_4.6.1          pkgbuild_1.4.8
+[19] brio_1.1.5           future.apply_1.20.2  listenv_0.10.1
+[22] Rcpp_1.1.2           otel_0.2.0           rlang_1.3.0
+[25] crayon_1.5.3
+Input and source MD5:
+          inst/extdata/conscape.jl       inst/extdata/suitability.asc
+"e06911e1804a056c164995a710a4ae13" "214f7c5254a14efb743d8b9cbb4c10d3"
+         inst/extdata/affinity.asc
+"f9d9d3814a1b587c477f55205cc50370"

@@ -38,9 +38,10 @@
 #'   merged raster. Can be a proj4string, EPSG code (e.g. `"EPSG:4326"`),
 #'   or a CRS taken from a `SpatRaster`. If `NULL` (default), the CRS of
 #'   the first tile is retained.
-#' @param chunk_size Maximum number of tile rasters to read and combine at
-#'   once. If there are more tiles than `chunk_size`, temporary intermediate
-#'   mosaics are written and then combined in a final pass.
+#' @param chunk_size Maximum number of raster sources per reduction batch.
+#'   Intermediate batches are reduced recursively, using disk-backed,
+#'   double-precision rasters. A value of 1 uses pairwise reduction (2 sources).
+#'   Smaller batches limit memory pressure but increase temporary-file I/O.
 #'
 #' @details
 #' For `method = "mosaic"` and `method = "merge"`, `tile_trim` is converted to
@@ -56,16 +57,18 @@
 #' * `"sum"` adds tile values cell-wise, treating `NA` as 0. This is the
 #'   correct reduction when each cell appears as a *target* in exactly one
 #'   tile (the `target_mode = "center"` case in [conscape_prep()]). Each
-#'   each tile contributes the source quality times the sum of target quality
+#'   tile contributes the source quality times the sum of target quality
 #'   and proximity over targets in that tile's center
 #'   and similar partial sums for betweenness; summing over tiles recovers the
 #'   full source-to-target sum up to paths that exit the tile buffer.
 #' * `"mosaic"` averages tile values where they overlap (`terra::mosaic` with
 #'   `fun = "mean"`). For additive connectivity metrics, this is the legacy
-#'   reduction for `target_mode = "full"`; each tile undercounts targets in
-#'   other tiles, so the average is biased. Sensitivity and elasticity surfaces
+#'   reduction for `target_mode = "full"`. Omitted targets and changed graph
+#'   boundaries affect this approximation; its error need not be negative.
+#'   Sensitivity and elasticity surfaces
 #'   are tile-local estimates rather than partial sums, so [run_conscape()]
-#'   also uses this mean reduction for those layers.
+#'   also uses this mean reduction for those layers and for tile-local
+#'   criticality. Criticality cannot use center-target sum reduction.
 #' * `"merge"` (`terra::merge`) fills cells with the first non-`NA` tile value
 #'   encountered. Useful for diagnostics and for non-overlapping tiles.
 #'
@@ -83,6 +86,9 @@
 #' A `SpatRaster` representing the combined ConScape surface. Overlapping
 #' margins are retained for `method = "sum"` and trimmed for the other methods.
 #' The optional CRS and mask are applied before the raster is returned.
+#' The result is backed by a temporary GeoTIFF for the current R session.
+#' Use [terra::writeRaster()] to save a durable result outside the tile and
+#' run working directories.
 #'
 #' @export
 #' @examples
@@ -171,7 +177,7 @@ mosaic_conscape <- function(out_dir,
   }
   if (!is.numeric(chunk_size) || length(chunk_size) != 1L ||
       is.na(chunk_size) || !is.finite(chunk_size) || chunk_size < 1 ||
-      chunk_size != floor(chunk_size)) {
+      chunk_size != floor(chunk_size) || chunk_size > .Machine$integer.max) {
     stop("chunk_size must be a single positive integer", call. = FALSE)
   }
   chunk_size <- as.integer(chunk_size)
@@ -183,6 +189,9 @@ mosaic_conscape <- function(out_dir,
   }
 
   first_tile <- terra::rast(tile_files[1])
+  if (!is.null(mask) && (!inherits(mask, "SpatRaster") || terra::nlyr(mask) != 1L)) {
+    stop("mask must be a single-layer SpatRaster", call. = FALSE)
+  }
 
   # Trimming semantics depend on the reduction method.
   #
@@ -214,6 +223,12 @@ mosaic_conscape <- function(out_dir,
 
   read_tile <- function(file, trim = TRUE) {
     x <- terra::rast(file)
+    if (terra::nlyr(x) != 1L || !terra::same.crs(first_tile, x) ||
+        !isTRUE(all.equal(terra::res(first_tile), terra::res(x))) ||
+        !isTRUE(all.equal(terra::origin(first_tile), terra::origin(x)))) {
+      stop("Tiles must be single-layer rasters with matching CRS, resolution, and grid origin.",
+           call. = FALSE)
+    }
     if (isTRUE(trim) && (trim_cols > 0L || trim_rows > 0L)) {
       e   <- terra::ext(x)
       rx  <- terra::res(x)[1]
@@ -240,92 +255,65 @@ mosaic_conscape <- function(out_dir,
     x
   }
 
-  # NA-as-zero helper used by the "sum" reduction. ConScape writes NA into
-  # cells outside the tile's analysis area (e.g., cells masked out by
-  # target_threshold or outside the buffered window). For a sum mosaic those
-  # absent contributions must be 0, not NA, or terra::mosaic would propagate
-  # NA across the whole landscape.
-  zero_out_na <- function(r) {
-    vals <- terra::values(r, mat = FALSE)
-    vals[!is.finite(vals)] <- 0
-    out <- r
-    terra::values(out) <- vals
-    out
-  }
+  # Keep only bounded batches of file-backed rasters. Intermediates use doubles
+  # so chunking does not silently round contributions to 32-bit floats.
+  tmp_dir <- tempfile("conscape-mosaic-")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+  temp_raster <- function() tempfile(tmpdir = tmp_dir, fileext = ".tif")
+  wopt <- list(datatype = "FLT8S")
+  fan_in <- max(2L, chunk_size)
 
-  combine_files <- function(files, trim = TRUE) {
-    r_list <- lapply(files, read_tile, trim = trim)
-    rc <- terra::sprc(r_list)
-    if (method == "sum") {
-      rc_zero <- terra::sprc(lapply(r_list, zero_out_na))
-      terra::mosaic(rc_zero, fun = "sum")
-    } else if (method == "mosaic") {
-      terra::mosaic(rc, fun = "mean")
+  combine <- function(files, fun, trim = FALSE) {
+    layers <- lapply(files, read_tile, trim = trim)
+    if (identical(fun, "merge")) {
+      terra::merge(terra::sprc(layers), filename = temp_raster(), wopt = wopt)
     } else {
-      terra::merge(rc)
+      terra::mosaic(terra::sprc(layers), fun = fun,
+                    filename = temp_raster(), wopt = wopt)
     }
   }
-
-  combine_sum_count <- function(files, trim = TRUE) {
-    r_list <- lapply(files, read_tile, trim = trim)
-    sum_list <- lapply(r_list, function(x) {
-      y <- x
-      vals <- terra::values(y, mat = FALSE)
-      vals[is.na(vals)] <- 0
-      terra::values(y) <- vals
-      y
-    })
-    count_list <- lapply(r_list, function(x) {
-      y <- x
-      vals <- terra::values(y, mat = FALSE)
-      vals <- ifelse(is.na(vals), 0, 1)
-      terra::values(y) <- vals
-      y
-    })
-    list(
-      sum = terra::mosaic(terra::sprc(sum_list), fun = "sum"),
-      count = terra::mosaic(terra::sprc(count_list), fun = "sum")
-    )
+  reduce_files <- function(files, fun) {
+    while (length(files) > 1L) {
+      groups <- split(files, ceiling(seq_along(files) / fan_in))
+      files <- vapply(groups, function(group) {
+        if (length(group) == 1L) return(group)
+        terra::sources(combine(group, fun))[1L]
+      }, character(1))
+    }
+    terra::rast(files[[1L]])
   }
 
-  if (length(tile_files) <= chunk_size) {
-    r_out <- combine_files(tile_files, trim = TRUE)
-  } else if (method %in% c("merge", "sum")) {
-    # `merge` and `sum` are both associative: combining chunks of partial
-    # results is equivalent to one-shot combine. For `sum`, NAs are already
-    # treated as zeros inside `combine_files`, so the same recursion works.
-    chunks <- split(tile_files, ceiling(seq_along(tile_files) / chunk_size))
-    tmp_dir <- tempfile("conscape_mosaic_chunks_")
-    dir.create(tmp_dir, recursive = TRUE)
-    on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
-
-    tmp_files <- character(length(chunks))
-    for (i in seq_along(chunks)) {
-      chunk_rast <- combine_files(chunks[[i]], trim = TRUE)
-      tmp_files[i] <- file.path(tmp_dir, paste0("chunk_", i, ".tif"))
-      terra::writeRaster(chunk_rast, tmp_files[i], overwrite = TRUE)
+  groups <- split(tile_files, ceiling(seq_along(tile_files) / fan_in))
+  sums <- counts <- character(length(groups))
+  for (i in seq_along(groups)) {
+    if (method == "merge") {
+      part <- combine(groups[[i]], "merge", trim = TRUE)
+    } else {
+      layers <- lapply(groups[[i]], read_tile)
+      # Raster arithmetic streams through terra; no full values() or xy matrix.
+      clean <- lapply(layers, function(x) {
+        valid <- if (method == "sum") is.finite(x) else !is.na(x)
+        terra::ifel(valid, x, 0, filename = temp_raster(), wopt = wopt)
+      })
+      part <- terra::mosaic(terra::sprc(clean), fun = "sum",
+                            filename = temp_raster(), wopt = wopt)
+      if (method == "mosaic") {
+        present <- lapply(layers, function(x) {
+          terra::ifel(is.na(x), 0, 1, filename = temp_raster(), wopt = wopt)
+        })
+        count <- terra::mosaic(terra::sprc(present), fun = "sum",
+                               filename = temp_raster(), wopt = wopt)
+        counts[i] <- terra::sources(count)[1L]
+      }
     }
-    r_out <- combine_files(tmp_files, trim = FALSE)
-  } else {
-    # method == "mosaic" (mean). Chunked mean = chunked sum / chunked count.
-    chunks <- split(tile_files, ceiling(seq_along(tile_files) / chunk_size))
-    tmp_dir <- tempfile("conscape_mosaic_chunks_")
-    dir.create(tmp_dir, recursive = TRUE)
-    on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
-
-    sum_files <- character(length(chunks))
-    count_files <- character(length(chunks))
-    for (i in seq_along(chunks)) {
-      chunk <- combine_sum_count(chunks[[i]], trim = TRUE)
-      sum_files[i] <- file.path(tmp_dir, paste0("sum_", i, ".tif"))
-      count_files[i] <- file.path(tmp_dir, paste0("count_", i, ".tif"))
-      terra::writeRaster(chunk$sum, sum_files[i], overwrite = TRUE)
-      terra::writeRaster(chunk$count, count_files[i], overwrite = TRUE)
-    }
-    total <- combine_sum_count(sum_files, trim = FALSE)$sum
-    counts <- combine_sum_count(count_files, trim = FALSE)$sum
-    r_out <- total / counts
-    r_out[counts == 0] <- NA
+    sums[i] <- terra::sources(part)[1L]
+  }
+  r_out <- reduce_files(sums, if (method == "merge") "merge" else "sum")
+  if (method == "mosaic") {
+    count <- reduce_files(counts, "sum")
+    r_out <- terra::ifel(count > 0, r_out / count, NA,
+                         filename = temp_raster(), wopt = wopt)
   }
 
   # Apply CRS if provided
@@ -340,7 +328,7 @@ mosaic_conscape <- function(out_dir,
     out_crs <- terra::crs(r_out)
     has_mask_crs <- !is.null(mask_crs) && length(mask_crs) == 1L && !is.na(mask_crs) && nzchar(mask_crs)
     has_out_crs <- !is.null(out_crs) && length(out_crs) == 1L && !is.na(out_crs) && nzchar(out_crs)
-    if (has_mask_crs && has_out_crs && mask_crs != out_crs) {
+    if (has_mask_crs && has_out_crs && !terra::same.crs(mask, r_out)) {
       stop("CRS of mask and r_out differ")
     }
     if (has_mask_crs && !has_out_crs) terra::crs(r_out) <- mask_crs
@@ -374,5 +362,8 @@ mosaic_conscape <- function(out_dir,
 
   # Clean names
   names(r_out) <- sub("-.*", "", names(r_out))
-  return(r_out)
+  # The returned raster must not reference files removed by on.exit(). Let terra
+  # manage this final backing file for the remainder of the R session.
+  terra::writeRaster(r_out, tempfile("conscape-mosaic-result-", fileext = ".tif"),
+                      wopt = wopt)
 }

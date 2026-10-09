@@ -64,7 +64,7 @@ test_that("Tiled ConScape vignette documents validation and dev-backend status",
   # Title + structure
   expect_match(vignette, "Tiled ConScape: Validation and Performance", fixed = TRUE)
   expect_match(vignette, "# Identity Validation", fixed = TRUE)
-  expect_match(vignette, "Wall-clock timing", fixed = TRUE)
+  expect_match(vignette, "Results: wall-clock timing", fixed = TRUE)
   expect_match(vignette, "# Decision Tree", fixed = TRUE)
   expect_match(vignette, "# Troubleshooting", fixed = TRUE)
 
@@ -76,6 +76,8 @@ test_that("Tiled ConScape vignette documents validation and dev-backend status",
   expect_match(vignette, "# Experimental: Dev Backend", fixed = TRUE)
   expect_match(vignette, "9aa05cc0b0c22b9d815d3051925010a2344eada0", fixed = TRUE)
   expect_match(vignette, "MethodError: no method matching write", fixed = TRUE)
+  expect_match(vignette, "disabled in this release", fixed = TRUE)
+  expect_match(vignette, "current-kernel-benchmarks", fixed = TRUE)
   expect_false(grepl("validate_workflows_summary.rds", vignette, fixed = TRUE))
 })
 
@@ -88,7 +90,10 @@ test_that("threaded Julia batch avoids per-thread output redirection", {
   distributed <- paste(readLines(distributed_file, warn = FALSE), collapse = "\n")
 
   expect_match(conscape, "function _with_conscape_logging\\(f::Function, quiet::Bool\\)")
-  expect_match(batch, "sensitivity_require_landmark_one,\\s*false\\)")
+  # Quiet mode now uses a task-local logger, never process-wide redirection.
+  expect_match(batch, "sensitivity_require_landmark_one,\\s*true\\)")
+  expect_match(conscape, "Logging.with_logger", fixed = TRUE)
+  expect_match(conscape, "quiet ? Logging.Warn : Logging.Info", fixed = TRUE)
   expect_match(batch, 'result in \\("done", "skipped_empty_targets"\\)', fixed = FALSE)
   expect_false(grepl("redirect_stdout\\(devnull\\)", batch))
   expect_false(grepl("redirect_stdout\\(devnull\\)", distributed))

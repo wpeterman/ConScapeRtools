@@ -2,6 +2,9 @@
 #
 # This example uses the package data shipped with ConScapeRtools. It is not run
 # automatically because it installs and calls a development branch of ConScape.jl.
+# The backend is disabled in 0.4.31: the pinned upstream solve is nonfunctional.
+# The historical calls below are retained only to guide a future upstream repair.
+stop('The experimental backend is disabled. Use conscape_prep() and run_conscape(backend = "classic").')
 
 library(ConScapeRtools)
 library(terra)

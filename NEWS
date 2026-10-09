@@ -1,3 +1,30 @@
+ConScapeRtools 0.4.31
+---------
+* Streamed the default expected-cost metrics in bounded target blocks using one
+  sparse factorization. The full per-tile graph and scientific weights are
+  preserved; floating-point reduction order can differ from upstream ConScape.
+* Disabled the nonfunctional experimental development backend before Julia
+  startup or output deletion, retaining its arguments and documented history.
+* Added real registered-ConScape integration checks on Windows, macOS, and Linux,
+  target-block equivalence tests, larger benchmarks, and refreshed validation data.
+* Reused proximity calculations for the two default metrics, bypassed redundant
+  landmark-one coarse graining, and removed unnecessary Julia module proxies.
+* Bounded distributed scheduling to one active solve per worker and initialized
+  Julia once per R-worker batch. BLAS limits now apply to serial runs too.
+* Cropped prep windows without extending full input landscapes. Mosaics now use
+  recursive disk-backed reductions, double-precision intermediates, and backing
+  files that remain readable after the function returns.
+* Fixed directory inputs dropping all but one tile, validated matched triplets
+  before execution, and protected input data before clearing working directories.
+  Automatic mosaicking now refuses incomplete output sets.
+* Preserved CRS in tile polygons, warned when coarse graining changes reachable
+  target quality, and rejected coarse graining that removes all targets.
+* Rejected center-mode criticality and silent loss of disconnected habitat.
+  Calibrated exponential decay analytically, selected buffer distances beyond
+  samples above the requested threshold, and reported effective tile geometry.
+* Corrected matrix-memory proxies and finite-buffer accuracy claims, isolated
+  test mocks, and added numerical, scheduling, path-safety, and benchmark checks.
+
 ConScapeRtools 0.4.30
 ---------
 * Updated the cross-platform check workflow to use the current checkout action

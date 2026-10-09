@@ -59,7 +59,7 @@ test_that("conscape_prep rejects incompatible raster geometry", {
       landmark = 5L,
       progress = FALSE
     ),
-    "same resolution"
+    "share resolution"
   )
 })
 
@@ -186,7 +186,7 @@ test_that("conscape_prep rejects incompatible raster extent", {
       landmark = 5L,
       progress = FALSE
     ),
-    "same extent"
+    "share extent"
   )
 })
 
@@ -208,7 +208,7 @@ test_that("conscape_prep protects non-empty output directories", {
       landmark = 5L,
       progress = FALSE
     ),
-    "asc_dir is not empty"
+    "Files currently exist"
   )
 })
 test_that("conscape_prep restores the GDAL PAM setting", {

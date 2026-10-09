@@ -47,13 +47,22 @@ cells.}
 \value{
 A named list of class \code{"ConScapeRtools_window_design"} with:
 \itemize{
-\item \code{centersize} and \code{buffer} in cells for \code{run_conscape()}.
+\item \code{centersize} and \code{buffer} in cells for \code{\link[=conscape_prep]{conscape_prep()}}.
 \item \code{tile_d} and \code{tile_trim} in map units for \code{\link[=conscape_prep]{conscape_prep()}}.
-\item \code{run_args}, a small list suitable for \code{run_conscape(..., backend = "conscape_dev")}.
+\item \code{centersize_map} and \code{buffer_map}: the same geometry in map units.
+\item \code{landmark}: the integer coarse-graining interval.
+\item \code{theta} and \code{distance_scale}: values copied from \code{design}, or \code{NA}.
+\item \code{run_args}: cell-unit arguments retained for the disabled dev backend.
 \item \code{prep_args}, a small list suitable for \code{\link[=conscape_prep]{conscape_prep()}} center-buffer
 preparation.
-\item \code{diagnostics}, including expected window count, source/context window
-cells, center cells, overlap area factor, and a workload proxy.
+\item \code{classic_prep_args}: equivalent map-unit preparation arguments.
+\item \code{diagnostics}: raster \code{nrow}, \code{ncol}, \code{resolution}; development-window
+starting cells \code{starts_x}, \code{starts_y} and their \code{expected_windows} count;
+\code{center_cells}, \code{source_window_cells}, \code{total_window_width_cells},
+\code{overlap_area_factor}, \code{workload_proxy}, and \code{landmark_aligned}.
+The retained development-window counts exclude outer buffers, unlike
+externally padded classic tiles. Use \code{\link[=window_design_scenarios]{window_design_scenarios()}} for
+classic tile counts and full-matrix storage proxies.
 }
 }
 \description{
@@ -107,9 +116,10 @@ context.
 \item Inspect \code{overlap_area_factor}. Values near 2 to 4 are often reasonable
 starting points. Very large values mean the buffer dominates the center,
 so most compute is repeated context.
-\item Use \code{dev_mode = "windowed"} first to test correctness and API behavior.
-Use \code{dev_mode = "batch"} when the same design should be scheduled as
-resumable on-disk jobs.
+\item Pass \code{prep_args} to \code{\link[=conscape_prep]{conscape_prep()}} and use the classic backend.
+The experimental dev backend is disabled because its audited upstream
+revision fails. \code{run_args} is retained for future upstream repair, not
+as a working alternative to the classic workflow.
 }
 }
 \examples{

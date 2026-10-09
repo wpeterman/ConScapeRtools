@@ -3,9 +3,9 @@
 #' @description
 #' After you have a calibrated tile or window design from [tile_design()] or
 #' [window_design()], you usually want to know what changing `centersize`
-#' would buy you: how much per-window RAM you would save, how many more
-#' (or fewer) windows you would solve, and whether the change is "free"
-#' in the sense of preserving the mathematical answer.
+#' would buy you: how matrix storage changes and how many more
+#' (or fewer) windows you would solve. These proxies identify candidates
+#' for benchmarking; they do not establish runtime, peak RAM, or accuracy.
 #' `window_design_scenarios()` sweeps a vector of candidate `centersize`
 #' values while holding `buffer`, `landmark`, and the landscape fixed, and
 #' returns a one-row-per-scenario summary of those tradeoffs.
@@ -23,61 +23,48 @@
 #'   sizes in cells. When `NULL` (default), a geometric sweep
 #'   `c(1, 1/2, 1/4, 1/8) * design$centersize` is built, snapped to
 #'   multiples of `landmark` so coarse-grained target cells stay aligned.
+#'   Explicit candidates are rounded up to multiples of `landmark`.
 #'   Candidates smaller than `landmark` or larger than the raster are
 #'   dropped.
 #' @param buffer Fixed buffer width in cells (the biological-calibration
-#'   parameter). When `NULL` (default), taken from `design`.
+#'   parameter). When `NULL` (default), taken from `design`. Rounded up to
+#'   a multiple of `landmark`, with a minimum of `landmark` when it exceeds 1.
 #' @param landmark Fixed coarse-graining window size in cells. When `NULL`
 #'   (default), taken from `design`, then `10L`.
 #' @param workers Integer number of parallel workers to model.
-#'   `total_ram_gb` in the output is the system-wide peak,
+#'   `total_ram_gb` in the output is the combined single-matrix proxy,
 #'   `workers * ram_per_window_gb`. Default `1L`.
 #' @param target_ram_gb Optional numeric. If supplied, the output gains a
 #'   logical column `recommended` flagging the **largest** `centersize`
 #'   whose `total_ram_gb` is at or below the target. Larger centers are
 #'   preferred at a given RAM budget because they minimize dispatch
-#'   overhead.
+#'   overhead. A flagged row is a candidate for benchmarking, not a guarantee
+#'   that the full run fits in RAM.
 #'
 #' @details
-#' What changes when you adjust `centersize`:
+#' The memory proxy counts one dense double-precision matrix of size
+#' `source_window_cells * target_cells_after_landmark`. It is not a peak-RAM
+#' estimate or upper bound. ConScape also needs sparse factorizations and
+#' several dense work arrays; parallel processes have separate runtime costs.
+#' Benchmark a representative tile and leave memory for these allocations.
+#' The default expected-cost metrics now solve target columns in blocks of
+#' at most 128. The reported full-matrix proxy is retained for comparison and
+#' for other metrics, not a prediction of the default streaming solver's RAM.
 #'
-#' * **Per-window peak RAM** scales as `8 * (centersize + 2*buffer)^2 *
-#'   (centersize / landmark)^2` bytes (8 bytes per double, dominant
-#'   contribution from the `Z = (I - W) \ I_target` block). Halving
-#'   centersize drops per-window RAM by roughly a factor of four for the
-#'   target block alone, and more once the smaller `(I - W)` factor is
-#'   counted.
-#' * **Window count** scales inversely with `centersize^2`. Smaller
-#'   centers mean more windows and more fixed dispatch overhead per
-#'   window.
-#' * **Total `workload_proxy`** = `landscape_area * (centersize +
-#'   2*buffer)^2`. As `centersize` shrinks, `workload_proxy` also
-#'   shrinks, approaching `landscape_area * (2*buffer)^2` for very
-#'   small centers. The savings come at the price of repeating per-tile
-#'   `(I - W)` factorization more times.
+#' Smaller centers reduce the number of target columns per solve but increase
+#' the number of graph factorizations. The workload proxy does not model this
+#' tradeoff fully and cannot predict wall-clock time.
 #'
-#' What does **not** change:
+#' The target metric is unchanged by centersize, but its tiled approximation
+#' can change: different centers define different finite graph boundaries.
+#' Check convergence after changing centersize as well as buffer. With
+#' `landmark > 1L`, coarse graining is another approximation, especially near
+#' missing cells and partial edge blocks. Landmark-aligned layouts preserve
+#' nominal grid positions, not guaranteed agreement with an uncoarsened run.
 #'
-#' * The mathematical quantity computed. The mosaicked `fcon` / `btwn` /
-#'   etc. surface comes from the same `Z = (I - W) \ I_target` algebra
-#'   in every scenario.
-#' * Buffer-truncation error, which is governed by `buffer` and
-#'   `distance_scale`, not by `centersize`.
-#' * The interpretation of any reported quantity.
-#'
-#' With `landmark > 1L`, ConScape's coarse graining places one target
-#' per `landmark` cells **within each tile**. Changing `centersize` then
-#' shifts the absolute positions of those landmark targets, which
-#' produces small per-cell jitter on the mosaicked surface but no change
-#' in scale, sign, or interpretation. For strict reproducibility across
-#' centersize choices, build the prep with `landmark = 1L`.
-#'
-#' Memory estimates assume ConScape's dense back-solve regime
-#' (`Z = (I - W) \ I_target` over `K = (centersize / landmark)^2`
-#' columns). They are upper bounds for typical 2D-grid problems where
-#' the sparse LU factor of `(I - W)` has `O(S^1.5)` fill-in rather than
-#' the `S^2` dense storage assumed here. Treat `ram_per_window_gb` as a
-#' worst-case envelope.
+#' Counts describe classic, externally padded tiles created by
+#' [conscape_prep()], before empty-target tiles are removed. Experimental dev
+#' windows use different edge handling; use [window_design()] for those counts.
 #'
 #' @return
 #' A data frame of class `"ConScapeRtools_scenarios"` with one row per
@@ -88,18 +75,18 @@
 #'   graph size.
 #' * `center_cells`: `centersize^2`, retained as RSP targets.
 #' * `target_cells_after_landmark`: `center_cells / landmark^2`, the
-#'   number of `Z` columns ConScape actually solves per window.
+#'   potential number of `Z` columns before masking and edge effects.
 #' * `expected_windows`: approximate tile count over `r`.
-#' * `ram_per_window_gb`: peak RAM per single window solve, in GB.
-#'   Worst-case envelope (see Details).
+#' * `ram_per_window_gb`: storage for one dense source-by-target matrix in
+#'   decimal GB, assuming a fully populated window. Excludes solver workspaces.
 #' * `total_ram_gb`: `workers * ram_per_window_gb`, the system-wide
-#'   peak when running `workers` solves in parallel.
+#'   single-matrix storage when running `workers` solves in parallel.
 #' * `overlap_area_factor`: `source_window_cells / center_cells`. A
 #'   measure of buffer overhead per retained center cell. Values near
 #'   2 are efficient; large values mean most per-tile work is repeated
 #'   buffer context.
 #' * `workload_proxy`: `expected_windows * source_window_cells *
-#'   center_cells`. Tracks total wall-clock work for the run.
+#'   center_cells`. A relative cell-pair count, not elapsed time.
 #' * `recommended`: logical, only when `target_ram_gb` is supplied.
 #'   `TRUE` for the largest `centersize` whose `total_ram_gb` is at or
 #'   below the target.
@@ -167,6 +154,9 @@ window_design_scenarios <- function(r = NULL,
   }
   if (is.null(landmark)) landmark <- 10L
   validate_positive_scalar(landmark, "landmark")
+  if (landmark != floor(landmark) || landmark > .Machine$integer.max) {
+    stop("landmark must be a positive integer.", call. = FALSE)
+  }
   landmark <- as.integer(landmark)
 
   if (is.null(buffer)) {
@@ -174,17 +164,19 @@ window_design_scenarios <- function(r = NULL,
          call. = FALSE)
   }
   validate_nonnegative_scalar(buffer, "buffer")
-  buffer <- as.integer(buffer)
+  buffer <- as.integer(ceiling(max(buffer, floor(landmark / 2)) / landmark) * landmark)
+  if (is.na(buffer)) stop("buffer is too large.", call. = FALSE)
 
   if (!is.numeric(workers) || length(workers) != 1L ||
-      is.na(workers) || workers < 1) {
+      is.na(workers) || !is.finite(workers) || workers < 1 ||
+      workers != floor(workers) || workers > .Machine$integer.max) {
     stop("`workers` must be a positive integer.", call. = FALSE)
   }
   workers <- as.integer(workers)
 
   if (!is.null(target_ram_gb)) {
     if (!is.numeric(target_ram_gb) || length(target_ram_gb) != 1L ||
-        is.na(target_ram_gb) || target_ram_gb <= 0) {
+        is.na(target_ram_gb) || !is.finite(target_ram_gb) || target_ram_gb <= 0) {
       stop("`target_ram_gb` must be NULL or a single positive numeric.",
            call. = FALSE)
     }
@@ -204,10 +196,11 @@ window_design_scenarios <- function(r = NULL,
     centersize <- sort(unique(as.integer(snapped)), decreasing = TRUE)
   } else {
     if (!is.numeric(centersize) || any(is.na(centersize)) ||
-        any(centersize <= 0)) {
+        !length(centersize) || any(!is.finite(centersize)) || any(centersize <= 0) ||
+        any(centersize > .Machine$integer.max)) {
       stop("`centersize` must be a positive numeric vector.", call. = FALSE)
     }
-    centersize <- sort(unique(as.integer(centersize)), decreasing = TRUE)
+    centersize <- sort(unique(as.integer(ceiling(centersize / landmark) * landmark)), decreasing = TRUE)
   }
 
   ## ---- per-candidate diagnostics ------------------------------------------
@@ -215,9 +208,7 @@ window_design_scenarios <- function(r = NULL,
     if (!is.null(r)) {
       ncols <- terra::ncol(r)
       nrows <- terra::nrow(r)
-      starts_x <- window_starts(ncols, cs, buffer)
-      starts_y <- window_starts(nrows, cs, buffer)
-      expected_windows <- as.integer(length(starts_x) * length(starts_y))
+      expected_windows <- ceiling(ncols / cs) * ceiling(nrows / cs)
     } else if (!is.null(design$diagnostics$expected_windows) &&
                !is.null(design$centersize)) {
       # Fall back to scaling the reference window count by area ratio.
@@ -227,8 +218,8 @@ window_design_scenarios <- function(r = NULL,
       expected_windows <- NA_integer_
     }
 
-    source_window_cells <- as.numeric((cs + 2L * buffer)^2)
-    center_cells <- as.numeric(cs^2)
+    source_window_cells <- (as.numeric(cs) + 2 * buffer)^2
+    center_cells <- as.numeric(cs)^2
     target_after_lm <- center_cells / as.numeric(landmark)^2
     overlap_area_factor <- source_window_cells / center_cells
 
@@ -303,9 +294,9 @@ print.ConScapeRtools_scenarios <- function(x, ...) {
   if (!is.null(target)) {
     cat("  target system RAM (GB): ", target, "\n", sep = "")
   }
-  cat("  ram_per_window_gb is a worst-case envelope ",
+  cat("  ram_per_window_gb counts one matrix, not peak RAM or an upper bound ",
       "(8 * source_window_cells * center_cells / landmark^2 / 1e9)\n", sep = "")
-  cat("  workload_proxy scales with total wall-clock work\n\n")
+  cat("  workload_proxy counts cell pairs; benchmark actual runtime and peak RAM\n\n")
 
   display <- as.data.frame(unclass(x))
   display$source_window_cells <- format(display$source_window_cells,
@@ -324,12 +315,12 @@ print.ConScapeRtools_scenarios <- function(x, ...) {
   print.data.frame(display, row.names = FALSE)
   if (!is.null(target) && any(x$recommended)) {
     rec <- x$centersize[x$recommended]
-    cat("\n  recommended centersize at RAM budget ", target, " GB: ",
-        rec, "\n", sep = "")
+    cat("\n  centersize candidate under the matrix-storage budget ", target, " GB: ",
+        rec, "; benchmark before committing to a full run\n", sep = "")
   } else if (!is.null(target)) {
     cat("\n  no candidate centersize fits within ", target, " GB on ",
-        workers, " workers; consider increasing landmark or workers, ",
-        "or decreasing the target budget.\n", sep = "")
+        workers, " workers; consider smaller centers, fewer workers, ",
+        "or a larger budget. Increasing landmark changes the approximation.\n", sep = "")
   }
   invisible(x)
 }

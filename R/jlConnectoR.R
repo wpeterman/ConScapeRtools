@@ -40,7 +40,8 @@ default_conscape_dev_project <- function() {
 }
 
 run_julia_command <- function(command, args = character(), stdout = TRUE, stderr = TRUE) {
-  system2(command, args = args, stdout = stdout, stderr = stderr)
+  # system2 quotes the executable, but callers must quote individual arguments.
+  system2(command, args = shQuote(args), stdout = stdout, stderr = stderr)
 }
 
 prepare_conscape_dev_project <- function(jl_home,
@@ -109,6 +110,8 @@ prepare_conscape_dev_project <- function(jl_home,
 #'   `conscape_dev_backend_setup()` defaults to the audited commit
 #'   `"9aa05cc0b0c22b9d815d3051925010a2344eada0"` from the experimental
 #'   `alg_efficiency` branch;
+#'   that execution backend is disabled in this release. Its setup helper is
+#'   retained only for upstream investigation and does not enable execution.
 #'   `conscape_sensitivity_setup()` defaults to `"sensitivity"`.
 #' @param url Git URL for ConScape.jl.
 #' @param force Logical. If `TRUE`, remove any existing ConScape dependency
@@ -447,9 +450,9 @@ ConScapeR_setup <- function(julia_path, install_libraries = FALSE) {
   }
   check_julia_pkgs(required_pkgs)
 
-  SA <- juliaImport("SparseArrays")
-  CS <- juliaImport("ConScape")
-  invisible(juliaEval("using Logging"))
+  # Calls below use qualified Julia names. Building R proxy objects for every
+  # module member is unnecessary and leaves finalizers across session restarts.
+  invisible(juliaEval("using ConScape, SparseArrays, Statistics, Logging; nothing"))
 }
 
 #' Wrapper for the Grid function of `ConScape`

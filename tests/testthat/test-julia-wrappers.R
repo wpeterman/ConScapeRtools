@@ -19,7 +19,7 @@ test_that("Grid prepares raster inputs and dispatches to Julia", {
       calls[[length(calls) + 1L]] <<- list(code = code, args = list(...))
       structure(list(code = code), class = "julia_grid")
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 2, vals = c(1, NaN, 3, 4))
@@ -39,7 +39,7 @@ test_that("Grid handles matrix costs separately from transformed affinities", {
       captured <<- list(code = code, args = list(...))
       "grid"
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   affinities <- matrix(c(1, NaN, 3, 4), 2)
@@ -79,7 +79,7 @@ test_that("Julia wrapper functions pass expected code to juliaLet", {
       code_seen <<- c(code_seen, code)
       paste0("ok-", length(code_seen))
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   for (wrapper in wrappers) {

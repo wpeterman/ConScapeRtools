@@ -15,7 +15,9 @@
 #'
 #' In ConScape terminology, habitat rasters supply source and target qualities,
 #' while the movement raster is an affinity/permeability surface that is
-#' converted into a sparse graph adjacency matrix. Movement costs are derived
+#' converted into a sparse graph adjacency matrix. The default expected-cost
+#' metrics use an equivalent target-block implementation instead of storing a
+#' full `GridRSP` object. Movement costs are derived
 #' from affinities via a named transformation (e.g., `"minuslog"`) or a custom
 #' Julia lambda string.
 #'
@@ -71,7 +73,7 @@ conscape_api_slots <- function() {
       "ConScape.Grid(source_qualities = ...)",
       "ConScape.Grid(affinities = ConScape.graph_matrix_from_raster(...))",
       "ConScape.Grid(costs = ...)",
-      "ConScape.GridRSP(theta = ...)",
+      "ConScape.GridRSP(\u03b8 = ...) or streamed expected-cost factorization",
       "distance_transformation = x -> exp(-x / distance_scale)",
       "ConScape.coarse_graining(g, landmark)",
       "ConScape.expected_cost / least_cost_distance / free_energy_distance / survival_probability / power_mean_proximity",
@@ -127,8 +129,7 @@ conscape_api_slots <- function() {
 #' tile-local approximation to landscape-level sensitivity. Each tile
 #' computes the derivative of its own per-tile landscape summary, not
 #' the global one, and [run_conscape()] mean-mosaics overlapping
-#' per-tile estimates. The approximation converges to the untiled
-#' answer as buffer grows; see
+#' per-tile estimates. Assess how error changes as the buffer grows; see
 #' `tests/testthat/test-sensitivity-convergence.R` for a reproducible
 #' convergence sweep. Use `landscape_measure = "sum"` for the most
 #' defensible tiled estimator. `landscape_measure = "eigenanalysis"`
@@ -196,12 +197,19 @@ conscape_sensitivity <- function(wrt = c("Q", "A&C=f(A)"),
     stop("unitless must be TRUE or FALSE.", call. = FALSE)
   }
   if (!is.numeric(one_out_of) || length(one_out_of) != 1L ||
-      is.na(one_out_of) || one_out_of < 1) {
+      is.na(one_out_of) || !is.finite(one_out_of) || one_out_of < 1 ||
+      one_out_of > .Machine$integer.max || one_out_of != floor(one_out_of)) {
     stop("one_out_of must be a positive integer.", call. = FALSE)
   }
   if (!is.null(diagvalue) &&
       (!is.numeric(diagvalue) || length(diagvalue) != 1L || is.na(diagvalue))) {
     stop("diagvalue must be NULL or a single numeric value.", call. = FALSE)
+  }
+
+  for (flag in list(target_equal_source, require_landmark_one)) {
+    if (!is.logical(flag) || length(flag) != 1L || is.na(flag)) {
+      stop("target_equal_source and require_landmark_one must be TRUE or FALSE.", call. = FALSE)
+    }
   }
 
   out <- list(
@@ -371,7 +379,7 @@ conscape_metric_specs <- function() {
       dir = "criticality",
       prefix = "criticality",
       layer = "criticality",
-      mosaic_kind = "additive"
+      mosaic_kind = "averageable"
     )
   )
 }

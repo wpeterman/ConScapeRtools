@@ -10,8 +10,8 @@
 #' so that proximity at `max_d` drops to `calibration_threshold`.
 #'
 #' @param r_mov `SpatRaster` representing movement affinities/permeability.
-#'   Values should be in a projected coordinate reference system (map units in
-#'   meters) and should be higher where movement is easier.
+#'   Use a projected coordinate reference system with linear units matching
+#'   `max_d`. Values should be higher where movement is easier.
 #' @param r_source Optional `SpatRaster` representing source quality
 #'   (default `NULL`). If only `r_target` is provided, it is used for both
 #'   source and target.
@@ -30,8 +30,9 @@
 #'   the ConScape / ConScapeR environment.
 #' @param calibration_threshold Proximity target used to calibrate
 #'   `distance_scale` at `max_d`. Default is `0.025`.
-#' @param trim_threshold Maximum proximity expected at the retained tile
-#'   boundary after trimming. Smaller values create larger tile overlaps.
+#' @param trim_threshold Maximum sampled proximity at or beyond the suggested
+#'   buffer distance on the calibration landscape. Not a bound on total
+#'   raster error. Smaller values create larger tile overlaps.
 #'   Default is `0.01`.
 #' @param tile_width Optional target interior tile width in map units. Use this
 #'   when memory or runtime constraints require a specific tile size. If `NULL`,
@@ -51,8 +52,11 @@
 #'   [conscape_julia_stop()] when finished.
 #'
 #' @details
-#' The input `r_mov` must be in a projected CRS so that cell resolution and
-#' `max_d` are expressed in compatible distance units. Only the cell
+#' The input `r_mov` must use linear coordinates so cell resolution and
+#' `max_d` have compatible distance units. Geographic longitude/latitude
+#' rasters are rejected. A missing CRS is accepted only under the user's
+#' assumption that the coordinates already have the intended linear units.
+#' Only the cell
 #' resolution and maximum values of `r_mov`, `r_source`, and `r_target`
 #' are used: the function constructs a fully connected synthetic landscape
 #' whose size is chosen so that the center cell can reach at least `max_d`,
@@ -62,12 +66,17 @@
 #'
 #' A ConScape `Grid` and `GridRSP` object are then created, and expected
 #' costs are computed from the center cell to all others. The decay parameter
-#' `distance_scale` is chosen by 1D optimization so that the exponential
-#' proximity at the cell closest to `max_d` drops to a specified threshold.
+#' `distance_scale` is calculated exactly as `-cost / log(calibration_threshold)`
+#' using the expected cost at the cell closest to `max_d`. It is not rounded
+#' or constrained to a fixed optimization interval.
 #' The synthetic calibration raster extends beyond `max_d` when needed so that
 #' the requested trim threshold can be evaluated directly on sampled cells.
 #' `distance_scale` remains in ConScape expected-cost units, while `tile_trim`
 #' is looked up as a map distance from the calibrated cost-to-proximity curve.
+#' The selected distance is beyond all sampled cells above `trim_threshold`.
+#' Calibration fails if no such distance is sampled. This finite, ideal-habitat
+#' calculation does not establish an error bound on a heterogeneous landscape;
+#' validate convergence by increasing the buffer on representative inputs.
 #' This value is then used to derive:
 #'
 #' * `tile_trim` from `trim_threshold` in map units, so tile-edge influence is explicit,
@@ -81,7 +90,7 @@
 #' @return
 #' A named list of class `"ConScapeRtools_design"` with elements:
 #'
-#' * `distance_scale` – calibrated exponential decay parameter (numerator of
+#' * `distance_scale` – calibrated exponential decay parameter (denominator of
 #'   `exp(-dist / distance_scale)`) to pass to [run_conscape()]. Also
 #'   accessible as `exp_d` for backwards compatibility.
 #' * `exp_d` – same as `distance_scale`; retained for backwards compatibility.
@@ -146,7 +155,6 @@
 #' @rdname tile_design
 #' @importFrom crayon %+% green red bold cyan
 #' @importFrom JuliaConnectoR juliaEval juliaImport juliaSetupOk juliaFun stopJulia
-#' @importFrom stats optimize
 
 
 tile_design <- function(r_mov,
@@ -165,10 +173,10 @@ tile_design <- function(r_mov,
   if (is.null(r_source) && is.null(r_target)) {
     stop("At least one of r_source or r_target must be provided.")
   }
-  if (!is.numeric(max_d) || length(max_d) != 1L || is.na(max_d) || max_d <= 0) {
+  if (!is.numeric(max_d) || length(max_d) != 1L || is.na(max_d) || !is.finite(max_d) || max_d <= 0) {
     stop("max_d must be a single positive numeric value.", call. = FALSE)
   }
-  if (!is.numeric(theta) || length(theta) != 1L || is.na(theta) || theta <= 0) {
+  if (!is.numeric(theta) || length(theta) != 1L || is.na(theta) || !is.finite(theta) || theta <= 0) {
     stop("theta must be a single positive numeric value.", call. = FALSE)
   }
   if (!is.numeric(calibration_threshold) || length(calibration_threshold) != 1L ||
@@ -180,22 +188,24 @@ tile_design <- function(r_mov,
     stop("trim_threshold must be a single numeric value between 0 and 1.", call. = FALSE)
   }
   if (!is.numeric(overlap_area_factor) || length(overlap_area_factor) != 1L ||
-      is.na(overlap_area_factor) || overlap_area_factor <= 1) {
+      is.na(overlap_area_factor) || !is.finite(overlap_area_factor) || overlap_area_factor <= 1) {
     stop("overlap_area_factor must be a single numeric value greater than 1.", call. = FALSE)
   }
   if (!is.null(tile_width) &&
-      (!is.numeric(tile_width) || length(tile_width) != 1L || is.na(tile_width) || tile_width <= 0)) {
+      (!is.numeric(tile_width) || length(tile_width) != 1L || is.na(tile_width) || !is.finite(tile_width) || tile_width <= 0)) {
     stop("tile_width must be NULL or a single positive numeric value.", call. = FALSE)
   }
   if (!is.null(max_tile_cells) &&
       (!is.numeric(max_tile_cells) || length(max_tile_cells) != 1L ||
-       is.na(max_tile_cells) || max_tile_cells < 1)) {
+       is.na(max_tile_cells) || !is.finite(max_tile_cells) || max_tile_cells < 1)) {
     stop("max_tile_cells must be NULL or a single numeric value of at least 1.", call. = FALSE)
   }
   if (!is.null(tile_width) && !is.null(max_tile_cells)) {
     stop("Use either tile_width or max_tile_cells, not both.", call. = FALSE)
   }
-  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) || landmark < 1) {
+  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) ||
+      !is.finite(landmark) || landmark < 1 || landmark > .Machine$integer.max ||
+      landmark != floor(landmark)) {
     stop("landmark must be a positive integer.", call. = FALSE)
   }
   if (!is.logical(stop_julia) || length(stop_julia) != 1L || is.na(stop_julia)) {
@@ -203,10 +213,11 @@ tile_design <- function(r_mov,
   }
   landmark <- as.integer(landmark)
   if (isTRUE(stop_julia)) {
-    on.exit(stop_conscape_julia(), add = TRUE)
+    on.exit({
+      g <- h <- NULL
+      stop_conscape_julia()
+    }, add = TRUE)
   }
-
-  conscape_julia_start(jl_home, quiet = TRUE)
 
   if (!is.null(r_source) && is.null(r_target)) {
     r_target <- r_source
@@ -217,6 +228,16 @@ tile_design <- function(r_mov,
   }
 
   r_res <- terra::res(r_mov)
+  validate_conscape_rasters(list(r_mov))
+  if (nzchar(terra::crs(r_mov)) && isTRUE(terra::is.lonlat(r_mov))) {
+    stop("r_mov must use projected linear units, not longitude/latitude. Project the raster before calibration.",
+         call. = FALSE)
+  }
+  for (r in list(r_source, r_target)) {
+    if (!inherits(r, "SpatRaster") || terra::nlyr(r) != 1L) {
+      stop("Quality inputs must be single-layer SpatRaster objects.", call. = FALSE)
+    }
+  }
   resx <- r_res[1]
   resy <- r_res[2]
   trim_extent_factor <- max(1, log(trim_threshold) / log(calibration_threshold))
@@ -267,6 +288,7 @@ tile_design <- function(r_mov,
   max_cell <- which.min(abs(e_dist - max_d))
 
   # Create ConScape Grid
+  conscape_julia_start(jl_home, quiet = TRUE)
   g <- Grid(affinities = mov,
             sources = src,
             targets = target,
@@ -278,16 +300,12 @@ tile_design <- function(r_mov,
   dists <- expected_cost(h)
   dist_from_source <- expected_cost_from_source(dists, source_cell = center_cell)
 
-  exp_d <- optimize(exp_opt,
-                    dists = dist_from_source,
-                    cell = max_cell,
-                    threshold = calibration_threshold,
-                    interval = c(1,2500),
-                    tol = 0.001,
-                    maximum = T)
+  # Solve exp(-cost / scale) = threshold exactly, without an arbitrary search
+  # interval or rounding a small, valid scale to zero.
+  exp_d_val <- calibrate_distance_scale(dist_from_source[max_cell, 1], calibration_threshold)
 
   ## Trim and tile size
-  source_proximity <- exp(-dist_from_source[, 1] / exp_d$maximum)
+  source_proximity <- exp(-dist_from_source[, 1] / exp_d_val)
   requested_trim <- trim_distance_from_proximity(
     map_distance = e_dist,
     proximity = source_proximity,
@@ -313,7 +331,6 @@ tile_design <- function(r_mov,
     landmark = landmark
   )
 
-  exp_d_val <- as.numeric(round(exp_d$maximum, 1))
   effective_tile_width <- as.numeric(tile_layout$tile_width)
   effective_tile_trim <- as.numeric(tile_layout$tile_trim)
   realized_overlap_area_factor <- ((effective_tile_width + 2 * effective_tile_trim) /
@@ -376,7 +393,7 @@ tile_design <- function(r_mov,
               diagnostics = diagnostics)
 
   cat(green("\n" %+% cyan("     *** Tile Design Parameters ***") %+%"\n",
-            "Given a maximum dispersal of " %+% red$bold(max_d) %+%" meters,\n",
+            "Given a maximum dispersal of " %+% red$bold(max_d) %+%" map units,\n",
             "`distance_scale` should be set to: " %+% red$bold(out$distance_scale) %+% "\n\n",
             "`tile_d` should be at least: " %+% red$bold(out$tile_d) %+%",\n\n",
             "`tile_trim` should be at least: " %+% red$bold(out$tile_trim) %+%",\n\n",
@@ -388,6 +405,13 @@ tile_design <- function(r_mov,
 }
 
 # Optimization function ------------------------------------------------
+
+calibrate_distance_scale <- function(cost, threshold) {
+  if (length(cost) != 1L || !is.finite(cost) || cost <= 0) {
+    stop("Calibration requires a finite positive expected cost at max_d. Check affinities, resolution, and max_d.", call. = FALSE)
+  }
+  -cost / log(threshold)
+}
 
 exp_opt <- function(x, dists, cell, threshold){
   prox <- exp(-dists[,1] * (1/x))
@@ -434,7 +458,12 @@ trim_distance_from_proximity <- function(map_distance, proximity, threshold) {
     return(min(positive_distance))
   }
 
-  max(map_distance[above])
+  beyond <- ok & map_distance > max(map_distance[above])
+  if (!any(beyond)) {
+    stop("Calibration grid does not reach the requested trim_threshold. Do not use this grid to infer a sufficient buffer.",
+         call. = FALSE)
+  }
+  min(map_distance[beyond])
 }
 
 proximity_at_map_distance <- function(map_distance, proximity, distance) {

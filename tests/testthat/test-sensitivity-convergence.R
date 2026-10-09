@@ -1,33 +1,9 @@
-## Tiled-vs-untiled convergence diagnostics for SENSITIVITY outputs.
-##
-## Companion test to test-tiled-untiled-convergence.R (which exercises
-## the additive fcon / btwn outputs). This test exercises ConScape's
-## landscape-summary derivatives:
-##
-##   - elasticity_quality           (sensitivity = "Q", unitless)
-##   - elasticity_affinity_cost_linked  (sensitivity = "A&C=f(A)", unitless)
-##
-## Two things make sensitivity fundamentally different from fcon / btwn:
-##
-##   1. `ConScape.sensitivity` requires `target_equal_source = TRUE`. The
-##      corrected `target_mode = "center"` workflow sets target = center
-##      cells only and source = full buffered window, which violates that
-##      precondition inside every tile. Therefore center-mode sensitivity
-##      is rejected at the R API layer; this test only exercises
-##      `target_mode = "full"`.
-##
-##   2. Sensitivity surfaces are tile-local landscape-summary derivatives,
-##      not pairwise sums over target cells. There is no exact tile->whole
-##      mosaic identity even in the degenerate-coverage limit (because each
-##      tile's per-tile landscape summary differs from the global one).
-##      `mosaic_method` is therefore mean (the "mosaic" reduction in
-##      mosaic_conscape()), and the only claim we test is that the tiled
-##      surface CONVERGES toward the untiled surface as buffer grows.
-##
-## The runtime is dominated by the untiled sensitivity reference (one
-## landmark = 1 solve on the whole crop) plus the per-buffer tile runs.
-## Keep n small (~40x40) so the test completes in a few minutes on a
-## developer laptop.
+## Sensitivity convergence on a fixed package-data crop.
+## These are tile-local landscape-summary derivatives, not additive target
+## contributions. Full-target mode and landmark=1 preserve target/source equality.
+## Increasing the buffer is an empirical accuracy check, not a monotonic-error
+## theorem. At full graph coverage, matching summaries can agree with untiled.
+## The test compares endpoints and records intermediate errors for both outputs.
 
 integration_jl_home <- function() {
   candidates <- c(

@@ -132,9 +132,9 @@ using R (\code{future}/\code{future.apply}). If \code{FALSE} (default), parallel
 is handled entirely within Julia.}
 
 \item{backend}{Execution backend. \code{"classic"} uses the stable bundled Julia
-wrappers. \code{"conscape_dev"} is experimental and requires a ConScape
-development installation exposing \code{Problem}, \code{WindowedProblem}, and
-\code{solve}; \code{dev_mode = "batch"} additionally requires \code{BatchProblem}.}
+wrappers. \code{"conscape_dev"} is disabled in this release because its audited
+upstream revision is nonfunctional. It stops before starting Julia or
+modifying output files. Its arguments remain for a future upstream repair.}
 
 \item{tile_trim}{Width of the overlapping border in map units. When
 \code{conscape_prep} is supplied, this value is taken from that object and
@@ -209,9 +209,10 @@ This is opt-in because it downloads a development Git dependency.}
 Julia tile worker. The default, \code{1}, avoids oversubscribing CPU cores when
 ConScape is already parallelized across tiles.}
 
-\item{mosaic_chunk_size}{Positive integer giving the maximum number of output tiles to hold in memory
-during each mosaic batch. Smaller values reduce peak memory at the cost of
-more temporary files.}
+\item{mosaic_chunk_size}{Positive integer controlling raster sources per
+disk-backed mosaic batch. Intermediate reductions use the same limit,
+with a minimum of 2 sources. Smaller values reduce memory pressure at the
+cost of more temporary files. See \code{\link[=mosaic_conscape]{mosaic_conscape()}}.}
 
 \item{stop_julia}{Logical. If \code{TRUE} (default), close the Julia session when
 \code{run_conscape()} exits. Set to \code{FALSE} to keep Julia open for faster
@@ -284,9 +285,36 @@ workers (\code{TRUE}).
 
 The default run computes \code{connected_habitat} and \code{betweenness_kweighted},
 corresponding to the historical \code{fcon} and \code{btwn} output layers. Additional
-metrics are requested with \code{metrics}. All metrics are passed to the bundled
-Julia runner, which builds a single \code{GridRSP} object and then evaluates
-each requested surface on it.
+metrics are requested with \code{metrics}. For either or both default metrics
+with \code{connectivity_function = "expected_cost"} and no sensitivity request,
+the Julia runner reuses one sparse factorization and solves at most 128
+target columns at a time. This preserves the full per-tile graph and weights,
+with floating-point reduction differences, without storing all columns of
+the fundamental matrix. Other requests build a single \code{GridRSP} and use
+ConScape's kernels; both default metrics then share their proximity matrix.
+Distributed execution keeps at most one tile solve active per worker.
+Each R worker initializes Julia once per assigned tile batch. BLAS thread
+limits apply in every classic execution mode.
+
+Directory inputs must have identical, non-empty sets of \code{.asc} filenames,
+with matching single-layer geometry in each triplet. Manifest and geometry
+errors are rejected before clearing output directories. Incomplete tile outputs stop
+automatic mosaicking; with \code{mosaic = FALSE}, inspect the warning and
+\code{diagnostics$output_validation} before using any output.
+
+\code{criticality} is a cell-removal effect, not a partial sum over center
+targets. It requires \code{connectivity_function = "expected_cost"} and cannot
+be requested with center-mode prep. Use an untiled run for landscape-level
+criticality, or full-mode tiles for explicitly tile-local estimates, which
+use mean reduction.
+The classic ConScape graph retains its largest connected component. Runs
+now stop if that pruning would discard positive-quality cells with positive
+affinities. Analyze disconnected components separately rather than treating
+silently omitted habitat as zero connectivity.
+With \code{landmark > 1L}, partial blocks and landmarks outside the movement
+graph can change the reachable target-quality total. The runner warns
+when this happens and stops if all reachable target quality is lost.
+Use \code{landmark = 1L} to avoid these coarse-graining effects.
 
 Sensitivity outputs are requested by passing a \code{\link[=conscape_sensitivity]{conscape_sensitivity()}}
 specification to \code{sensitivity}. These surfaces are computed after the
@@ -316,8 +344,7 @@ Even with both constraints satisfied, tiled sensitivity is a
 tile-local approximation to landscape-level sensitivity: each tile
 computes the derivative of its own per-tile landscape summary, not
 the global one, and the mosaic step averages overlapping per-tile
-estimates. The approximation converges to the untiled sensitivity
-as \code{tile_trim} (buffer) grows -- see
+estimates. Assess how error changes as \code{tile_trim} (buffer) grows; see
 \code{tests/testthat/test-sensitivity-convergence.R}. For strict
 correctness, run sensitivity untiled when the landscape fits in a
 single graph.
@@ -325,9 +352,8 @@ single graph.
 \code{run_conscape()} mosaics sensitivity surfaces with \code{method = "mosaic"}
 (mean) regardless of \code{target_mode}, because sensitivity outputs are
 tile-local landscape-summary derivatives rather than pairwise sums.
-The mosaic dispatch is per output layer, so fcon / btwn can use
-sum mosaic while sensitivity uses mean mosaic in the same run when
-\code{target_mode = "full"} is in effect.
+Full-mode runs use mean reduction for both the connectivity and sensitivity
+layers. Center-mode runs support additive connectivity metrics only.
 }
 \examples{
 \dontrun{
@@ -416,59 +442,8 @@ plot(cs_serial$fcon - cs_single$fcon, main = "Tiled minus untiled")
 layerCor(c(cs_single$fcon, cs_serial$fcon), fun = "cor")
 layerCor(c(cs_single$btwn, cs_serial$btwn), fun = "cor")
 
-## Experimental ConScape dev backend using package data.
-## This creates or reuses a dedicated Julia project with ConScape's
-## development backend API.
-habitat_demo <- terra::crop(
-  habitat,
-  terra::ext(
-    terra::xmin(habitat),
-    terra::xmin(habitat) + 40 * terra::res(habitat)[1],
-    terra::ymax(habitat) - 40 * terra::res(habitat)[2],
-    terra::ymax(habitat)
-  ),
-  snap = "near"
-)
-affinity_demo <- terra::crop(affinity, terra::ext(habitat_demo), snap = "near")
-
-dev_project <- conscape_dev_backend_setup(
-  jl_home = jl_home,
-  rev = "9aa05cc0b0c22b9d815d3051925010a2344eada0"
-)
-
-cs_dev <- run_conscape(
-  target_qualities = habitat_demo,
-  source_qualities = habitat_demo,
-  affinities = affinity_demo,
-  out_dir = file.path(tempdir(), "conscape_dev_windowed"),
-  jl_home = jl_home,
-  backend = "conscape_dev",
-  dev_mode = "windowed",
-  centersize = 10,
-  buffer = 10,
-  dev_project = dev_project,
-  landmark = 1L,
-  theta = 0.15,
-  distance_scale = 150,
-  metrics = c("btwn", "fcon")
-)
-
-cs_dev_batch <- run_conscape(
-  target_qualities = habitat_demo,
-  source_qualities = habitat_demo,
-  affinities = affinity_demo,
-  out_dir = file.path(tempdir(), "conscape_dev_batch"),
-  jl_home = jl_home,
-  backend = "conscape_dev",
-  dev_mode = "batch",
-  centersize = 10,
-  buffer = 10,
-  dev_project = dev_project,
-  landmark = 1L,
-  theta = 0.15,
-  distance_scale = 150,
-  metrics = c("btwn", "fcon")
-)
+## The experimental dev backend is disabled. Its retained API and repair
+## criteria are documented in Tiled_ConScape_Validation_and_Performance.
 }
 }
 \seealso{

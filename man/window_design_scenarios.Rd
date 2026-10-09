@@ -30,24 +30,27 @@ which the default candidate sweep is built.}
 sizes in cells. When \code{NULL} (default), a geometric sweep
 \code{c(1, 1/2, 1/4, 1/8) * design$centersize} is built, snapped to
 multiples of \code{landmark} so coarse-grained target cells stay aligned.
+Explicit candidates are rounded up to multiples of \code{landmark}.
 Candidates smaller than \code{landmark} or larger than the raster are
 dropped.}
 
 \item{buffer}{Fixed buffer width in cells (the biological-calibration
-parameter). When \code{NULL} (default), taken from \code{design}.}
+parameter). When \code{NULL} (default), taken from \code{design}. Rounded up to
+a multiple of \code{landmark}, with a minimum of \code{landmark} when it exceeds 1.}
 
 \item{landmark}{Fixed coarse-graining window size in cells. When \code{NULL}
 (default), taken from \code{design}, then \code{10L}.}
 
 \item{workers}{Integer number of parallel workers to model.
-\code{total_ram_gb} in the output is the system-wide peak,
+\code{total_ram_gb} in the output is the combined single-matrix proxy,
 \code{workers * ram_per_window_gb}. Default \code{1L}.}
 
 \item{target_ram_gb}{Optional numeric. If supplied, the output gains a
 logical column \code{recommended} flagging the \strong{largest} \code{centersize}
 whose \code{total_ram_gb} is at or below the target. Larger centers are
 preferred at a given RAM budget because they minimize dispatch
-overhead.}
+overhead. A flagged row is a candidate for benchmarking, not a guarantee
+that the full run fits in RAM.}
 }
 \value{
 A data frame of class \code{"ConScapeRtools_scenarios"} with one row per
@@ -58,17 +61,17 @@ candidate \code{centersize}. Columns:
 graph size.
 \item \code{center_cells}: \code{centersize^2}, retained as RSP targets.
 \item \code{target_cells_after_landmark}: \code{center_cells / landmark^2}, the
-number of \code{Z} columns ConScape actually solves per window.
+potential number of \code{Z} columns before masking and edge effects.
 \item \code{expected_windows}: approximate tile count over \code{r}.
-\item \code{ram_per_window_gb}: peak RAM per single window solve, in GB.
-Worst-case envelope (see Details).
+\item \code{ram_per_window_gb}: storage for one dense source-by-target matrix in
+decimal GB, assuming a fully populated window. Excludes solver workspaces.
 \item \code{total_ram_gb}: \code{workers * ram_per_window_gb}, the system-wide
-peak when running \code{workers} solves in parallel.
+single-matrix storage when running \code{workers} solves in parallel.
 \item \code{overlap_area_factor}: \code{source_window_cells / center_cells}. A
 measure of buffer overhead per retained center cell. Values near
 2 are efficient; large values mean most per-tile work is repeated
 buffer context.
-\item \code{workload_proxy}: \code{expected_windows * source_window_cells * center_cells}. Tracks total wall-clock work for the run.
+\item \code{workload_proxy}: \code{expected_windows * source_window_cells * center_cells}. A relative cell-pair count, not elapsed time.
 \item \code{recommended}: logical, only when \code{target_ram_gb} is supplied.
 \code{TRUE} for the largest \code{centersize} whose \code{total_ram_gb} is at or
 below the target.
@@ -80,53 +83,37 @@ columns and highlights the recommended scenario when one is flagged.
 \description{
 After you have a calibrated tile or window design from \code{\link[=tile_design]{tile_design()}} or
 \code{\link[=window_design]{window_design()}}, you usually want to know what changing \code{centersize}
-would buy you: how much per-window RAM you would save, how many more
-(or fewer) windows you would solve, and whether the change is "free"
-in the sense of preserving the mathematical answer.
+would buy you: how matrix storage changes and how many more
+(or fewer) windows you would solve. These proxies identify candidates
+for benchmarking; they do not establish runtime, peak RAM, or accuracy.
 \code{window_design_scenarios()} sweeps a vector of candidate \code{centersize}
 values while holding \code{buffer}, \code{landmark}, and the landscape fixed, and
 returns a one-row-per-scenario summary of those tradeoffs.
 }
 \details{
-What changes when you adjust \code{centersize}:
-\itemize{
-\item \strong{Per-window peak RAM} scales as \code{8 * (centersize + 2*buffer)^2 * (centersize / landmark)^2} bytes (8 bytes per double, dominant
-contribution from the \verb{Z = (I - W) \\ I_target} block). Halving
-centersize drops per-window RAM by roughly a factor of four for the
-target block alone, and more once the smaller \code{(I - W)} factor is
-counted.
-\item \strong{Window count} scales inversely with \code{centersize^2}. Smaller
-centers mean more windows and more fixed dispatch overhead per
-window.
-\item \strong{Total \code{workload_proxy}} = \code{landscape_area * (centersize + 2*buffer)^2}. As \code{centersize} shrinks, \code{workload_proxy} also
-shrinks, approaching \code{landscape_area * (2*buffer)^2} for very
-small centers. The savings come at the price of repeating per-tile
-\code{(I - W)} factorization more times.
-}
+The memory proxy counts one dense double-precision matrix of size
+\code{source_window_cells * target_cells_after_landmark}. It is not a peak-RAM
+estimate or upper bound. ConScape also needs sparse factorizations and
+several dense work arrays; parallel processes have separate runtime costs.
+Benchmark a representative tile and leave memory for these allocations.
+The default expected-cost metrics now solve target columns in blocks of
+at most 128. The reported full-matrix proxy is retained for comparison and
+for other metrics, not a prediction of the default streaming solver's RAM.
 
-What does \strong{not} change:
-\itemize{
-\item The mathematical quantity computed. The mosaicked \code{fcon} / \code{btwn} /
-etc. surface comes from the same \verb{Z = (I - W) \\ I_target} algebra
-in every scenario.
-\item Buffer-truncation error, which is governed by \code{buffer} and
-\code{distance_scale}, not by \code{centersize}.
-\item The interpretation of any reported quantity.
-}
+Smaller centers reduce the number of target columns per solve but increase
+the number of graph factorizations. The workload proxy does not model this
+tradeoff fully and cannot predict wall-clock time.
 
-With \code{landmark > 1L}, ConScape's coarse graining places one target
-per \code{landmark} cells \strong{within each tile}. Changing \code{centersize} then
-shifts the absolute positions of those landmark targets, which
-produces small per-cell jitter on the mosaicked surface but no change
-in scale, sign, or interpretation. For strict reproducibility across
-centersize choices, build the prep with \code{landmark = 1L}.
+The target metric is unchanged by centersize, but its tiled approximation
+can change: different centers define different finite graph boundaries.
+Check convergence after changing centersize as well as buffer. With
+\code{landmark > 1L}, coarse graining is another approximation, especially near
+missing cells and partial edge blocks. Landmark-aligned layouts preserve
+nominal grid positions, not guaranteed agreement with an uncoarsened run.
 
-Memory estimates assume ConScape's dense back-solve regime
-(\verb{Z = (I - W) \\ I_target} over \code{K = (centersize / landmark)^2}
-columns). They are upper bounds for typical 2D-grid problems where
-the sparse LU factor of \code{(I - W)} has \code{O(S^1.5)} fill-in rather than
-the \code{S^2} dense storage assumed here. Treat \code{ram_per_window_gb} as a
-worst-case envelope.
+Counts describe classic, externally padded tiles created by
+\code{\link[=conscape_prep]{conscape_prep()}}, before empty-target tiles are removed. Experimental dev
+windows use different edge handling; use \code{\link[=window_design]{window_design()}} for those counts.
 }
 \examples{
 library(ConScapeRtools)

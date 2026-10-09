@@ -70,7 +70,9 @@ function conscape_batch(src_dir, mov_dir, target_dir, out_dir,
 
     # Align filenames across target/source/movement by basename.
     # This prevents accidental mixing of tiles when some files have been deleted.
-    bn = sort!(collect(intersect(intersect(Set(r_targets), Set(r_sources)), Set(r_res))))
+    Set(r_targets) == Set(r_sources) == Set(r_res) ||
+        throw(ArgumentError("Target, source, and movement tile filenames must match"))
+    bn = sort!(unique(r_targets))
     r_targets = bn
     r_sources = bn
     r_res     = bn
@@ -116,7 +118,7 @@ function conscape_batch(src_dir, mov_dir, target_dir, out_dir,
                                   sensitivity_diagvalue,
                                   sensitivity_target_equal_source,
                                   sensitivity_require_landmark_one,
-                                  false)
+                                  true)
 
                 if result in ("done", "skipped_empty_targets")
                     success = true

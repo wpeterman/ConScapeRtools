@@ -17,7 +17,7 @@
 ##                          (cell-unit center-buffer prep, otherwise identical
 ##                          to classic_tiled)
 ##   4. full_legacy       - conscape_prep(target_mode = "full") + run_conscape()
-##                          (biased mean-mosaic estimator; opt-in for legacy)
+##                          (tile-local mean-mosaic estimator; opt-in for legacy)
 ##   5. dev_windowed      - run_conscape(backend = "conscape_dev",
 ##                                       dev_mode = "windowed") [optional]
 ##   6. dev_batch         - run_conscape(backend = "conscape_dev",
@@ -32,8 +32,8 @@
 ## 1e-6. This full-coverage comparison should not contain measurable
 ## buffer-truncation error.
 ##
-## When the buffered window does NOT cover the full landscape, tiled outputs
-## CONVERGE to untiled as buffer grows but do not equal it exactly. That
+## When the buffered window does NOT cover the full landscape, test whether
+## error decreases as buffer grows. Monotonic convergence is not guaranteed. That
 ## convergence is exercised by tests/testthat/test-tiled-untiled-convergence.R.
 ##
 ## Usage:
@@ -72,20 +72,28 @@ crop_top_left <- function(r, n) {
 
 as_stack <- function(x) {
   if (inherits(x, "SpatRaster")) return(x)
+  if (is.null(x)) stop("A required workflow failed; no raster is available.")
   layers <- intersect(c("btwn", "fcon"), names(x))
+  if (!length(layers)) stop("No connectivity layers were returned.")
   do.call(c, lapply(layers, function(n) {
     r <- x[[n]]; names(r) <- n; r
   }))
 }
 
 agreement <- function(candidate, reference, label) {
+  if (!identical(names(candidate), names(reference))) stop("Output layers differ.")
+  terra::compareGeom(candidate, reference, stopOnError = TRUE)
   layers <- intersect(names(candidate), names(reference))
   do.call(rbind, lapply(layers, function(lyr) {
     diff <- terra::values(candidate[[lyr]] - reference[[lyr]], mat = FALSE)
     cand <- terra::values(candidate[[lyr]], mat = FALSE)
     refv <- terra::values(reference[[lyr]], mat = FALSE)
+    if (!identical(is.finite(cand), is.finite(refv))) {
+      stop("Output coverage differs for ", label, "/", lyr, ".")
+    }
     ok <- is.finite(diff) & is.finite(cand) & is.finite(refv)
     diff <- diff[ok]; cand <- cand[ok]; refv <- refv[ok]
+    if (!length(diff)) stop("No finite values available for comparison.")
     ref_scale <- max(abs(refv))
     cor_val <- if (length(diff) > 1L && sd(cand) > 0 && sd(refv) > 0) {
       suppressWarnings(cor(cand, refv))
@@ -354,7 +362,7 @@ validate_workflows <- function(jl_home    = Sys.getenv("CONSCAPERTOOLS_JL_HOME")
   cat("\n----- Identity validation: tiled vs untiled -----\n")
   cat(sprintf("Demo: %dx%d cells, centersize=%d, buffer=%d, theta=%g, distance_scale=%g\n",
               n_cells, n_cells, centersize, buffer, theta, distance_scale))
-  cat("identical_fp = TRUE when max_abs / max(|untiled|) < 1e-6 (floating-point tolerance)\n\n")
+  cat("identical_fp = TRUE when max_abs / max(1, max(|untiled|)) < 1e-6\n\n")
   print(summary, row.names = FALSE, digits = 4)
 
   cat("\n----- Wall-clock timing (proc.time elapsed seconds) -----\n")

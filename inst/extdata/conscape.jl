@@ -93,10 +93,10 @@ function _metric_specs(metrics, sensitivity_wrt, sensitivity_unitless)
 end
 
 function _ensure_output_dirs(out_dir, specs)
-    if !isdir(out_dir); mkdir(out_dir); end
+    mkpath(out_dir)
     for (_, (dir_name, _)) in specs
         outdir = joinpath(out_dir, dir_name)
-        if !isdir(outdir); mkdir(outdir); end
+        mkpath(outdir)
     end
 end
 
@@ -136,19 +136,132 @@ function _gridsrp_failure_message(e, mov_prob, hab_qual_source, coarse_target_qu
 end
 
 function _with_conscape_logging(f::Function, quiet::Bool)
-    if quiet
-        Logging.with_logger(Logging.NullLogger()) do
-            redirect_stdout(devnull) do
-                redirect_stderr(devnull) do
-                    f()
-                end
-            end
+    # Logger scope is task-local. Stream redirection is process-wide and unsafe
+    # when tiles run on different Julia threads. Numerical warnings stay visible.
+    Logging.with_logger(Logging.ConsoleLogger(stderr, quiet ? Logging.Warn : Logging.Info)) do
+        f()
+    end
+end
+
+# Reuse the proximity matrix when both default metrics are requested. These
+# calls use ConScape's own kernels, with exactly its target ordering and no
+# change to weights or diagonal treatment. No extra graph-sized cache survives.
+function _paired_metric_surfaces(h, conn_fun, distance_transformation)
+    proximity = conn_fun(h)
+    if conn_fun <: ConScape.DistanceFunction
+        map!(distance_transformation, proximity, proximity)
+    end
+    fcon = ConScape.connected_habitat(h, proximity)
+    targetidx, targetnodes = ConScape._targetidx_and_nodes(h.g)
+    coordinates = h.g.id_to_grid_coordinate_list
+    bet = ConScape.RSP_betweenness_kweighted(
+        h.W, h.Z,
+        [h.g.source_qualities[i] for i in coordinates],
+        [h.g.target_qualities[i] for i in intersect(coordinates, targetidx)],
+        proximity, targetnodes)
+    btwn = fill(NaN, h.g.nrows, h.g.ncols)
+    btwn[coordinates] = bet
+    return fcon, btwn
+end
+
+# The two default metrics are sums over targets. Solve their columns in bounded
+# blocks, reusing one sparse factorization for forward and transposed solves.
+# This is the same full-graph calculation, not an additional spatial
+# approximation. Only floating-point reduction order differs from ConScape.
+function _streamed_default_surfaces(g, theta, distance_transformation;
+                                    connected = true, between = true,
+                                    blocksize = 128)
+    blocksize > 0 || throw(ArgumentError("blocksize must be positive"))
+    coordinates = g.id_to_grid_coordinate_list
+    # Preserve the upstream node order, including explicitly stored sparse zeros.
+    targetidx = Set(ConScape._targetidx(g.target_qualities, coordinates))
+    targetnodes = findall(in(targetidx), coordinates)
+    isempty(targetnodes) && throw(ArgumentError("No retained target nodes"))
+    source = [g.source_qualities[i] for i in coordinates]
+    target = [g.target_qualities[coordinates[i]] for i in targetnodes]
+    W = ConScape._W(ConScape._Pref(g.affinities), theta, g.costmatrix)
+    factor = lu(I - W)
+    CW = g.costmatrix .* W
+    n = length(coordinates)
+    fcon = zeros(n)
+    btwn = zeros(n)
+    tiny_z = false
+    min_edge = minimum(nonzeros(CW))
+    for first in 1:blocksize:length(targetnodes)
+        cols = first:min(first + blocksize - 1, length(targetnodes))
+        nodes = targetnodes[cols]
+        rhs = zeros(n, length(cols))
+        for (j, node) in enumerate(nodes)
+            rhs[node, j] = 1.0
         end
-    else
-        Logging.with_logger(Logging.NullLogger()) do
-            f()
+        Z = factor \ rhs
+        tiny_z |= minimum(Z) * min_edge == 0
+        # Expected cost: (I-W)^-1 (C .* W) Z, divided by Z, then
+        # subtract each target's diagonal value before transforming distance.
+        K = factor \ (CW * Z)
+        K ./= Z
+        replace!(K, NaN => Inf)
+        diagonal = [K[node, j] for (j, node) in enumerate(nodes)]
+        K .-= diagonal'
+        map!(distance_transformation, K, K)
+        qt = target[cols]
+        if connected
+            fcon .+= source .* (K * qt)
+        end
+        if between
+            K .*= source .* qt'
+            # Scaling is local to a block and cancels after its linear solve.
+            # Keep upstream overflow protection and inverse-zero convention.
+            scale = max(1.0, maximum(K))
+            totals = vec(sum(K, dims = 1)) ./ scale
+            for j in axes(K, 2), i in axes(K, 1)
+                zi = inv(Z[i, j])
+                zi = isfinite(zi) ? zi : floatmax(Float64)
+                K[i, j] *= inv(scale) * zi
+            end
+            for (j, node) in enumerate(nodes)
+                zi = inv(Z[node, j])
+                K[node, j] -= totals[j] * (isfinite(zi) ? zi : floatmax(Float64))
+            end
+            B = factor' \ K
+            B .*= scale .* Z
+            btwn .+= vec(sum(B, dims = 2))
         end
     end
+    if tiny_z
+        @warn "Z-matrix contains too small values, which can lead to inaccurate results. Check graph connectivity or decrease theta."
+    end
+    function surface(values)
+        out = fill(NaN, g.nrows, g.ncols)
+        out[coordinates] = values
+        out
+    end
+    return connected ? surface(fcon) : nothing, between ? surface(btwn) : nothing
+end
+
+function _check_retained_habitat(g, movement, source, target)
+    retained = falses(size(movement))
+    retained[g.id_to_grid_coordinate_list] .= true
+    dropped = count(eachindex(movement)) do i
+        !retained[i] && movement[i] > 0 && (source[i] > 0 || target[i] > 0)
+    end
+    dropped == 0 || throw(ArgumentError(
+        "ConScape's largest-component pruning would discard $dropped positive-quality cells. " *
+        "Analyze disconnected components separately or revise the movement mask explicitly."))
+    nothing
+end
+
+function _check_coarse_target_mass(g, coarse, landmark)
+    landmark == 1 && return nothing
+    coordinates = g.id_to_grid_coordinate_list
+    original_mass = sum(g.target_qualities[i] for i in coordinates)
+    coarse_mass = sum(coarse[i] for i in coordinates)
+    original_mass > 0 && coarse_mass == 0 && throw(ArgumentError(
+        "Coarse graining removed all reachable target quality. Use landmark = 1 or revise the grid alignment."))
+    if !isapprox(original_mass, coarse_mass; rtol = 1e-10, atol = 0)
+        @warn "Coarse graining changed reachable target-quality total; use landmark = 1 to avoid masked-landmark and partial-block effects" landmark original_mass coarse_mass
+    end
+    nothing
 end
 
 function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_res,
@@ -208,6 +321,13 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                         throw(ErrorException("readasc r_res failed: $e"))
                     end
 
+                    for (label, values) in (("affinities", mov_prob),
+                                             ("source qualities", hab_qual_source),
+                                             ("target qualities", hab_qual_target))
+                        any(v -> !isnan(v) && (!isfinite(v) || v < 0), values) &&
+                            throw(ArgumentError("$label must contain non-negative finite values or NA"))
+                    end
+
                     try
                         mov_nan = isnan.(mov_prob)
 
@@ -240,12 +360,16 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                     catch e
                         throw(ErrorException("Grid construction failed: $e"))
                     end
+                    _check_retained_habitat(g, mov_prob, hab_qual_source, hab_qual_target)
 
                     coarse_target_qualities = try
-                        ConScape.coarse_graining(g, land_mark)
+                        # npix=1 is exactly the original target matrix. Skipping
+                        # coarse_graining also avoids its repeated node searches.
+                        land_mark == 1 ? g.target_qualities : ConScape.coarse_graining(g, land_mark)
                     catch e
                         throw(ErrorException("coarse_graining failed: $e"))
                     end
+                    _check_coarse_target_mass(g, coarse_target_qualities, land_mark)
 
                     has_targets(x) = x isa SparseMatrixCSC ? (nnz(x) > 0) : any(x .> 0.0)
 
@@ -262,7 +386,7 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                     end
 
                     g_coarse = try
-                        ConScape.Grid(size(mov_prob)...,
+                        land_mark == 1 ? g : ConScape.Grid(size(mov_prob)...,
                                       affinities = adjacency_matrix,
                                       source_qualities = hab_qual_source,
                                       target_qualities = coarse_target_qualities,
@@ -271,11 +395,30 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                         throw(ErrorException("coarse Grid construction failed: $e"))
                     end
 
+                    distance_transformation = x -> exp(-x / exp_d)
+                    if conn_fun === ConScape.expected_cost && isempty(sensitivity_wrt) &&
+                       all(in(("connected_habitat", "betweenness_kweighted")), metric_ids)
+                        try
+                            fcon, btwn = _streamed_default_surfaces(g_coarse, theta,
+                                distance_transformation;
+                                connected = "connected_habitat" in metric_ids,
+                                between = "betweenness_kweighted" in metric_ids)
+                            fcon === nothing || _write_surface(out_dir, specs, "connected_habitat", iter, fcon, meta_p)
+                            btwn === nothing || _write_surface(out_dir, specs, "betweenness_kweighted", iter, btwn, meta_p)
+                        catch e
+                            throw(ErrorException(_gridsrp_failure_message(e, mov_prob,
+                                hab_qual_source, coarse_target_qualities, theta)))
+                        end
+                        return "done"
+                    end
+
                     h_coarse = try
-                        ConScape.GridRSP(g_coarse, theta = theta)
+                        ConScape.GridRSP(g_coarse, θ = theta)
                     catch e
                         try
-                            ConScape.GridRSP(g_coarse, θ = theta)
+                            # Only retry a keyword-API mismatch, not a failed solve.
+                            e isa MethodError || rethrow()
+                            ConScape.GridRSP(g_coarse, theta = theta)
                         catch e2
                             throw(ErrorException(_gridsrp_failure_message(
                                 e2,
@@ -289,7 +432,16 @@ function conscape(src_dir, mov_dir, target_dir, out_dir, r_target, r_source, r_r
                     distance_transformation = x -> exp(-x / exp_d)
 
                     try
+                        paired = "connected_habitat" in metric_ids && "betweenness_kweighted" in metric_ids
+                        if paired
+                            fcon, btwn = _paired_metric_surfaces(h_coarse, conn_fun, distance_transformation)
+                            _write_surface(out_dir, specs, "connected_habitat", iter, fcon, meta_p)
+                            _write_surface(out_dir, specs, "betweenness_kweighted", iter, btwn, meta_p)
+                        end
                         for metric in metric_ids
+                            if paired && metric in ("connected_habitat", "betweenness_kweighted")
+                                continue
+                            end
                             if metric == "connected_habitat"
                                 value = ConScape.connected_habitat(
                                     h_coarse,

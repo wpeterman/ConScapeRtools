@@ -1,27 +1,3 @@
-mock_julia <- function() {
-  testthat::local_mocked_bindings(
-    stopJulia = function() invisible(TRUE),
-    juliaSetupOk = function() TRUE,
-    juliaEval = function(...) invisible(TRUE),
-    ConScapeR_setup = function(...) invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
-  )
-}
-
-write_fake_conscape_outputs <- function(out_dir, source_file, iter = "") {
-  r <- terra::rast(source_file)
-  btwn <- r
-  fcon <- r
-  terra::values(btwn) <- seq_len(terra::ncell(btwn))
-  terra::values(fcon) <- seq_len(terra::ncell(fcon)) * 2
-  dir.create(file.path(out_dir, "btwn"), recursive = TRUE, showWarnings = FALSE)
-  dir.create(file.path(out_dir, "fcon"), recursive = TRUE, showWarnings = FALSE)
-  terra::writeRaster(btwn, file.path(out_dir, "btwn", paste0("betweenness", iter, ".asc")),
-                     overwrite = TRUE, NAflag = -9999)
-  terra::writeRaster(fcon, file.path(out_dir, "fcon", paste0("fcon", iter, ".asc")),
-                     overwrite = TRUE, NAflag = -9999)
-  "done"
-}
 
 test_that("run_conscape rejects non-empty output directory when requested", {
   mock_julia()
@@ -46,7 +22,7 @@ test_that("run_conscape recreates output directory immediately after clearing it
   mock_julia()
   testthat::local_mocked_bindings(
     juliaCall = function(...) stop("simulated Julia failure"),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
   out_dir <- file.path(tempdir(), "run-clear-recreate")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -95,7 +71,7 @@ test_that("run_conscape can leave Julia open when requested", {
     juliaSetupOk = function() TRUE,
     juliaEval = function(...) invisible(TRUE),
     ConScapeR_setup = function(...) invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   target <- make_test_raster()
@@ -134,7 +110,7 @@ test_that("run_conscape warns when reusing Julia with threaded settings", {
       invisible(TRUE)
     },
     conscape_julia_status = function() TRUE,
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 10, vals = 1)
@@ -174,7 +150,7 @@ test_that("run_conscape can run a mocked single-raster workflow and crop extensi
       )
       write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 6, vals = 1, crs = "EPSG:4326")
@@ -219,7 +195,7 @@ test_that("run_conscape can run mocked tiled serial workflow and mosaic results"
                          r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
       write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   out <- run_conscape(
@@ -365,18 +341,18 @@ test_that("run_conscape restores the caller's future plan after errors", {
   old_plan <- future::plan()
   on.exit(future::plan(old_plan), add = TRUE)
   r <- make_test_raster(n = 4, vals = 1)
+  prep <- conscape_prep(centersize = 2, buffer = 1, landmark = 1L,
+                        r_target = r, r_src = r, r_mov = r, progress = FALSE)
 
   testthat::local_mocked_bindings(
     future_lapply = function(...) stop("mock future failure", call. = FALSE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_error(
     run_conscape(
       out_dir = file.path(tempdir(), "run-future-plan-restore"),
-      target_qualities = r,
-      source_qualities = r,
-      affinities = r,
+      conscape_prep = prep,
       parallel = TRUE,
       parallel_R = TRUE,
       workers = 2L,
@@ -408,7 +384,7 @@ test_that("run_conscape handles a prepared single-tile workflow", {
                          r_target, r_source, r_res, landmark, theta, exp_d, NA_val, iter, ...) {
       write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   out <- run_conscape(
@@ -445,7 +421,7 @@ test_that("run_conscape warns when mocked threaded execution misses outputs", {
       dir.create(file.path(out_dir, "fcon"), recursive = TRUE, showWarnings = FALSE)
       "ok"
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_warning(
@@ -479,6 +455,7 @@ test_that("run_conscape validates requested parallel outputs instead of defaults
     tile_d = 5,
     tile_trim = 2,
     asc_dir = file.path(tempdir(), "run-parallel-criticality-prep"),
+    target_mode = "full",
     r_target = r,
     r_mov = r,
     r_src = r,
@@ -502,7 +479,7 @@ test_that("run_conscape validates requested parallel outputs instead of defaults
       }
       "ok"
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_warning(
@@ -523,7 +500,7 @@ test_that("run_conscape validates requested parallel outputs instead of defaults
   expect_true("criticality" %in% names(out$outdirs))
   expect_false("btwn" %in% names(out$outdirs))
   expect_true(all(out$diagnostics$output_validation$ok))
-  expect_equal(out$diagnostics$mosaic_method, c(criticality = "sum"))
+  expect_equal(out$diagnostics$mosaic_method, c(criticality = "mosaic"))
 })
 
 test_that("run_conscape accepts ConScape-native slot aliases", {
@@ -536,7 +513,7 @@ test_that("run_conscape accepts ConScape-native slot aliases", {
       calls[[length(calls) + 1L]] <<- extras
       write_fake_conscape_outputs(out_dir, file.path(target_dir, r_target), iter)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 6, vals = 1)
@@ -570,7 +547,7 @@ test_that("run_conscape forwards experimental ConScape dev modes", {
       names(out) <- "btwn"
       out
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 6, vals = 1)
@@ -609,7 +586,7 @@ test_that("run_conscape validates experimental batch options early", {
     run_conscape_dev_backend = function(...) {
       list(...)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   r <- make_test_raster(n = 3, vals = 1)

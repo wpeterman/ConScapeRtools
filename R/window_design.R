@@ -70,21 +70,30 @@
 #' * Inspect `overlap_area_factor`. Values near 2 to 4 are often reasonable
 #'   starting points. Very large values mean the buffer dominates the center,
 #'   so most compute is repeated context.
-#' * Use `dev_mode = "windowed"` first to test correctness and API behavior.
-#'   Use `dev_mode = "batch"` when the same design should be scheduled as
-#'   resumable on-disk jobs.
+#' * Pass `prep_args` to [conscape_prep()] and use the classic backend.
+#'   The experimental dev backend is disabled because its audited upstream
+#'   revision fails. `run_args` is retained for future upstream repair, not
+#'   as a working alternative to the classic workflow.
 #'
 #' @return
 #' A named list of class `"ConScapeRtools_window_design"` with:
 #'
-#' * `centersize` and `buffer` in cells for `run_conscape()`.
+#' * `centersize` and `buffer` in cells for [conscape_prep()].
 #' * `tile_d` and `tile_trim` in map units for [conscape_prep()].
-#' * `run_args`, a small list suitable for `run_conscape(...,
-#'   backend = "conscape_dev")`.
+#' * `centersize_map` and `buffer_map`: the same geometry in map units.
+#' * `landmark`: the integer coarse-graining interval.
+#' * `theta` and `distance_scale`: values copied from `design`, or `NA`.
+#' * `run_args`: cell-unit arguments retained for the disabled dev backend.
 #' * `prep_args`, a small list suitable for [conscape_prep()] center-buffer
 #'   preparation.
-#' * `diagnostics`, including expected window count, source/context window
-#'   cells, center cells, overlap area factor, and a workload proxy.
+#' * `classic_prep_args`: equivalent map-unit preparation arguments.
+#' * `diagnostics`: raster `nrow`, `ncol`, `resolution`; development-window
+#'   starting cells `starts_x`, `starts_y` and their `expected_windows` count;
+#'   `center_cells`, `source_window_cells`, `total_window_width_cells`,
+#'   `overlap_area_factor`, `workload_proxy`, and `landmark_aligned`.
+#'   The retained development-window counts exclude outer buffers, unlike
+#'   externally padded classic tiles. Use [window_design_scenarios()] for
+#'   classic tile counts and full-matrix storage proxies.
 #'
 #' @export
 #' @examples
@@ -124,7 +133,8 @@ window_design <- function(r,
   }
   if (is.null(landmark)) landmark <- 10L
   if (!is.numeric(landmark) || length(landmark) != 1L ||
-      is.na(landmark) || landmark < 1) {
+      is.na(landmark) || !is.finite(landmark) || landmark < 1 ||
+      landmark > .Machine$integer.max || landmark != floor(landmark)) {
     stop("landmark must be a positive integer.", call. = FALSE)
   }
   landmark <- as.integer(landmark)
@@ -200,7 +210,7 @@ window_design <- function(r,
     total_window_width_cells = centersize_cells + 2L * buffer_cells,
     overlap_area_factor = overlap_area_factor,
     workload_proxy = workload_proxy,
-    landmark_aligned = all(c(centersize_cells, max(buffer_cells, 1L)) %% landmark == 0L)
+    landmark_aligned = all(c(centersize_cells, buffer_cells) %% landmark == 0L)
   )
 
   out <- list(
@@ -240,13 +250,13 @@ window_design <- function(r,
 }
 
 validate_positive_scalar <- function(x, name) {
-  if (!is.numeric(x) || length(x) != 1L || is.na(x) || x <= 0) {
+  if (!is.numeric(x) || length(x) != 1L || is.na(x) || !is.finite(x) || x <= 0) {
     stop(name, " must be a single positive numeric value.", call. = FALSE)
   }
 }
 
 validate_nonnegative_scalar <- function(x, name) {
-  if (!is.numeric(x) || length(x) != 1L || is.na(x) || x < 0) {
+  if (!is.numeric(x) || length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) {
     stop(name, " must be a single non-negative numeric value.", call. = FALSE)
   }
 }

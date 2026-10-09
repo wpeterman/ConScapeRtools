@@ -31,7 +31,8 @@ number of columns of \code{Z} equals the number of positive target cells. Two
 workload proxies are reported:
 \itemize{
 \item \code{estimated_source_target_cells} summarizes the work the ConScape backend
-actually performs per prep object. For \code{target_mode = "center"} (the new
+approximates before coarse graining. It is not a measured runtime or
+peak-memory estimate. For \code{target_mode = "center"} (the new
 default), each tile's backend target raster is restricted to its center
 cells, so this column uses \code{n_positive_move * n_positive_output_target}.
 For \code{target_mode = "full"} (the legacy mode), the full buffered target

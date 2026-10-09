@@ -25,7 +25,7 @@ library(terra)
 
 # Abstract
 
-ConScape connectivity calculations on large landscapes are expensive when posed as a single graph. `ConScapeRtools` provides a stable tiled workflow that decomposes the problem into smaller windowed sub-problems. The tiled solution matches the untiled answer to floating-point tolerance when the buffer covers the relevant landscape context. At smaller buffers, measure the data-dependent truncation error with a buffer sweep.
+ConScape connectivity calculations on large landscapes are expensive when posed as a single graph. `ConScapeRtools` provides a stable tiled workflow that decomposes the problem into smaller windowed sub-problems. For additive metrics with the same target representation, the tiled solution matches the untiled answer to floating-point tolerance when every tile sees the full comparison graph. At smaller buffers, measure the data-dependent truncation error with a buffer sweep.
 
 The same calculation can be parameterized two equivalent ways:
 
@@ -34,7 +34,7 @@ The same calculation can be parameterized two equivalent ways:
 
 Both produce identical output. They differ only in parameter units.
 
-A third experimental option (ConScape's development `WindowedProblem` and `BatchProblem` via `backend = "conscape_dev"`) is not recommended for production. The package pins the audited development commit `9aa05cc0b0c22b9d815d3051925010a2344eada0`, where this backend is nonfunctional. See "Experimental: Dev Backend" near the end of this vignette.
+A third experimental option (ConScape's development `WindowedProblem` and `BatchProblem` via `backend = "conscape_dev"`) is disabled in this release. The package retains the audited development commit `9aa05cc0b0c22b9d815d3051925010a2344eada0`, where this backend is nonfunctional. See "Experimental: Dev Backend" near the end of this vignette.
 
 This vignette derives all parameters from a single `tile_design()` calibration on the package rasters and shows two validation configurations:
 
@@ -60,16 +60,16 @@ After reading this vignette you should be able to:
 | Untiled | none | `run_conscape(target_qualities = ..., ...)` on full raster | stable | reference |
 | Classic tiled | `tile_d`, `tile_trim` (map units) | `conscape_prep()` + `run_conscape()` | stable | recommended |
 | Center-buffer | `centersize`, `buffer` (cells) | `conscape_prep(window_units = "cells")` + `run_conscape()` | stable | recommended |
-| Windowed (dev) | `centersize`, `buffer` (cells) | `run_conscape(backend = "conscape_dev", dev_mode = "windowed")` | experimental | broken upstream |
-| Batch (dev) | `centersize`, `buffer` (cells) | `run_conscape(backend = "conscape_dev", dev_mode = "batch")` | experimental | broken upstream |
+| Windowed (dev) | `centersize`, `buffer` (cells) | `run_conscape(backend = "conscape_dev", dev_mode = "windowed")` | experimental | disabled |
+| Batch (dev) | `centersize`, `buffer` (cells) | `run_conscape(backend = "conscape_dev", dev_mode = "batch")` | experimental | disabled |
 
-All five rows implement the **same** per-window mathematical recipe introduced by the corrected `target_mode = "center"` semantics:
+The two stable tiled workflows use the following `target_mode = "center"` recipe. The disabled development backend is not a validated equivalent:
 
 - Per-tile RSP target set = the tile's interior (center) cells only.
 - Per-tile context (sources, affinities) = full buffered window.
 - Recombination = sum of per-cell contributions across tiles (`mosaic_conscape(method = "sum")`).
 
-The two stable rows produce bit-identical output to each other (same math, different units). The "Identity Validation" section below shows both stable workflows compared against an untiled reference, plus the legacy `target_mode = "full"` mean-mosaic estimator for context. The dev backend rows fail on the pinned ConScape.jl development commit; details and a stable workaround are documented in the "Experimental" section.
+The two stable parameterizations use the same code when their aligned geometry matches. The "Identity Validation" section below compares both workflows with an untiled reference, plus the legacy `target_mode = "full"` mean-mosaic estimator for context. The dev backend rows fail on the pinned ConScape.jl development commit; details and a stable workaround are documented in the "Experimental" section.
 
 # Core Idea
 
@@ -79,7 +79,7 @@ ConScape connectivity calculations depend on three pieces:
 - **Target cells** (`target_qualities`) -- absorbing states in the randomized shortest-path (RSP) model. These define the columns of the fundamental matrix `Z = (I - W) \ I_target`.
 - **Affinities** (`affinities`) -- the movement graph weights used to build `W = Pref ⊙ exp(-theta C)`.
 
-Solving the full all-at-once problem requires factoring `(I - W)` over the entire landscape and solving one column of `Z` per target cell. Both cost scale superlinearly with the landscape size.
+Solving the untiled problem requires factoring `(I - W)` over the entire landscape and solving one column of `Z` per target cell. The default metrics now solve those columns in bounded blocks. This reduces live dense storage but does not eliminate graph factorization or the total column-solve work.
 
 A **windowed** workflow restricts each per-tile RSP problem to a buffered window:
 
@@ -101,9 +101,9 @@ This separation matters in practice:
 
 ## Why this preserves the untiled answer
 
-Let `i` be an arbitrary cell. The untiled per-cell connectivity is a sum over **all** target cells `j` of a product `q_src(i) * q_tgt(j) * proximity(i, j)`. With center-only targets, each target `j` belongs to exactly one tile `T(j)` (the tile whose center contains `j`). The contribution of pair `(i, j)` is non-zero in `mosaic_conscape(method = "sum")` only via tile `T(j)`, provided cell `i` is in `T(j)`'s buffered window. Cells outside the buffered window contribute zero, which creates buffer-truncation error. Under exponential decay, `exp(-buffer / distance_scale)` is the proximity at the buffer edge. It helps calibrate a buffer, but it is not a bound on total raster error. Total error also depends on source and target weights, the number and arrangement of omitted targets, and paths through the affinity surface.
+Let `i` be an arbitrary cell. The untiled per-cell connectivity is a sum over **all** target cells `j` of a product `q_src(i) * q_tgt(j) * proximity(i, j)`. With center-only targets, each target `j` belongs to exactly one tile `T(j)` (the tile whose center contains `j`). The contribution of pair `(i, j)` is non-zero in `mosaic_conscape(method = "sum")` only via tile `T(j)`, provided cell `i` is in `T(j)`'s buffered window. Cells outside the buffered window contribute zero, which creates buffer-truncation error. Under exponential decay, proximity is `exp(-expected_cost / distance_scale)`. Buffer width is in cells or map units, so it cannot be substituted directly for expected cost. It helps calibrate a buffer, but it is not a bound on total raster error. Total error also depends on source and target weights, the number and arrangement of omitted targets, and paths through the affinity surface.
 
-The "Identity Validation" section confirms this empirically: when the buffer is large enough that every relevant cell lies in some tile's window, the tiled and untiled surfaces match to floating-point tolerance.
+The "Identity Validation" section confirms this empirically: when every tile's buffer covers the entire comparison landscape, the tiled and untiled surfaces match to floating-point tolerance.
 
 # Parameters
 
@@ -150,11 +150,15 @@ It tells you how much extra contextual area is being loaded for each retained ce
 
 ## `batch_grain`
 
-`batch_grain` is an optional ConScape `BatchProblem` setting that thins target qualities inside batches. Leave it as `NULL` when you are testing numerical agreement. Use it only when you intentionally want a coarser target set for throughput.
+`batch_grain` is retained for the disabled development `BatchProblem` backend.
+It historically thinned target qualities inside batches. It is not a tuning
+option for the supported classic workflow; leave it as `NULL`.
 
 ## `batch_ext`
 
-`batch_ext` controls the raster extension used for intermediate batch outputs. The default `.tif` is usually appropriate. Use a format such as `.nc` only when you have a specific storage or cluster workflow that benefits from it.
+`batch_ext` is also retained for the disabled development backend. Its default
+`.tif` records the historical intermediate-output format, but it has no role
+in the supported classic workflow.
 
 # Example Data
 
@@ -194,35 +198,24 @@ td <- tile_design(
 summary(td)
 ```
 
-On the package rasters this returns:
+The calibration below was regenerated with the current analytic decay-scale
+calculation. The recorded object contains only design values and diagnostics,
+not live Julia objects.
 
-```         
-ConScape tile design summary
-            parameter        value                                               description
-       distance_scale 3.800000e+00   Exponential distance-decay numerator for run_conscape()
-                theta 1.000000e-01    Randomized shortest-path theta used during calibration
-               tile_d 5.400000e+03                     Suggested minimum interior tile width
-            tile_trim 1.350000e+03      Suggested minimum tile overlap and mosaic trim width
-           centersize 2.000000e+01         Equivalent center window size for WindowedProblem
-               buffer 5.000000e+00               Equivalent buffer width for WindowedProblem
-             landmark 5.000000e+00          Landmark value used to round tile width and trim
-       trim_threshold 5.000000e-02          Requested maximum proximity at the trim distance
-  expected_tile_count 8.800000e+01               Expected number of interior tiles for r_mov
-  overlap_area_factor 1.960000e+00 Extended tile area divided by retained interior tile area
-    proximity_at_trim 4.728280e-02         Expected proximity at the effective trim distance
+```{r recorded-calibration}
+td <- readRDS(system.file("extdata", "validation", "calibration.rds",
+                         package = "ConScapeRtools"))
+summary(td)
 ```
 
-Interpretation:
-
-- `distance_scale = 3.8` goes to `run_conscape()` (it is in ConScape expected-cost units, not map distance).
-- `theta = 0.1` should be reused in the actual run.
-- `tile_trim = 1350 m` is the biologically calibrated context distance in map units (5 cells at this resolution).
-- `tile_d = 5400 m` is the retained center width in map units (20 cells).
-- `centersize = 20`, `buffer = 5` are the equivalent cell counts.
-- `expected_tile_count = 88` tiles across the full 144 x 206 cell raster.
-- `proximity_at_trim = 0.047` confirms the calibrated buffer leaves about 5% proximity at its edge, matching the requested threshold.
-
-These values flow unmodified into every subsequent step of this vignette.
+**How to read the output.** `distance_scale` is approximately 3.83147 in
+expected-cost units, not map distance. Reuse `theta = 0.1` in the analysis.
+The suggested center width is 5400 map units (20 cells), with a buffer of
+1350 map units (5 cells). This gives 88 classic tiles on the full raster
+and an extended-to-center area ratio of 2.25. Proximity at the aligned buffer
+is approximately 0.0225, below the requested 0.05 threshold. That threshold
+describes the ideal-habitat calibration, not the maximum error of a tiled
+connectivity raster.
 
 # Step 2: Translate To Window Parameters
 
@@ -233,7 +226,7 @@ wd <- window_design(r = habitat, design = td)
 summary(wd)
 ```
 
-For chunks below that need concrete numbers without running Julia, we hard-code the values returned by `tile_design()` above:
+The recorded calibration is also expressible directly in map units:
 
 ```{r window-design-from-values}
 wd <- window_design(
@@ -246,9 +239,10 @@ wd <- window_design(
 summary(wd)
 ```
 
-These are the **same** numbers `tile_design()` produced in Step 1, so all of Step 1's diagnostics apply to `wd` unchanged.
+This recreates the recorded geometry without starting Julia. For a new analysis,
+rerun the calibration with your own landscape and movement assumptions.
 
-The returned `run_args` list contains the two values needed by `backend = "conscape_dev"`:
+The returned `run_args` list records the cell-unit geometry. The development backend that originally consumed it is disabled; use `wd$prep_args` with `conscape_prep()` for a working center-buffer workflow:
 
 ```{r run-args}
 wd$run_args
@@ -270,50 +264,51 @@ wd$diagnostics$overlap_area_factor
 wd$diagnostics$workload_proxy
 ```
 
-`expected_windows` is how many tiles your design will solve. `overlap_area_factor` is `(centersize + 2*buffer)^2 / centersize^2`, a measure of buffer overhead per retained center cell; values near 2 are efficient, larger values mean most per-tile work is repeated context. `workload_proxy` is `expected_windows * source_window_cells * center_cells`, a unitless count that tracks total wall-clock work.
+`expected_windows` describes experimental dev-window geometry; it is not the
+number of classic padded tiles. Use `window_design_scenarios()` for the latter.
+`overlap_area_factor` is `(centersize + 2*buffer)^2 / centersize^2`, a measure of
+buffer overhead. `workload_proxy` counts cell pairs and windows, not elapsed time.
 
 ## Tile sizing: RAM, throughput, and tradeoffs
 
-`centersize` is a pure compute knob. Adjusting it does not change the mathematical answer (the same per-cell connectivity quantity comes out of the mosaic regardless of centersize), and it does not change buffer-truncation error (that is governed by `buffer` and `distance_scale`). What it does change:
+Changing `centersize` changes the size and number of tile solves. It preserves the intended metric, but it can change the finite-buffer approximation because each solve has different graph boundaries. Repeat a convergence check after changing either `centersize` or `buffer`.
 
-- **Per-window peak RAM** scales as `8 * (centersize + 2*buffer)^2 * (centersize / landmark)^2` bytes (8 bytes per double, dominant contribution from the `Z = (I - W) \ I_target` block). Halving `centersize` drops that by roughly a factor of four.
-- **Window count** scales inversely with `centersize^2`. Smaller centers mean more windows and more fixed dispatch overhead per window.
-- **Total work** (`workload_proxy`) = `landscape_area * (centersize + 2*buffer)^2`. Smaller `centersize` *reduces* `workload_proxy`, approaching `landscape_area * (2*buffer)^2` for very small centers. The savings come at the price of factoring `(I - W)` more times.
+The full dense fundamental matrix has one row per graph node and one column per retained target. For a fully populated window, its storage is approximately `8 * (centersize + 2*buffer)^2 * (centersize / landmark)^2` bytes. This remains the reported design proxy, not peak RAM. The default expected-cost metrics instead solve at most 128 target columns at once. Other metric requests can still allocate the full matrix; solver factors and work arrays add memory, and each distributed worker has its own Julia runtime.
 
-> **One caveat with `landmark > 1L`**: ConScape's `coarse_graining()` places one target per `landmark` cells *within each tile*, so changing `centersize` shifts the absolute positions of those landmark targets. The mosaicked surface has small per-cell jitter as a result; scale, sign, and interpretation are unaffected. For strict reproducibility across centersize choices, build the prep with `landmark = 1L`.
+Smaller centers reduce target columns but require more factorizations. A cell-pair workload proxy cannot capture that tradeoff or predict elapsed time. Likewise, landmark alignment preserves nominal target-grid positions across tiles, but coarse graining can change values near missing habitat and partial edge blocks. Use `landmark = 1L` when checking the uncoarsened calculation.
 
-`window_design_scenarios()` makes the tradeoff concrete. Pass your calibrated design and it returns a one-row-per-candidate table of per-window RAM, window count, and workload proxy:
+`window_design_scenarios()` provides a screening table:
 
 ```{r scenarios-default}
 window_design_scenarios(r = habitat, design = wd)
 ```
 
-The default sweep halves `wd$centersize` geometrically and snaps each candidate to a multiple of `landmark`. You can pass an explicit vector of candidates and a target RAM budget; the helper flags the **largest** `centersize` that fits the budget (large centers minimize dispatch overhead):
+The default sweep halves the reference centersize and aligns candidates to landmarks. Explicit candidates are rounded up to the same alignment used by prep.
 
 ```{r scenarios-target-ram}
 window_design_scenarios(
   r             = habitat,
   design        = wd,
   centersize    = c(40, 20, 10, 5),
-  workers       = 4L,        # model 4 parallel ConScape workers
-  target_ram_gb = 2          # system-wide budget across all workers
+  workers       = 4L,
+  target_ram_gb = 2  # screening budget for the Z matrices, not total process RAM
 )
 ```
 
 **How to read the output:**
 
-- `centersize`, `buffer`, `landmark`: the design parameters for that row, in cells.
-- `source_window_cells` = `(centersize + 2 * buffer)^2`, the per-window graph size that ConScape factorizes.
-- `center_cells` = `centersize^2`, retained as RSP targets before coarse graining.
-- `target_cells_after_landmark` = `center_cells / landmark^2`, the number of `Z` columns ConScape solves per window.
-- `expected_windows`: approximate tile count on the supplied raster.
-- `ram_per_window_gb`: worst-case envelope for a single window's peak memory.
-- `total_ram_gb` = `workers * ram_per_window_gb`, system-wide peak when running `workers` solves in parallel.
-- `overlap_area_factor` = `source_window_cells / center_cells`. Near 2 is efficient.
-- `workload_proxy`: total cells-times-targets-times-windows; tracks wall-clock work.
-- `recommended`: present only when `target_ram_gb` was supplied; flags the largest centersize fitting the budget.
+- `source_window_cells` and `target_cells_after_landmark` describe a fully populated window before masking and edge effects.
+- `expected_windows` counts classic padded tiles before empty-target tiles are removed. Experimental dev windows have different edge handling.
+- `ram_per_window_gb` counts one dense matrix in decimal GB.
+- `total_ram_gb` multiplies that matrix storage by workers. It excludes other live arrays, solver factors, and runtime overhead.
+- `workload_proxy` counts cell pairs across windows. It is not a runtime prediction.
+- `recommended` flags the largest candidate whose matrix-only proxy meets the requested threshold. It does not certify that the run fits in RAM.
 
-The goal is not to minimize any single number. The goal is to pick the largest `centersize` whose `total_ram_gb` fits comfortably on your machine, accept the resulting `expected_windows` count as sequencing overhead, and let the helper rule out designs where the buffer dominates the center or each window exceeds available memory. At the calibrated `(centersize = 20, buffer = 5)` on this raster the helper's first row corresponds to the design you would get from `tile_design()` directly.
+Benchmark one representative tile before increasing workers. Keep `blas_threads = 1L` when processing several tiles concurrently. Distributed execution keeps one active tile per worker; using more workers still multiplies live solver memory.
+
+Preparation crops individual windows directly from the input raster. Mosaicking uses disk-backed, double-precision batches and recursively combines intermediate results, so its final reduction does not reopen all chunks at once. This reduces R memory allocation but adds temporary-file I/O. Write durable mosaics with `terra::writeRaster()` outside both disposable working directories.
+
+Reproducible developer benchmarks are supplied in `inst/examples/benchmark_memory.R` and `inst/examples/benchmark_julia.jl`. They separate R-managed allocations from Julia allocations and exclude startup or input generation from the warmed timings. Neither allocation total is a measurement of process peak RAM.
 
 # Step 4: Prepare A Reduced Demo Landscape
 
@@ -338,7 +333,7 @@ demo_wd <- window_design(
 )
 
 theta_demo          <- td$theta            # 0.1
-distance_scale_demo <- td$distance_scale   # 3.8
+distance_scale_demo <- td$distance_scale   # approximately 3.83147
 
 demo_wd
 ```
@@ -353,9 +348,10 @@ A reproducible harness lives at `inst/examples/validate_workflows.R`. It runs un
 
 ```{r validation-harness, eval=FALSE}
 Sys.setenv(CONSCAPERTOOLS_JL_HOME = "C:/path/to/julia/bin")
-wd$diagnostics$expected_windows
-wd$diagnostics$overlap_area_factor
-wd$diagnostics$workload_proxy
+source(system.file("examples", "validate_workflows.R", package = "ConScapeRtools"))
+validation <- validate_workflows(theta = td$theta,
+  distance_scale = td$distance_scale, centersize = td$centersize,
+  buffer = td$buffer, landmark = td$landmark)
 ```
 
 ## What the harness compares
@@ -367,127 +363,113 @@ wd$diagnostics$workload_proxy
 | center_buffer | `conscape_prep(centersize, buffer)` | tile center cells | sum |
 | full_legacy | `conscape_prep(target_mode = "full")` | full buffered cells | mean |
 
-The two stable rows (`classic_tiled`, `center_buffer`) are bit-identical to each other because they use the same math with different parameter units. `full_legacy` is the older mean-mosaic estimator, retained for reproducibility of pre-0.4.21 results. The dev windowed / batch rows are not included because the pinned, audited ConScape.jl revision errors at `solve()` (see "Experimental: Dev Backend" below).
+The two stable rows (`classic_tiled`, `center_buffer`) use the same calculation with equivalent geometry expressed in different units. `full_legacy` is the older mean-mosaic estimator, retained for reproducibility of pre-0.4.21 results. The dev windowed / batch rows are not included because the pinned, audited ConScape.jl revision errors at `solve()` (see "Experimental: Dev Backend" below).
 
-## Results: realistic buffer (calibrated tile_design)
+## Results: calibrated and full-coverage buffers
 
-Run with the calibrated `(centersize = 20, buffer = 5)` from Step 1:
+The tables below are regenerated from the current solver using the bundled
+40 x 40 crop, `landmark = 5`, and the calibration printed in Step 1.
+The CSV files and environment record ship under `inst/extdata/validation`.
+They are measured examples, not universal error or timing guarantees.
 
-```         
------ Identity validation: tiled vs untiled -----
-Demo: 40x40 cells, centersize=20, buffer=5, theta=0.1, distance_scale=3.8
-identical_fp = TRUE when max_abs / max(|untiled|) < 1e-6 (floating-point tolerance)
-
-      workflow layer    n  max_abs mean_abs     rmse    cor rel_max_abs identical_fp
- classic_tiled  btwn 1600 0.153435 0.016266 0.034368 0.9997    0.025713        FALSE
- classic_tiled  fcon 1600 0.009454 0.001355 0.002569 1.0000    0.003922        FALSE
- center_buffer  btwn 1600 0.153435 0.016266 0.034368 0.9997    0.025713        FALSE
- center_buffer  fcon 1600 0.009454 0.001355 0.002569 1.0000    0.003922        FALSE
-   full_legacy  btwn 1600 0.279411 0.022676 0.052069 0.9992    0.046825        FALSE
-   full_legacy  fcon 1600 0.026963 0.001806 0.004466 0.9998    0.011186        FALSE
+```{r current-validation}
+validation_dir <- system.file("extdata", "validation", package = "ConScapeRtools")
+for (buffer in c(5, 20)) {
+  cat("\nBuffer:", buffer, "cells\n")
+  tab <- read.csv(file.path(validation_dir,
+                            paste0("agreement-buffer-", buffer, ".csv")))
+  print(tab, row.names = FALSE, digits = 4)
+}
 ```
 
-**Interpretation:**
+**How to read the output.** `max_abs` is the largest absolute cell difference;
+`rmse` is the root mean squared cell difference. Both have the output metric's
+units. `rel_max_abs` divides the largest difference by
+`max(1, max(abs(reference)))`, and `identical_fp` tests whether this scaled
+difference is below 1e-6. The comparison also requires identical finite-cell
+coverage, so a run cannot pass by silently omitting difficult cells.
+Correlation alone is not an accuracy check because biased surfaces can still
+be highly correlated.
 
-- `classic_tiled` and `center_buffer` produce **bit-identical** output (their summary rows match to all digits), confirming that the map-unit and cell-unit parameterizations are the same calculation.
-- **Maximum absolute error** is small in both metrics:
-  - `btwn`: max_abs = 0.15, mean_abs = 0.016, RMSE = 0.034 against an untiled scale of \~6 (so relative error \~2.6%).
-  - `fcon`: max_abs = 0.009, mean_abs = 0.001, RMSE = 0.003 against an untiled scale of \~2.4 (relative error \~0.4%).
-  - Linear correlation with untiled is 0.9997 (btwn) and \~1.000 (fcon) -- the surfaces are visually indistinguishable.
-- `identical_fp = FALSE` here because we are below the 1e-6 relative threshold -- this is genuine buffer-truncation error from the calibrated 5-cell buffer, not solver noise.
-- **`full_legacy` has larger maximum error in this demo** than the center/sum workflows (max_abs = 0.28 vs 0.15 for btwn, 0.027 vs 0.009 for fcon). This result is consistent with the documented low bias of the legacy mean estimator, but the ratio is specific to this example.
-
-The realistic buffer trades data-dependent truncation error for a tile window containing at most `(centersize + 2*buffer)^2 = 30^2 = 900` raster cells, rather than the full-landscape graph. On a large landscape, limiting the per-window graph can make an otherwise infeasible analysis tractable.
-
-## Results: wide buffer (floating-point identity)
-
-To confirm there is nothing wrong with the tiling itself, rerun with a buffer wide enough that every tile's buffered window covers the entire demo crop. With `centersize = 20` and `buffer = 20`, each buffered window is 60 x 60 cells -- larger than the 40 x 40 raster, so each tile sees the same `W` matrix and the same `Z` columns as the untiled run.
-
-```         
------ Identity validation: tiled vs untiled -----
-Demo: 40x40 cells, centersize=20, buffer=20, theta=0.1, distance_scale=3.8
-identical_fp = TRUE when max_abs / max(|untiled|) < 1e-6 (floating-point tolerance)
-
-      workflow layer    n   max_abs  mean_abs      rmse cor rel_max_abs identical_fp
- classic_tiled  btwn 1600 4.582e-07 3.626e-08 5.950e-08   1   7.679e-08         TRUE
- classic_tiled  fcon 1600 1.072e-07 6.324e-09 1.082e-08   1   4.447e-08         TRUE
- center_buffer  btwn 1600 4.582e-07 3.626e-08 5.950e-08   1   7.679e-08         TRUE
- center_buffer  fcon 1600 1.072e-07 6.324e-09 1.082e-08   1   4.447e-08         TRUE
-   full_legacy  btwn 1600 0.000e+00 0.000e+00 0.000e+00   1   0.000e+00         TRUE
-   full_legacy  fcon 1600 0.000e+00 0.000e+00 0.000e+00   1   0.000e+00         TRUE
-```
-
-**Interpretation:**
-
-- All six rows show `identical_fp = TRUE`: relative error below 1e-6.
-- `classic_tiled` and `center_buffer` differ from untiled by \~5e-7 absolute (\~8e-8 relative, seven significant digits). These small differences arise when separate tile solves are aggregated and should be interpreted as floating-point variation, not measurable buffer truncation in this full-coverage example.
-- `full_legacy` is **bit-exactly identical** (max_abs = 0) here because in degenerate-coverage every tile produces the same full surface, and the mean of N identical surfaces equals each one -- there is no rounding from the sum.
-- `cor = 1` to printed precision.
-
-This is the **floating-point identity** claim: when the buffer covers the relevant context, the tiled output is the same surface as the untiled output within the stated numerical tolerance.
-
-## Convergence between the two regimes
-
-Comparing the two tables answers the question "how does the error behave as I make the buffer wider":
-
-| buffer           | btwn max_abs | btwn rel | fcon max_abs | fcon rel | identical_fp |
-|------------------|-------------:|---------:|-------------:|---------:|:------------:|
-| 5 (calibrated)   |        0.153 |     2.6% |       0.0095 |     0.4% |    FALSE     |
-| 20 (covers crop) |       4.6e-7 |     8e-8 |       1.1e-7 |     4e-8 |     TRUE     |
-
-The error drops by \~6 orders of magnitude when the buffer grows from the calibrated 5 cells (proximity \~0.05 at edge) to 20 cells (proximity at edge effectively 0). This example shows rapid empirical convergence as edge proximity declines. It does not establish a universal error rate. Use a buffer sweep on your own data to measure convergence; `tests/testthat/test-tiled-untiled-convergence.R` demonstrates the calculation.
+The 5-cell buffer excludes some graph context. The 20-cell buffer makes every
+tile cover the full crop, where additive center contributions should recover
+the untiled solution within numerical tolerance. These comparisons test the
+same coarsened target representation on both sides; they do not validate
+coarse graining against an uncoarsened landscape. Intermediate errors need not
+decrease monotonically. Repeat the comparison after changing the landscape,
+theta, target weights, or tiling geometry.
 
 ## Results: wall-clock timing
 
-The harness also reports wall-clock timing for each workflow. Each row's `seconds` is `proc.time()`-elapsed time for the workflow end to end on a single R session (`conscape_prep()` + `run_conscape()` for the tiled rows). `speedup_vs_untiled` is the ratio of untiled seconds to that workflow's seconds; values greater than 1 mean the workflow is faster than the untiled run.
+Each row includes Julia startup, input/output, the numerical solves, and,
+for tiled runs, preparation and mosaicking. These are single end-to-end
+measurements, not replicated kernel benchmarks.
 
-**Realistic buffer (centersize = 20, buffer = 5):**
-
-```         
------ Wall-clock timing (proc.time elapsed seconds) -----
-      workflow seconds speedup_vs_untiled status
-       untiled    33.3               1.00     ok
- classic_tiled    33.9               0.98     ok
- center_buffer    34.3               0.97     ok
-   full_legacy    33.6               0.99     ok
+```{r current-timings}
+for (buffer in c(5, 20)) {
+  cat("\nBuffer:", buffer, "cells\n")
+  print(read.csv(file.path(validation_dir,
+                           paste0("timing-buffer-", buffer, ".csv"))),
+        row.names = FALSE, digits = 3)
+}
 ```
 
-**Wide buffer (centersize = 20, buffer = 20):**
+A `speedup_vs_untiled` above 1 means that workflow was faster in this run.
+On this small crop, startup and file handling can dominate. Do not extrapolate
+its timing ratios to production landscapes. Center mode partitions the
+coarse targets among tiles, while full mode repeats buffered target solves.
+Both modes still factor each tile's graph.
 
-```         
------ Wall-clock timing (proc.time elapsed seconds) -----
-      workflow seconds speedup_vs_untiled status
-       untiled    21.8               1.00     ok
- classic_tiled    22.5               0.97     ok
- center_buffer    21.6               1.01     ok
-   full_legacy    22.8               0.96     ok
+## Julia memory and processing benchmarks
+
+The default expected-cost metrics now factor the sparse graph once and solve
+at most 128 target columns at a time. Each block contributes to the same
+full-graph sums. Blocking changes neither the spatial domain nor the scientific
+weights, although summation order can change the last floating-point digits.
+Requests for other metrics, other connectivity functions, or sensitivity retain
+the upstream `GridRSP` route and its full source-by-target matrices.
+
+```{r current-kernel-benchmarks}
+bench <- read.csv(file.path(validation_dir, "julia-benchmarks.csv"))
+print(bench, row.names = FALSE, digits = 4)
 ```
 
-**How to read these numbers.** The demo is deliberately small (1600 cells, 4 tiles) so the harness completes in a couple of minutes. At this scale several effects compete:
+These are fresh-process Windows benchmarks with Julia 1.12.6, ConScape 0.3.0,
+one Julia thread, and the BLAS thread count printed in the table.
+`seconds_median` summarizes three warmed graph-plus-metric calculations.
+`allocated_mb_median` counts cumulative Julia allocations, not simultaneously
+live RAM. `peak_working_set_mb` is the operating-system process high-water mark
+observed at 100 ms intervals, including package loading, input construction,
+and a small warm-up. It does not include R or multiple worker processes.
 
-1.  **Julia / ConScape startup overhead** (\~1-3 s) is paid once per `run_conscape()` call.
-2.  **Per-tile R-side and disk I/O** (writing per-tile ASCIIs, reading per-tile outputs, mosaicking) adds a fixed cost per tile.
-3.  **Algorithmic per-tile work**: `center_buffer` and `classic_tiled` solve `Z` over `K_center = centersize^2 = 400` target columns per tile (1600 column-solves across 4 tiles, matching untiled). `full_legacy` solves `Z` over `K_full = (centersize + 2*buffer)^2` target columns per tile -- 900 columns at buffer=5 (3600 total, 2.3x untiled), 1600 columns at buffer=20 (6400 total, 4x untiled).
-4.  **Mosaic step**: `sum` and `mean` are O(N) and negligible here.
-
-What the numbers show on this demo:
-
-- **All four stable workflows fall in a tight 21-35 s band** with speedup ratios between 0.92x and 1.01x. On a landscape this small the fixed Julia startup + R-side I/O overhead dominates, so the tiled / untiled ordering is set by measurement noise (\~10% run to run); none of the small differences are practically meaningful at this scale.
-- **`full_legacy` is competitive here** only because the per-tile graph is small enough that the 2-4x extra column-solve work is hidden by overhead. On a production landscape it scales much worse.
-
-**At production scale** (landscapes that do not fit in a single graph) the tradeoff can invert: untiled analysis may become infeasible, so the meaningful comparison is among tiled workflows. Tiling limits each solve to a graph based on at most `(centersize + 2*buffer)^2` raster cells rather than the full landscape. Actual time and memory depend on graph sparsity, solver choice, matrix fill-in, and the number of targets.
-
-To extrapolate from this demo to a production landscape:
-
-- **Untiled cost** depends on the sparse graph, the selected ConScape solver, matrix fill-in, and the number of target columns. Do not assume a universal cubic rate.
-- **Tiled cost** uses smaller per-window graphs and target sets. Holding `centersize` and `buffer` fixed makes the expected number of windows approximately proportional to landscape area, but total runtime still includes Julia startup, raster input/output, and mosaicking.
-- The landscape size at which an untiled run becomes infeasible depends on available memory, graph structure, solver settings, `theta`, and the number of targets. Benchmark your own system rather than using a fixed cell-count threshold.
-
-For per-cell timing at different landscape sizes, the `conscape_efficiency_assessment()` helper (returning `estimated_source_target_cells` and `estimated_output_source_target_cells`) gives a cheap a-priori cost estimate without running any Julia.
+The dense cases have one target per cell; the 120-cell-wide case keeps 256
+random targets on a 14,400-node graph. All use seed 2718 and heterogeneous
+affinities and unequal source/target qualities. The `separate` method calls
+the two upstream metrics separately; `shared` reuses their proximity matrix;
+`streamed` is the new bounded-target implementation. Sparse workloads can
+show a timing tradeoff even when memory falls. These results establish a
+measured improvement in the tested cases, not that every Julia configuration
+is globally optimal. Parallel workers multiply live graph and solver memory.
 
 ## Reproducing the tables
 
-Both tables are produced by the shipped `inst/examples/validate_workflows.R` harness. On the validation system, with Julia installed and the package loaded with `devtools::load_all()`, the calibrated run completed in about 2 minutes and the wide-buffer run in about 90 seconds. Runtime will differ across systems. Run the harness to regenerate the tables and save new results outside the disposable tile and run directories.
+Run the supplied scripts from a source checkout, with Julia available.
+Keep recorded results outside disposable tile and run directories.
+
+```{r reproduce-validation, eval=FALSE}
+Sys.setenv(CONSCAPERTOOLS_JL_HOME = "C:/path/to/julia/bin")
+# From a shell, after loading the package's development dependencies:
+# Rscript inst/examples/refresh_validation.R NEW_RESULTS_DIRECTORY
+# julia --startup-file=no inst/examples/benchmark_julia.jl . 80 1 streamed 1 3 128
+# On Windows, benchmark_julia_windows.ps1 runs the full comparison and records
+# process peak working set. See its required Julia, Repository, and OutputDirectory.
+```
+
+`inst/examples/refresh_validation.R` regenerates calibration, agreement,
+timing, and environment records. `benchmark_memory.R` separately measures
+R preparation and mosaic allocations. A single-matrix design proxy or a
+cumulative allocation count is not a safe process-RAM budget. Measure a
+representative tile and increase concurrency only after checking system memory.
 
 # Step 5: Run On The Stable Backend
 
@@ -549,9 +531,9 @@ center_run <- run_conscape(
 )
 ```
 
-Both runs default to `target_mode = "center"`, write per-tile target rasters restricted to their center cells, keep source qualities and affinities across the full buffered window, and recombine the per-tile outputs with `mosaic_conscape(method = "sum")` (chosen automatically when `conscape_prep$target_mode == "center"`). The "Identity Validation" tables above confirm the two preps produce bit-identical output.
+Both runs default to `target_mode = "center"`, write per-tile target rasters restricted to their center cells, keep source qualities and affinities across the full buffered window, and recombine the per-tile outputs with `mosaic_conscape(method = "sum")` (chosen automatically when `conscape_prep$target_mode == "center"`). The "Identity Validation" tables report matching summaries for the two parameterizations.
 
-If you want the older biased mean-mosaic behavior for comparison, pass `target_mode = "full"` to `conscape_prep()` explicitly.
+If you want the older mean-mosaic behavior for comparison, pass `target_mode = "full"` to `conscape_prep()` explicitly.
 
 # Step 6: Relate The Two Parameterizations
 
@@ -573,8 +555,8 @@ Use this flowchart to pick a workflow.
 
 1.  **Does the landscape fit in a single ConScape graph on your machine?** If yes, run untiled with direct `target_qualities` / `source_qualities` / `affinities` arguments to `run_conscape()`. Skip tiling.
 2.  **Do you need a stable, well-tested workflow?** Use the stable backend. Within the stable backend, the choice between `tile_d`/`tile_trim` (map units) and `centersize`/`buffer` (cell units) is purely a matter of taste -- the math is identical.
-3.  **Are you reproducing pre-0.4.21 results that used the old biased mean-mosaic estimator?** Pass `target_mode = "full"` to `conscape_prep()`. Note that this estimator is biased low and not recommended for new work; the `full_legacy` row in the validation tables is exact only in degenerate-coverage cases and is \~2x worse than the center+sum workflow at realistic buffers.
-4.  **Do you specifically need ConScape's restartable on-disk job scheduler (`BatchProblem`)?** Today the dev backend is broken upstream (see "Experimental: Dev Backend"). Do not use it for production work. The stable backend already implements the same per-window math.
+3.  **Are you reproducing pre-0.4.21 results that used the old mean-mosaic estimator?** Pass `target_mode = "full"` to `conscape_prep()`. It remains a tile-local approximation; the `full_legacy` results do not establish a universal error direction or ratio relative to center/sum.
+4.  **Do you specifically need ConScape's restartable on-disk job scheduler (`BatchProblem`)?** The dev backend is disabled because its audited upstream revision fails (see "Experimental: Dev Backend"). Use the classic workflow; restartable batch scheduling is not a supported capability.
 
 | Question | Workflow |
 |----|----|
@@ -594,18 +576,18 @@ This is normal. `identical_fp = TRUE` only holds when the buffered window covers
 
 Likely causes, in order of frequency:
 
-1.  Buffer is much too small relative to `distance_scale`. A starting value of `buffer >= 4 * distance_scale_in_cells` makes edge proximity smaller than 0.02 under exponential decay. Confirm adequacy with a buffer sweep because edge proximity is not a bound on total error.
+1.  The buffer may omit influential paths or targets. Use `tile_design()` to relate map distance to expected cost on an ideal-habitat grid, then confirm adequacy with a buffer sweep on your landscape. There is no general conversion of `distance_scale` to cells, and edge proximity is not a bound on total error.
 2.  `landmark > 1L` was used on one side of the comparison but not the other. Set both sides to the same `landmark`, or use `landmark = 1L` for strict identity tests.
 3.  The mask written by `conscape_prep()` (in `asc_dir/mask/mask.asc`) does not match the input habitat's NA pattern. Inspect with `terra::plot(terra::rast(file.path(prep$asc_dir, "mask", "mask.asc")))`.
 4.  `target_threshold > 0` was used, which removes low-quality cells from the target set in the tiled run but not the untiled run. Set `target_threshold = 0` on both sides for strict identity tests.
 
 **Symptom: `mosaic_conscape()` returns NA everywhere when `method = "sum"`.**
 
-`method = "sum"` treats per-tile NA as 0. If every tile is fully NA (e.g., the per-tile ConScape run failed silently), the sum is 0 and the final mask sets it to NA. Inspect the per-tile `*.asc` files in `cs_res$outdirs$btwn` and `cs_res$outdirs$fcon`.
+`method = "sum"` treats nonfinite tile values as zero, then applies the supplied output mask. An all-NA result requires a mask with no retained cells or output geometry with no retained coverage. Inspect the mask and tile extents. Failed runs now stop automatic mosaicking when outputs are incomplete.
 
 **Symptom: tiled `btwn` magnitudes look too low.**
 
-With `target_mode = "full"` (legacy), per-tile `btwn` undercounts paths that cross into other tiles. The mean mosaic preserves this undercount. Switch to `target_mode = "center"` (the default) and `mosaic_conscape(method = "sum")` to recover the untiled magnitudes.
+Finite buffers can omit influential paths and targets in either mode. Increase the buffer and compare against an untiled reference with matching weights and coarse graining. Switching to center/sum avoids repeated target contributions, but does not by itself remove truncation error.
 
 **Symptom: Julia process hangs at startup on Windows.**
 
@@ -622,13 +604,13 @@ Use this decision sequence for a real analysis:
 5.  Adjust `centersize` (or `tile_d`) only if the workload proxy or per-tile memory use is too large.
 6.  Validate on a small crop with `source(system.file("examples", "validate_workflows.R", package = "ConScapeRtools"))` and `validate_workflows()`.
 7.  Confirm the tiled and untiled surfaces agree to within an acceptable tolerance. For strict identity, rerun with a wide enough buffer that `identical_fp = TRUE` for every row.
-8.  Scale up using the same stable backend. Use multiple R workers (`parallel = TRUE, workers = N`) for throughput.
+8.  Scale up using the same stable backend. `parallel = TRUE, workers = N` uses Julia threads by default. Add `parallel_R = TRUE` for separate R workers, or `distributed = TRUE` for separate Julia workers. Benchmark a representative workload before choosing the worker count.
 
 # Experimental: Dev Backend
 
 The ConScape development backend (`backend = "conscape_dev"` with `dev_mode = "windowed"` or `dev_mode = "batch"`) was added so users could experiment with ConScape's upcoming `WindowedProblem` and `BatchProblem` scheduling. `ConScapeRtools` prepares an isolated Julia project with `conscape_dev_backend_setup()` and gates this workflow behind `backend = "conscape_dev"`.
 
-> **Known issue (audited commit).** When `validate_workflows(include_dev = TRUE)` is run against ConScape.jl commit `9aa05cc0b0c22b9d815d3051925010a2344eada0` from the `alg_efficiency` branch, `dev_windowed` errors with:
+> **Known issue (audited commit).** Before the disabled-backend guard was added, `validate_workflows(include_dev = TRUE)` against ConScape.jl commit `9aa05cc0b0c22b9d815d3051925010a2344eada0` from the `alg_efficiency` branch produced this `dev_windowed` error:
 >
 > ```         
 > MethodError: no method matching write(::String, ::Missing;
@@ -638,11 +620,11 @@ The ConScape development backend (`backend = "conscape_dev"` with `dev_mode = "w
 >
 > On the audited commit, `ConScape.solve(windowed_problem, rast; mosaic_return = true)` returns `Missing` instead of a `Rasters.RasterStack` in the tested configuration. The bridge's writer call therefore sees a `Missing` instead of a raster. `dev_batch` fails further downstream with `"No completed ConScape dev batch output directories found."` for the same root cause.
 >
-> The fix lives upstream. Until ConScape.jl publishes a stable revision with a documented `WindowedProblem`/`BatchProblem` API, the dev backend should be treated as non-functional. The `validate_workflows()` table reports the failure with a `status = "failed"` row and the captured error message so this is visible in any audit run.
+> The fix lives upstream. Starting in 0.4.31, `run_conscape(backend = "conscape_dev")` stops with an informative error before Julia startup, dependency installation, or output deletion. The arguments and bridge source are retained for future repair, but no development-backend results are claimed. Re-enabling it requires a pinned working upstream revision, numerical agreement tests, and cross-platform integration checks.
 >
-> **The stable backend is unaffected** and reproduces the untiled solution to floating-point tolerance (see "Identity Validation" above). It already implements the same per-window math the dev `WindowedProblem` was intended to expose, so for almost every user the dev backend's loss costs nothing.
+> **The stable backend is unaffected** and reproduces the untiled solution to floating-point tolerance (see "Identity Validation" above). Use `conscape_prep(centersize = ..., buffer = ...)` followed by `run_conscape(backend = "classic")` for supported center-buffer processing.
 
-If you want to reproduce or diagnose the audited development backend:
+The historical calls below document the retained API. They now stop at the disabled-backend guard. `conscape_dev_backend_setup()` remains an explicit installation tool for upstream investigation, not a way to enable execution in this release:
 
 ```{r dev-attempt, eval=FALSE}
 dev_project <- conscape_dev_backend_setup(

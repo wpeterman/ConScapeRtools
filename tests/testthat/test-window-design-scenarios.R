@@ -28,7 +28,7 @@ test_that("window_design_scenarios returns a tidy data frame from a window desig
                sc$center_cells / sc$landmark^2)
   expect_equal(sc$overlap_area_factor,
                sc$source_window_cells / sc$center_cells)
-  # ram_per_window matches the documented worst-case envelope
+  # ram_per_window matches the documented single-matrix storage proxy
   expect_equal(sc$ram_per_window_gb,
                8 * sc$source_window_cells *
                  sc$target_cells_after_landmark / 1e9)

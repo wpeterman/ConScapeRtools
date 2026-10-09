@@ -32,7 +32,7 @@
 #' anchored to the original raster grid:
 #'
 #' * The target tile width `tile_d` is converted to a raw number of
-#'   cells (`tile_cells_raw = round(tile_d / resx)`), then rounded *up*
+#'   cells (`tile_cells_raw = ceiling(tile_d / resx)`), then rounded *up*
 #'   to the nearest multiple of `landmark`, with a minimum of
 #'   `landmark` cells (`tile_cells`).
 #' * Starting column and row indices are generated with
@@ -104,7 +104,7 @@ make_tiles <- function(r,
   nrows <- nrow(r)
 
   # tile size in cells, multiple of npix
-  tile_cells_raw <- round(tile_d / resx)
+  tile_cells_raw <- ceiling(tile_d / resx)
   tile_cells <- max(npix, ceiling(tile_cells_raw / npix) * npix)
 
   col_starts <- seq(1L, ncols, by = tile_cells)
@@ -134,6 +134,7 @@ make_tiles <- function(r,
   }
 
   cs_tiles <- terra::vect(do.call(c, lapply(tiles_int, terra::as.polygons)))
+  terra::crs(cs_tiles) <- terra::crs(r)
 
   # npix = landmark (number of pixels in coarse-grain window)
   # tile_trim = user's requested *minimum* overlap in map units

@@ -160,7 +160,7 @@ test_that("conscape_dev_backend_setup prepares an isolated Julia project", {
       )
       "ConScape dev backend project prepared"
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   out <- conscape_dev_backend_setup(
@@ -189,7 +189,7 @@ test_that("conscape_dev_backend_setup reports Julia setup failures", {
       attr(out, "status") <- 1L
       out
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_error(
@@ -215,7 +215,7 @@ test_that("conscape_sensitivity_setup installs the sensitivity branch and parses
       c("Resolving package versions...",
         "ConScape sensitivity version: 0.3.0")
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   version <- conscape_sensitivity_setup(jl_home = julia_bin, quiet = TRUE)
@@ -241,7 +241,7 @@ test_that("conscape_sensitivity_setup passes force = TRUE through to Julia", {
       calls[[length(calls) + 1L]] <<- list(args = args)
       "ConScape sensitivity version: 0.3.0"
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   conscape_sensitivity_setup(jl_home = julia_bin, force = TRUE, quiet = TRUE)
@@ -259,7 +259,7 @@ test_that("conscape_sensitivity_setup reports Julia install failures", {
       attr(out, "status") <- 1L
       out
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_error(

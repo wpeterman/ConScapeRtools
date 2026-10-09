@@ -5,16 +5,9 @@ using ConScape
 using SparseArrays
 using Statistics
 
-@everywhere begin
-    using LinearAlgebra
-    using Logging
-    using ConScape
-    using SparseArrays
-    using Statistics
-    Logging.global_logger(Logging.NullLogger())
-end
-
-@everywhere function _set_blas_threads(n::Integer)
+# The caller includes this file only on its own worker pool. Do not broadcast
+# definitions or imports to unrelated workers in a reused Julia session.
+function _set_blas_threads(n::Integer)
     try
         BLAS.set_num_threads(max(1, n))
     catch e
@@ -23,7 +16,7 @@ end
     return nothing
 end
 
-@everywhere function _csv_escape(x)
+function _csv_escape(x)
     s = replace(String(x), "\"" => "\"\"")
     return "\"" * s * "\""
 end
@@ -48,8 +41,8 @@ function _write_batch_diagnostics(out_dir, rows)
 end
 
 # NOTE: max_retries is kept for backward compatibility but no retries are performed.
-@everywhere function safe_conscape(i, src_dir, mov_dir, target_dir, out_dir,
-                                   r_targets, r_sources, r_res,
+function safe_conscape(i, src_dir, mov_dir, target_dir, out_dir,
+                                   r_target, r_source, r_move,
                                    land_mark, theta, exp_d, NA_val,
                                    max_retries,
                                    metrics,
@@ -64,12 +57,13 @@ end
                                    sensitivity_target_equal_source,
                                    sensitivity_require_landmark_one,
                                    blas_threads)
+    old_blas = BLAS.get_num_threads()
     _set_blas_threads(blas_threads)
-    iter = "-" * splitext(r_targets[i])[1]
+    iter = "-" * splitext(r_target)[1]
     started = time()
     try
         result = conscape(src_dir, mov_dir, target_dir, out_dir,
-                          r_targets[i], r_sources[i], r_res[i],
+                          r_target, r_source, r_move,
                           land_mark, theta, exp_d, NA_val, iter,
                           metrics, connectivity_function_name,
                           cost_function_name, sensitivity_wrt,
@@ -79,11 +73,11 @@ end
                           sensitivity_diagvalue,
                           sensitivity_target_equal_source,
                           sensitivity_require_landmark_one,
-                          false)
+                          true)
         status = result in ("done", "skipped_empty_targets") ? "ok" : "failed"
         return (
             index = i,
-            tile = r_targets[i],
+            tile = r_target,
             status = status,
             attempts = 1,
             seconds = round(time() - started; digits = 3),
@@ -94,12 +88,14 @@ end
         println(msg)
         return (
             index = i,
-            tile = r_targets[i],
+            tile = r_target,
             status = "failed",
             attempts = 1,
             seconds = round(time() - started; digits = 3),
             error = msg
         )
+    finally
+        BLAS.set_num_threads(old_blas)
     end
 end
 
@@ -118,12 +114,11 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
                                     sensitivity_one_out_of = 1,
                                     sensitivity_diagvalue = nothing,
                                     sensitivity_target_equal_source = true,
-                                    sensitivity_require_landmark_one = true)
+                                    sensitivity_require_landmark_one = true,
+                                    worker_ids = workers())
 
-    _set_blas_threads(blas_threads)
-    for worker in workers()
-        remotecall_wait(_set_blas_threads, worker, blas_threads)
-    end
+    worker_ids = worker_ids isa Integer ? [Int(worker_ids)] : Int.(worker_ids)
+    isempty(worker_ids) && throw(ArgumentError("No distributed workers supplied"))
 
     # r_targets/r_sources/r_res arrive via JuliaConnectoR from R character
     # vectors. R does not distinguish a length-1 vector from a scalar, so
@@ -138,9 +133,10 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
     r_sources = _as_string_vector(r_sources)
     r_res     = _as_string_vector(r_res)
 
-    # Align filenames across target/source/movement by basename.
-    # This prevents accidental mixing of tiles when some files have been deleted.
-    bn = sort!(collect(intersect(intersect(Set(r_targets), Set(r_sources)), Set(r_res))))
+    # Never silently omit an unmatched tile.
+    Set(r_targets) == Set(r_sources) == Set(r_res) ||
+        throw(ArgumentError("Target, source, and movement tile filenames must match"))
+    bn = sort!(unique(r_targets))
     r_targets = bn
     r_sources = bn
     r_res     = bn
@@ -149,7 +145,7 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
     results = Vector{Union{String,Nothing}}(undef, n)
     diagnostics = Vector{NamedTuple}(undef, n)
     progress_counter = Base.Threads.Atomic{Int}(0)
-    worker_counter = Base.Threads.Atomic{Int}(0)
+    nextjob = Base.Threads.Atomic{Int}(1)
     work_estimates = [
         filesize(joinpath(target_dir, r_targets[i])) +
         filesize(joinpath(src_dir, r_sources[i])) +
@@ -158,12 +154,17 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
     ]
     job_order = sortperm(work_estimates, rev = true)
 
-    @sync for i in job_order
+    # One outstanding call per worker bounds live graphs and transfers only
+    # three scalar filenames per job instead of three complete manifests.
+    @sync for worker in worker_ids
         @async begin
-            worker = workers()[(Base.Threads.atomic_add!(worker_counter, 1) % nworkers()) + 1]
+          while true
+            job = Base.Threads.atomic_add!(nextjob, 1)
+            job > n && break
+            i = job_order[job]
             row = remotecall_fetch(safe_conscape, worker,
                                    i, src_dir, mov_dir, target_dir, out_dir,
-                                   r_targets, r_sources, r_res,
+                                   r_targets[i], r_sources[i], r_res[i],
                                    land_mark, theta, exp_d, NA_val,
                                    max_retries, metrics,
                                    connectivity_function_name,
@@ -184,6 +185,7 @@ function conscape_batch_distributed(src_dir, mov_dir, target_dir, out_dir,
                 pct = round(Int, 100 * done / n)
                 println("Progress: $pct% completed")
             end
+          end
         end
     end
 

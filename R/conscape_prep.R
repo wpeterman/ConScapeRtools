@@ -61,24 +61,24 @@
 #'     so every cell is a target in exactly one tile, and [mosaic_conscape()]
 #'     (called by [run_conscape()]) combines outputs with `method = "sum"` to
 #'     reconstruct the global source-to-target sums up to buffer truncation.
-#'     This matches the per-window math used by ConScape's dev
-#'     `WindowedProblem` and converges to the untiled solution as buffer
-#'     grows.
+#'     With matching target representation and full graph coverage, this
+#'     recovers the untiled additive metrics within numerical tolerance.
+#'     Test finite-buffer accuracy on representative landscapes.
 #'   * `"full"` preserves the legacy ConScapeRtools behavior: every cell in
 #'     the buffered tile is a target, every tile produces a full surface, and
 #'     overlapping tiles are averaged with `method = "mosaic"` (mean). This is
-#'     a smoothed approximation; individual tiles undercount targets that
-#'     fall in other tiles, so the mean is biased low. Use only for backward
-#'     compatibility.
+#'     a tile-local approximation affected by omitted targets and graph
+#'     boundaries, without a guaranteed error direction. Use it for legacy
+#'     comparisons or tile-local sensitivity and criticality estimates.
 #'   * `"auto"` (default) chooses `"center"` whenever `centersize`/`buffer`
 #'     or `tile_d`/`tile_trim` are supplied. The center-target geometry is
 #'     derived from `tile_d` and `tile_trim` (rounded to whole cells) when
 #'     those arguments are used.
 #'
 #' @details
-#' All three rasters (`r_target`, `r_mov`, `r_src`) must have identical extent
-#' and resolution; this is checked at the start of the function. The CRS is not
-#' modified but should be the same for all layers.
+#' All three rasters (`r_target`, `r_mov`, `r_src`) must be single-layer rasters
+#' with identical extent, resolution, and CRS. The ASCII backend requires
+#' square cells. These conditions are checked before any output is removed.
 #'
 #' The argument names mirror the original ConScapeRtools workflow, while the
 #' returned `input_slots` element records the equivalent ConScape slots:
@@ -91,6 +91,10 @@
 #' contains 1 for cells with `r_target >= target_threshold` and 0 otherwise.
 #' This mask is used later to restrict the mosaicked ConScape outputs to the
 #' potentially occupiable landscape.
+#' This is a reporting mask: outputs outside eligible target habitat are
+#' hidden even when those cells have positive source quality. For unmasked
+#' source-cell outputs, use `run_conscape(mosaic = FALSE)` and mosaic manually
+#' without this mask.
 #'
 #' Because `clear_dir = TRUE` removes everything inside `asc_dir`, keep run
 #' outputs and durable R or data objects in separate sibling directories, not
@@ -115,6 +119,8 @@
 #' * `tile_trim` – effective overlap width in map units (may be larger than
 #'   the user–supplied `tile_trim` if increased for landmark alignment).
 #' * `landmark` – the coarse–graining window size passed in via `landmark`.
+#' * `centersize`, `buffer` – effective landmark-aligned cell counts, not the
+#'   unrounded request. Boundary tile centers may be smaller.
 #' * `input_slots` – named paths showing how prepared rasters map to ConScape's
 #'   `target_qualities`, `source_qualities`, and `affinities` slots.
 #'
@@ -214,6 +220,18 @@ conscape_prep <- function(tile_d = NULL,
 
   ## ----- basic checks: extents and resolutions -----
   rasters <- list(r_target = r_target, r_mov = r_mov, r_src = r_src)
+  validate_conscape_rasters(rasters)
+  validate_nonnegative_scalar(target_threshold, "target_threshold")
+  if (!is.numeric(landmark) || length(landmark) != 1L || is.na(landmark) ||
+      !is.finite(landmark) || landmark < 1 || landmark > .Machine$integer.max ||
+      landmark != floor(landmark)) {
+    stop("landmark must be a positive integer.", call. = FALSE)
+  }
+  for (flag in list(clear_dir = clear_dir, progress = progress)) {
+    if (!is.logical(flag) || length(flag) != 1L || is.na(flag)) {
+      stop("clear_dir and progress must be TRUE or FALSE.", call. = FALSE)
+    }
+  }
 
   # extents
   if (!all(vapply(rasters, function(x) isTRUE(all.equal(terra::ext(x), terra::ext(r_target))), logical(1)))) {
@@ -232,23 +250,19 @@ conscape_prep <- function(tile_d = NULL,
       stop("Supply both centersize and buffer, or supply neither.", call. = FALSE)
     }
     if (!is.numeric(centersize) || length(centersize) != 1L ||
-        is.na(centersize) || centersize <= 0) {
+        is.na(centersize) || !is.finite(centersize) || centersize <= 0) {
       stop("centersize must be a single positive numeric value.", call. = FALSE)
     }
     if (!is.numeric(buffer) || length(buffer) != 1L ||
-        is.na(buffer) || buffer < 0) {
+        is.na(buffer) || !is.finite(buffer) || buffer < 0) {
       stop("buffer must be a single non-negative numeric value.", call. = FALSE)
     }
     if (identical(window_units, "cells")) {
       tile_d <- centersize * resx
       tile_trim <- buffer * resx
-      centersize_cells <- as.integer(ceiling(centersize))
-      buffer_cells <- as.integer(ceiling(buffer))
     } else {
       tile_d <- centersize
       tile_trim <- buffer
-      centersize_cells <- as.integer(ceiling(centersize / resx))
-      buffer_cells <- as.integer(ceiling(buffer / resx))
     }
     if (identical(target_mode, "auto")) target_mode <- "center"
   } else {
@@ -258,24 +272,22 @@ conscape_prep <- function(tile_d = NULL,
     # In tile_d/tile_trim mode, the user has not explicitly chosen a windowing
     # scheme. We derive centersize/buffer from tile_d/tile_trim so center mode
     # has well-defined geometry, then default to "center". Users who depend on
-    # the legacy biased-mean tiled behavior can opt in with target_mode = "full".
-    resx_cells <- resx
-    centersize_cells <- as.integer(ceiling(tile_d / resx_cells))
-    buffer_cells <- as.integer(ceiling(tile_trim / resx_cells))
+    # the legacy mean-mosaic behavior can opt in with target_mode = "full".
     if (identical(target_mode, "auto")) target_mode <- "center"
   }
 
-  if (!is.numeric(tile_d) || length(tile_d) != 1L || is.na(tile_d) || tile_d <= 0) {
+  if (!is.numeric(tile_d) || length(tile_d) != 1L || is.na(tile_d) || !is.finite(tile_d) || tile_d <= 0) {
     stop("tile_d must be a single positive numeric value.", call. = FALSE)
   }
-  if (!is.numeric(tile_trim) || length(tile_trim) != 1L || is.na(tile_trim) || tile_trim < 0) {
+  if (!is.numeric(tile_trim) || length(tile_trim) != 1L || is.na(tile_trim) || !is.finite(tile_trim) || tile_trim < 0) {
     stop("tile_trim must be a single non-negative numeric value.", call. = FALSE)
   }
 
   ## ----- set up asc_dir and (optionally) clear it -----
   if (is.null(asc_dir)) {
-    asc_dir <- file.path(tempdir(), "asc")
+    asc_dir <- tempfile("conscape-prep-")
   }
+  validate_conscape_output_dir(asc_dir, clear_dir, conscape_input_sources(rasters))
   if (!dir.exists(asc_dir)) dir.create(asc_dir, recursive = TRUE)
   asc_dir <- normalizePath(asc_dir)
 
@@ -379,8 +391,8 @@ conscape_prep <- function(tile_d = NULL,
     tile_trim = tile_design$tile_trim,   # map units, for mosaic_conscape
     landmark  = tile_design$landmark,
     target_mode = target_mode,
-    centersize = centersize_cells,
-    buffer = buffer_cells,
+    centersize = as.integer(tile_design$tile_cells),
+    buffer = as.integer(tile_design$overlap_cells),
     window_units = window_units,
     tile_d = tile_design$tile_width,
     target_threshold = target_threshold,

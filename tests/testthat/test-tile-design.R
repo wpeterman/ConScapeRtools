@@ -33,7 +33,11 @@ test_that("tile trim is derived from map distance and proximity", {
   map_distance <- c(0, 10, 20, 30, 40)
   proximity <- c(1, 0.2, 0.04, 0.008, 0.001)
 
-  expect_equal(trim_distance(map_distance, proximity, threshold = 0.01), 20)
+  expect_equal(trim_distance(map_distance, proximity, threshold = 0.01), 30)
+  expect_error(trim_distance(map_distance, rep(1, 5), threshold = 0.01),
+               "does not reach")
+  expect_equal(trim_distance(map_distance, c(1, 0.001, 0.04, 0.008, 0.001),
+                             threshold = 0.01), 30)
   expect_equal(prox_at_distance(map_distance, proximity, distance = 20), 0.04)
   expect_equal(prox_at_distance(map_distance, proximity, distance = 30), 0.008)
 })
@@ -46,10 +50,10 @@ test_that("tile_design uses target as source when source is omitted", {
     ConScapeR_setup = function(...) invisible(TRUE),
     Grid = function(...) "grid",
     GridRSP = function(...) "rsp",
-    expected_cost = function(...) matrix(seq_len(49), ncol = 1),
+    expected_cost = function(...) matrix(sqrt(outer((-3:3)^2, (-3:3)^2, "+")), ncol = 1),
     juliaEval = function(...) TRUE,
     stopJulia = function() invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_message(
@@ -93,10 +97,10 @@ test_that("tile_design uses source as target when target is omitted", {
     ConScapeR_setup = function(...) invisible(TRUE),
     Grid = function(...) "grid",
     GridRSP = function(...) "rsp",
-    expected_cost = function(...) matrix(seq_len(49), ncol = 1),
+    expected_cost = function(...) matrix(sqrt(outer((-3:3)^2, (-3:3)^2, "+")), ncol = 1),
     juliaEval = function(...) TRUE,
     stopJulia = function() invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_message(
@@ -117,7 +121,7 @@ test_that("tile_design rejects invalid Julia setup", {
 
   testthat::local_mocked_bindings(
     juliaSetupOk = function() FALSE,
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   expect_error(
@@ -154,7 +158,7 @@ test_that("tile_design calibration raster is compact and center-referenced", {
     },
     juliaEval = function(...) TRUE,
     stopJulia = function() invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   out <- tile_design(
@@ -198,10 +202,10 @@ test_that("tile_design supports explicit tile width and max tile cells", {
     ConScapeR_setup = function(...) invisible(TRUE),
     Grid = function(...) "grid",
     GridRSP = function(...) "rsp",
-    expected_cost = function(...) matrix(seq_len(49), ncol = 1),
+    expected_cost = function(...) matrix(sqrt(outer((-3:3)^2, (-3:3)^2, "+")), ncol = 1),
     juliaEval = function(...) TRUE,
     stopJulia = function() invisible(TRUE),
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   by_width <- tile_design(
@@ -249,7 +253,7 @@ test_that("tile_design can keep Julia open when requested", {
     ConScapeR_setup = function(...) invisible(TRUE),
     Grid = function(...) "grid",
     GridRSP = function(...) "rsp",
-    expected_cost = function(...) matrix(seq_len(49), ncol = 1),
+    expected_cost = function(...) matrix(sqrt(outer((-3:3)^2, (-3:3)^2, "+")), ncol = 1),
     juliaEval = function(...) {
       eval_calls <<- eval_calls + 1L
       TRUE
@@ -258,7 +262,7 @@ test_that("tile_design can keep Julia open when requested", {
       stop_calls <<- stop_calls + 1L
       invisible(TRUE)
     },
-    .env = asNamespace("ConScapeRtools")
+    .package = "ConScapeRtools"
   )
 
   out <- tile_design(
@@ -272,4 +276,9 @@ test_that("tile_design can keep Julia open when requested", {
   expect_s3_class(out, "ConScapeRtools_design")
   expect_equal(stop_calls, 0L)
   expect_equal(eval_calls, 0L)
+})
+test_that("calibration rejects angular coordinates before starting Julia", {
+  r <- make_test_raster(n = 3, vals = 0.5, crs = "EPSG:4326")
+  expect_error(tile_design(r_mov = r, r_target = r, max_d = 1000, jl_home = "unused"),
+               "projected linear units")
 })

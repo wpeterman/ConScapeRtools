@@ -19,7 +19,8 @@
 #' workload proxies are reported:
 #'
 #' * `estimated_source_target_cells` summarizes the work the ConScape backend
-#'   actually performs per prep object. For `target_mode = "center"` (the new
+#'   approximates before coarse graining. It is not a measured runtime or
+#'   peak-memory estimate. For `target_mode = "center"` (the new
 #'   default), each tile's backend target raster is restricted to its center
 #'   cells, so this column uses `n_positive_move * n_positive_output_target`.
 #'   For `target_mode = "full"` (the legacy mode), the full buffered target
@@ -129,6 +130,11 @@ conscape_efficiency_assessment <- function(..., reference = 1L) {
       diagnostics$n_finite_output_target <- diagnostics$n_finite_target
     }
 
+    if ("written" %in% names(diagnostics)) {
+      diagnostics <- diagnostics[!is.na(diagnostics$written) & diagnostics$written, , drop = FALSE]
+    }
+    if (!nrow(diagnostics)) stop("Prep object has no written tile diagnostics.", call. = FALSE)
+
     # Choose which target count drives the backend-work proxy: with the
     # corrected center mode the backend solves Z over center-only targets, so
     # the proxy should use n_positive_output_target there.
@@ -175,6 +181,12 @@ conscape_efficiency_assessment <- function(..., reference = 1L) {
   out <- do.call(rbind, summaries)
   rownames(out) <- NULL
 
+  if (!is.character(reference) &&
+      (!is.numeric(reference) || length(reference) != 1L || is.na(reference) ||
+       !is.finite(reference) || reference > .Machine$integer.max ||
+       reference != floor(reference))) {
+    stop("reference must identify one supplied prep object.", call. = FALSE)
+  }
   reference_idx <- if (is.character(reference)) {
     match(reference, out$scenario)
   } else {

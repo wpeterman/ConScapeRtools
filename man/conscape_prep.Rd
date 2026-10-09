@@ -89,15 +89,15 @@ and affinities are kept in full. Adjacent tiles' centers are disjoint,
 so every cell is a target in exactly one tile, and \code{\link[=mosaic_conscape]{mosaic_conscape()}}
 (called by \code{\link[=run_conscape]{run_conscape()}}) combines outputs with \code{method = "sum"} to
 reconstruct the global source-to-target sums up to buffer truncation.
-This matches the per-window math used by ConScape's dev
-\code{WindowedProblem} and converges to the untiled solution as buffer
-grows.
+With matching target representation and full graph coverage, this
+recovers the untiled additive metrics within numerical tolerance.
+Test finite-buffer accuracy on representative landscapes.
 \item \code{"full"} preserves the legacy ConScapeRtools behavior: every cell in
 the buffered tile is a target, every tile produces a full surface, and
 overlapping tiles are averaged with \code{method = "mosaic"} (mean). This is
-a smoothed approximation; individual tiles undercount targets that
-fall in other tiles, so the mean is biased low. Use only for backward
-compatibility.
+a tile-local approximation affected by omitted targets and graph
+boundaries, without a guaranteed error direction. Use it for legacy
+comparisons or tile-local sensitivity and criticality estimates.
 \item \code{"auto"} (default) chooses \code{"center"} whenever \code{centersize}/\code{buffer}
 or \code{tile_d}/\code{tile_trim} are supplied. The center-target geometry is
 derived from \code{tile_d} and \code{tile_trim} (rounded to whole cells) when
@@ -116,6 +116,8 @@ and movement tiles (as \code{.asc} files).
 \item \code{tile_trim} – effective overlap width in map units (may be larger than
 the user–supplied \code{tile_trim} if increased for landmark alignment).
 \item \code{landmark} – the coarse–graining window size passed in via \code{landmark}.
+\item \code{centersize}, \code{buffer} – effective landmark-aligned cell counts, not the
+unrounded request. Boundary tile centers may be smaller.
 \item \code{input_slots} – named paths showing how prepared rasters map to ConScape's
 \code{target_qualities}, \code{source_qualities}, and \code{affinities} slots.
 }
@@ -130,9 +132,9 @@ applies the same tiling to the target, source, and movement rasters, and
 \code{\link[=run_conscape]{run_conscape()}} and \code{\link[=mosaic_conscape]{mosaic_conscape()}}.
 }
 \details{
-All three rasters (\code{r_target}, \code{r_mov}, \code{r_src}) must have identical extent
-and resolution; this is checked at the start of the function. The CRS is not
-modified but should be the same for all layers.
+All three rasters (\code{r_target}, \code{r_mov}, \code{r_src}) must be single-layer rasters
+with identical extent, resolution, and CRS. The ASCII backend requires
+square cells. These conditions are checked before any output is removed.
 
 The argument names mirror the original ConScapeRtools workflow, while the
 returned \code{input_slots} element records the equivalent ConScape slots:
@@ -145,6 +147,10 @@ A binary mask (\code{mask.asc}) is written to \code{file.path(asc_dir, "mask")} 
 contains 1 for cells with \code{r_target >= target_threshold} and 0 otherwise.
 This mask is used later to restrict the mosaicked ConScape outputs to the
 potentially occupiable landscape.
+This is a reporting mask: outputs outside eligible target habitat are
+hidden even when those cells have positive source quality. For unmasked
+source-cell outputs, use \code{run_conscape(mosaic = FALSE)} and mosaic manually
+without this mask.
 
 Because \code{clear_dir = TRUE} removes everything inside \code{asc_dir}, keep run
 outputs and durable R or data objects in separate sibling directories, not

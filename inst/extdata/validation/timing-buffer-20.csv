@@ -1,0 +1,5 @@
+"workflow","seconds","speedup_vs_untiled","status"
+"untiled",32.7,1,"ok"
+"classic_tiled",31.63,1.03,"ok"
+"center_buffer",30.95,1.06,"ok"
+"full_legacy",31.03,1.05,"ok"
