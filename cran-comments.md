@@ -1,6 +1,6 @@
 ## R CMD check results
 
-ConScapeRtools 0.4.31 was checked from its built source archive on Windows 11
+ConScapeRtools 0.4.32 was checked from its built source archive on Windows 11
 x64 with R 4.6.1 and `R CMD check --as-cran`: 0 errors, 0 warnings, 1 note.
 The note is the expected `New submission` note. The full check includes
 the PDF and HTML manuals, examples, tests, and vignette rebuilding.
@@ -11,6 +11,12 @@ merging the branch or preparing a submission. Real Julia integration tests run
 separately on the three R-release platforms.
 
 ## Release summary
+
+Version 0.4.32 declares GPL-2 for the combined package and credits the
+ConScape.jl contributors for the adapted numerical routines. The installed
+COPYRIGHTS file records the upstream files and versions, modifications, and
+the retained MIT notice for preexisting code. COPYING supplies the GPL-2 text
+in the source distribution; installed users can use the copy supplied with R.
 
 This release prepares the supported classic backend for its first CRAN
 submission:

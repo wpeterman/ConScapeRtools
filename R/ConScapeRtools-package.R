@@ -26,6 +26,13 @@
 #' never install or update Julia packages. Use `install_libraries = TRUE` or an
 #' explicit setup helper only when you intend to modify a Julia environment.
 #'
+#' @section License and attribution:
+#' The package is distributed under GPL-2. Its optimized Julia metric helpers
+#' adapt numerical routines by the ConScape.jl contributors. The installed
+#' `COPYRIGHTS` file records upstream source versions and modifications and
+#' preserves the original MIT notice for preexisting ConScapeRtools code.
+#' Locate it with `system.file("COPYRIGHTS", package = "ConScapeRtools")`.
+#'
 #' @name ConScapeRtools-package
 #' @aliases ConScapeRtools
 #' @keywords internal

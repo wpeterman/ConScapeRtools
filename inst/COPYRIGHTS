@@ -1,0 +1,66 @@
+ConScapeRtools licensing and source attribution
+==============================================
+
+ConScapeRtools 0.4.32 is distributed under the GNU General Public
+License version 2 (GPL-2). The complete license accompanies the source in
+COPYING. Installed R distributions provide the same license at
+file.path(R.home("share"), "licenses", "GPL-2").
+
+Adapted Julia numerical routines
+-------------------------------
+
+The ConScape.jl contributors authored the upstream numerical routines used
+by _paired_metric_surfaces() and _streamed_default_surfaces() in
+inst/extdata/conscape.jl (extdata/conscape.jl in an installed package).
+Upstream project: https://github.com/ConScape/ConScape.jl
+Upstream license: GNU General Public License version 2.
+
+Source files and routines:
+* src/gridrsp.jl: expected_cost(), connected_habitat(), and metric dispatch.
+* src/randomizedshortestpath.jl: RSP_expected_cost(),
+  RSP_betweenness_kweighted(), and connected_habitat().
+
+Inspected upstream source: ConScape 0.3.0, sensitivity build with git-tree SHA-1
+1534b7983fcf3f52d1e84e2d148625342842d614. Numerical equivalence was also tested
+against registered ConScape 0.3.0, git-tree SHA-1
+b0d387e05e5135e7375e33718cdcb466117c7bee.
+
+ConScapeRtools adaptations, 2026-10-08: share proximity calculations between
+metrics; solve target columns in bounded blocks; reuse a sparse factorization
+for forward and transposed solves; accumulate per-target contributions; and
+retain upstream weighting, diagonal correction, and numerical safeguards.
+These are modified implementations, not unmodified upstream source. The
+ConScapeRtools authors are responsible for the adaptations.
+
+The adaptations first appeared in version 0.4.31. Version 0.4.32 corrects the
+package license declaration and supplies this attribution. The prior MIT-only
+declaration did not grant MIT rights to the upstream-derived routines.
+
+Retained notice for preexisting ConScapeRtools code
+-------------------------------------------------
+
+The following original MIT notice is preserved for code previously distributed
+under that license. It does not replace GPL-2 for the combined package or
+relicense the upstream-derived Julia routines.
+
+# MIT License
+
+Copyright (c) 2024 ConScapeRtools authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

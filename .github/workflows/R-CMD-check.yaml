@@ -78,5 +78,9 @@ jobs:
           NOT_CRAN: 'true'
         run: |
           Sys.setenv(CONSCAPERTOOLS_JL_HOME = dirname(Sys.which("julia")))
+          # Separate R workers cannot use pkgload's in-process development namespace.
+          install.packages(".", repos = NULL, type = "source")
+          stopifnot(as.character(packageVersion("ConScapeRtools")) ==
+                    read.dcf("DESCRIPTION")[1, "Version"])
           pkgload::load_all()
           testthat::test_local(stop_on_failure = TRUE)

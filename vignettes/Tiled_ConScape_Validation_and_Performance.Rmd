@@ -658,6 +658,13 @@ Set `blas_threads = 1` when running multiple Julia threads to avoid oversubscrib
 
 # Further Reading
 
+The optimized Julia helpers adapt ConScape.jl numerical routines under GPL-2.
+ConScapeRtools 0.4.32 corrects the package license declaration and adds attribution
+without changing the numerical implementation benchmarked here. Source versions,
+modifications, and the retained MIT notice are recorded in the installed
+`COPYRIGHTS` file, available through
+`system.file("COPYRIGHTS", package = "ConScapeRtools")`.
+
 - The main user guide (`vignette("ConScapeRtools_Guide", package = "ConScapeRtools")`) covers the day-to-day tiled workflow and sensitivity analysis.
 - `?tile_design`, `?window_design`, `?conscape_prep`, `?run_conscape`, `?mosaic_conscape` document the API surface.
 - `tests/testthat/test-tiled-untiled-agreement.R` is the degenerate-coverage agreement test (identity in the buffer-covers-landscape case).

@@ -1,3 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# _paired_metric_surfaces and _streamed_default_surfaces adapt numerical routines
+# by the ConScape.jl contributors (ConScape 0.3.0, GPL-2). See COPYRIGHTS in the
+# installed package for source files, source versions, and retained notices.
+# Modified by the ConScapeRtools authors, 2026-10-08: shared proximity, bounded
+# target-block solves, sparse factorization reuse, and accumulated contributions.
+
 using Logging
 using ConScape
 using LinearAlgebra

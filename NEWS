@@ -1,3 +1,11 @@
+ConScapeRtools 0.4.32
+---------
+* Corrected the release license to GPL-2 for the adapted ConScape.jl numerical
+  routines. Added upstream attribution, source provenance, and modification
+  notices while preserving the original MIT notice for preexisting code.
+* Installed the package before live CI integration tests so separate R workers
+  can load the same package version on clean Windows, macOS, and Linux runners.
+
 ConScapeRtools 0.4.31
 ---------
 * Streamed the default expected-cost metrics in bounded target blocks using one
